@@ -139,6 +139,17 @@ def _init_db():
                 resulted_at TEXT,
                 results TEXT DEFAULT '{}'
             );
+        CREATE TABLE IF NOT EXISTS owner_images (
+            id TEXT PRIMARY KEY,
+            timeblock_id TEXT NOT NULL,
+            patient_id TEXT,
+            filename TEXT DEFAULT 'photo.jpg',
+            content_type TEXT DEFAULT 'image/jpeg',
+            data TEXT NOT NULL,
+            caption TEXT DEFAULT '',
+            submitted_at TEXT NOT NULL,
+            source TEXT DEFAULT 'owner'
+        );
         """)
         # Migrate existing resources table to add status columns if missing
         try:
@@ -782,6 +793,25 @@ class InMemoryRepository(BaseRepository):
                 (_json.dumps(results), resulted_at, lab_id)
             )
             return conn.execute("SELECT changes()").fetchone()[0] > 0
+
+    def save_owner_image(self, img: dict) -> dict:
+        import json as _json
+        with _get_conn() as conn:
+            conn.execute(
+                "INSERT INTO owner_images (id, timeblock_id, patient_id, filename, content_type, data, caption, submitted_at, source) VALUES (?,?,?,?,?,?,?,?,?)",
+                (img["id"], img["timeblock_id"], img.get("patient_id"), img.get("filename","photo.jpg"),
+                 img.get("content_type","image/jpeg"), img["data"], img.get("caption",""),
+                 img["submitted_at"], img.get("source","owner"))
+            )
+        return img
+
+    def get_images_for_timeblock(self, timeblock_id: str) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT id, timeblock_id, patient_id, filename, content_type, data, caption, submitted_at, source FROM owner_images WHERE timeblock_id=? ORDER BY submitted_at ASC",
+                (timeblock_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ── Module-level helpers for Clinic + Assignment rows ──────────────────────

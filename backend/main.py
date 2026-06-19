@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from .repository import db
@@ -317,8 +317,16 @@ def intake_send(req: IntakeSendRequest):
             if o:
                 owner_name = o.name
 
+    intake_msg = (
+        f"Hi {owner_name}! {patient_name} has an appointment coming up with us. "
+        f"Can you tell us what's been going on? Any symptoms, changes in behaviour, or concerns? "
+        f"📸 Feel free to include photos too — images of anything unusual you've noticed "
+        f"(skin conditions, swelling, discharge, changes in posture or gait) are really helpful "
+        f"for us to prepare before your visit."
+    )
     log_agent_step("INTAKE AGENT", f"Sent pre-visit questionnaire to owner ({owner_name}) for {patient_name}")
-    return {"status": "pending", "message": "Questionnaire sent to owner (simulated)"}
+    log_agent_step("INTAKE AGENT", "Photo attachment option included in owner message")
+    return {"status": "pending", "message": intake_msg}
 
 @app.post("/api/intake/parse")
 def intake_parse(req: IntakeParseRequest):
@@ -871,3 +879,36 @@ def order_lab(body: dict):
     db.create_lab(lab)
     lab['results'] = {}
     return lab
+
+# ── Owner Image Endpoints (F002 upgrade — intake photo attachments) ──────────
+
+@app.post("/api/intake/{timeblock_id}/images")
+async def upload_owner_image(timeblock_id: str, request: Request):
+    """Accept base64-encoded owner photos submitted with intake response."""
+    import json as _json
+    from uuid import uuid4
+    from datetime import datetime as _dt
+    body = await request.json()
+    images = body.get("images", [])
+    saved = []
+    for img_data in images:
+        img = {
+            "id": str(uuid4()),
+            "timeblock_id": timeblock_id,
+            "patient_id": body.get("patient_id"),
+            "filename": img_data.get("filename", "owner_photo.jpg"),
+            "content_type": img_data.get("content_type", "image/jpeg"),
+            "data": img_data.get("data", ""),
+            "caption": img_data.get("caption", "Owner-submitted photo"),
+            "submitted_at": _dt.now().isoformat(),
+            "source": "owner",
+        }
+        db.save_owner_image(img)
+        saved.append({"id": img["id"], "filename": img["filename"], "caption": img["caption"]})
+    log_agent_step(f"INTAKE AGENT: {len(saved)} owner photo(s) received and stored for appointment {timeblock_id}")
+    return {"saved": len(saved), "images": saved}
+
+@app.get("/api/timeblocks/{timeblock_id}/images")
+def get_timeblock_images(timeblock_id: str):
+    """Return all images (owner photos + future clinical) for an appointment."""
+    return db.get_images_for_timeblock(timeblock_id)

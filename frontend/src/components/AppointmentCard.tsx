@@ -195,6 +195,7 @@ export default function AppointmentCard({ item, patient, role, onLogEntry, curre
           {(role === "front_desk" || role === "vet") && tbId && (
             <IntakePanel
               timeblockId={tbId}
+              patientId={item.patient?.id ?? item.patient_id}
               role={role}
               intakeStatus={intakeStatus}
               onStatusChange={setIntakeStatus}

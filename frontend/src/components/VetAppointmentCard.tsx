@@ -73,6 +73,8 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
   const [histLoading, setHistLoading] = useState(false);
   const [isComplete, setIsComplete]   = useState(item.status === "complete");
   const [soapOpen, setSoapOpen]       = useState(false);
+  const [ownerPhotos, setOwnerPhotos] = useState<any[] | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const tbId = item.timeblock_id ?? item.id;
   const procedure = item.job?.procedure ?? "Unknown Procedure";
@@ -98,6 +100,16 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
         .catch(() => { setHistory([]); setHistLoading(false); });
     }
   }, [activeTab, expanded, patient?.id]);
+
+  // Fetch owner photos when imaging tab opened
+  useEffect(() => {
+    if (activeTab === "imaging" && expanded && ownerPhotos === null) {
+      fetch(`${API}/api/timeblocks/${tbId}/images`)
+        .then(r => r.ok ? r.json() : [])
+        .then(imgs => setOwnerPhotos(imgs))
+        .catch(() => setOwnerPhotos([]));
+    }
+  }, [activeTab, expanded, tbId]);
 
   const handleComplete = async () => {
     const res = await fetch(`${API}/api/appointments/${tbId}/complete`, {
@@ -301,11 +313,55 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
           {/* ── Imaging tab ── */}
           {activeTab === "imaging" && (
             <div>
+              {/* ── Owner-submitted photos ── */}
+              {ownerPhotos === null ? (
+                <div style={{ color: "#52525b", fontSize: "0.72rem", padding: "8px 0" }}>Loading images…</div>
+              ) : ownerPhotos.length > 0 ? (
+                <div style={{ marginBottom: "14px" }}>
+                  <div style={{ fontSize: "0.65rem", color: "#52525b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ background: "rgba(16,185,129,0.12)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)", borderRadius: "4px", padding: "1px 6px", fontSize: "0.6rem", fontWeight: 700 }}>OWNER</span>
+                    Owner-Submitted Photos ({ownerPhotos.length})
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: "6px" }}>
+                    {ownerPhotos.map((img: any) => (
+                      <div
+                        key={img.id}
+                        onClick={() => setLightboxSrc(`data:${img.content_type ?? "image/jpeg"};base64,${img.data}`)}
+                        style={{ cursor: "pointer", position: "relative" }}
+                        title={img.caption || img.filename}
+                      >
+                        <img
+                          src={`data:${img.content_type ?? "image/jpeg"};base64,${img.data}`}
+                          alt={img.caption || "Owner photo"}
+                          style={{
+                            width: "100%", aspectRatio: "1", objectFit: "cover",
+                            borderRadius: "7px", border: "1px solid rgba(63,63,70,0.5)",
+                            transition: "transform 0.15s ease, border-color 0.15s ease",
+                          }}
+                          onMouseEnter={e => { (e.target as HTMLImageElement).style.transform = "scale(1.04)"; (e.target as HTMLImageElement).style.borderColor = "rgba(52,211,153,0.5)"; }}
+                          onMouseLeave={e => { (e.target as HTMLImageElement).style.transform = "scale(1)"; (e.target as HTMLImageElement).style.borderColor = "rgba(63,63,70,0.5)"; }}
+                        />
+                        {img.caption && (
+                          <div style={{ fontSize: "0.58rem", color: "#71717a", textAlign: "center", marginTop: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {img.caption}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: "10px 0 6px", color: "#52525b", fontSize: "0.72rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ opacity: 0.5 }}>📷</span> No owner photos submitted with intake
+                </div>
+              )}
+
+              {/* ── Clinical imaging studies ── */}
               {(patient?.imaging_notes || item.job?.required_skills?.some((s: string) =>
                 ["X-Ray","Ultrasound","Imaging"].includes(s))) ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   <div style={{ fontSize: "0.65rem", color: "#52525b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>
-                    Imaging records
+                    Clinical studies
                   </div>
                   {(item.job?.required_skills ?? []).filter((s: string) => ["X-Ray","Ultrasound","Imaging"].includes(s)).map((sk: string, i: number) => (
                     <div key={i} style={{
@@ -326,11 +382,41 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
                     </div>
                   )}
                 </div>
-              ) : (
-                <div style={{ padding: "16px 0", textAlign: "center", color: "#52525b", fontSize: "0.75rem" }}>
+              ) : ownerPhotos?.length === 0 && (
+                <div style={{ padding: "10px 0", textAlign: "center", color: "#52525b", fontSize: "0.75rem" }}>
                   No imaging studies for this appointment.
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Lightbox */}
+          {lightboxSrc && (
+            <div
+              onClick={() => setLightboxSrc(null)}
+              style={{
+                position: "fixed", inset: 0, zIndex: 100,
+                background: "rgba(0,0,0,0.85)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "zoom-out",
+              }}
+            >
+              <img
+                src={lightboxSrc}
+                alt="Owner photo"
+                style={{ maxWidth: "90vw", maxHeight: "85vh", borderRadius: "12px", boxShadow: "0 8px 48px rgba(0,0,0,0.8)" }}
+                onClick={e => e.stopPropagation()}
+              />
+              <button
+                onClick={() => setLightboxSrc(null)}
+                style={{
+                  position: "fixed", top: "20px", right: "20px",
+                  background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)",
+                  borderRadius: "50%", width: "36px", height: "36px",
+                  color: "white", fontSize: "18px", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >×</button>
             </div>
           )}
 
