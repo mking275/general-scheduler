@@ -8,10 +8,13 @@ import {
   FileText, History, Image, CalendarPlus, CheckCircle2, AlertTriangle, FlaskConical
 } from "lucide-react";
 import LabsPanel from "./LabsPanel";
+import BreedAlertsPanel from "./BreedAlertsPanel";
+import CareTimelinePanel from "./CareTimelinePanel";
+import PrescriptionPanel from "./PrescriptionPanel";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 
-type Tab = "history" | "labs" | "soap" | "imaging" | "followup";
+type Tab = "history" | "labs" | "soap" | "imaging" | "followup" | "breed" | "care" | "rx";
 
 function suggestFollowUp(procedure: string, patientName: string): { interval: string; note: string; prompt: string } {
   const p = (procedure ?? "").toLowerCase();
@@ -244,6 +247,9 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
             <TabBtn id="soap"     label="SOAP Notes" icon={<FileText size={11} />}      active={activeTab === "soap"}     onClick={() => setActiveTab("soap")} />
             <TabBtn id="imaging"  label="Imaging"    icon={<Image size={11} />}       active={activeTab === "imaging"}  onClick={() => setActiveTab("imaging")} />
             <TabBtn id="followup" label="Follow-Up"  icon={<CalendarPlus size={11} />} active={activeTab === "followup"} onClick={() => setActiveTab("followup")} />
+            <TabBtn id="breed"    label="Breed"      icon={<span style={{fontSize:"10px"}}>🧬</span>}  active={activeTab === "breed"}    onClick={() => setActiveTab("breed")} />
+            <TabBtn id="care"     label="Care"       icon={<span style={{fontSize:"10px"}}>💉</span>} active={activeTab === "care"}     onClick={() => setActiveTab("care")} />
+            <TabBtn id="rx"       label="Rx"         icon={<span style={{fontSize:"10px"}}>💊</span>} active={activeTab === "rx"}       onClick={() => setActiveTab("rx")} />
           </div>
 
           {/* ── History tab ── */}
@@ -455,6 +461,42 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
                 <CalendarPlus size={14} />
                 Schedule via Agent — "{followUp.prompt.slice(0, 48)}…"
               </button>
+            </div>
+          )}
+
+          {/* ── Breed Intelligence tab ── */}
+          {activeTab === "breed" && patient?.id && (
+            <div style={{ paddingTop: "4px" }}>
+              <BreedAlertsPanel
+                patientId={patient.id}
+                patientName={patient.name}
+                breed={patient.breed}
+              />
+            </div>
+          )}
+
+          {/* ── Preventive Care tab ── */}
+          {activeTab === "care" && patient?.id && (
+            <div style={{ paddingTop: "4px" }}>
+              <CareTimelinePanel
+                patientId={patient.id}
+                patientName={patient.name}
+                timeblockId={tbId}
+                onLogEntry={onLogEntry}
+              />
+            </div>
+          )}
+
+          {/* ── Prescriptions tab ── */}
+          {activeTab === "rx" && patient?.id && (
+            <div style={{ paddingTop: "4px" }}>
+              <PrescriptionPanel
+                patientId={patient.id}
+                patientName={patient.name}
+                timeblockId={tbId}
+                issuedBy={vet?.name}
+                onLogEntry={onLogEntry}
+              />
             </div>
           )}
 

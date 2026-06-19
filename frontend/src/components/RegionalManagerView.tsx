@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import ForecastPanel from "./ForecastPanel";
+import WaitlistPanel from "./WaitlistPanel";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 
@@ -672,6 +674,17 @@ export default function RegionalManagerView({ onClinicSelect, allTimeblocks: pro
                       >
                         → Go to schedule
                       </button>
+
+                      {/* g. 4-week capacity forecast */}
+                      <div style={{ borderTop: `1px solid ${color}22`, paddingTop: "14px" }}>
+                        <div style={{ fontSize: "0.7rem", color: "#a1a1aa", fontWeight: 700, marginBottom: "10px" }}>Capacity Forecast</div>
+                        <ForecastPanel clinicId={clinic.id} clinicName={clinic.name} />
+                      </div>
+
+                      {/* h. Waitlist */}
+                      <div style={{ borderTop: `1px solid ${color}22`, paddingTop: "14px", minHeight: "200px" }}>
+                        <WaitlistPanel clinicId={clinic.id} />
+                      </div>
                     </div>
                   </div>
                 </div>

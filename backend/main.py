@@ -41,6 +41,18 @@ def log_agent_step(step: str, message: str):
     return entry
 
 
+def _log1(msg: str):
+    """Single-arg adapter for Phase 3 agents that call log_fn(msg) with a pre-formatted string."""
+    _SESSION_LOG.append(msg)
+    return msg
+
+
+def log_step(msg: str):
+    """Single-arg log adapter for Phase 3+ agents that call self._log('MSG')."""
+    _SESSION_LOG.append(msg)
+    return msg
+
+
 @app.on_event("startup")
 def on_startup():
     """Seed patients/owners on startup if patients table is empty."""
@@ -59,6 +71,12 @@ def on_startup():
         seed_westside_appointment()
     except Exception as e:
         print(f"[SEED] Westside appt seed error (non-fatal): {e}")
+    try:
+        from .seed_data import seed_phase3_data
+        seed_phase3_data()
+    except Exception as e:
+        print(f"[SEED] Phase3 seed error (non-fatal): {e}")
+
 
 
 # ============================================================
@@ -905,10 +923,297 @@ async def upload_owner_image(timeblock_id: str, request: Request):
         }
         db.save_owner_image(img)
         saved.append({"id": img["id"], "filename": img["filename"], "caption": img["caption"]})
-    log_agent_step(f"INTAKE AGENT: {len(saved)} owner photo(s) received and stored for appointment {timeblock_id}")
+    _log1(f"INTAKE AGENT: {len(saved)} owner photo(s) received and stored for appointment {timeblock_id}")
     return {"saved": len(saved), "images": saved}
 
 @app.get("/api/timeblocks/{timeblock_id}/images")
 def get_timeblock_images(timeblock_id: str):
     """Return all images (owner photos + future clinical) for an appointment."""
     return db.get_images_for_timeblock(timeblock_id)
+
+
+# ============================================================
+# Phase 3 (F013) — Appointment Reminders & Confirmation (T015)
+# IMPORTANT: action-queue MUST be registered before /{timeblock_id}
+# ============================================================
+
+@app.get("/api/timeblocks/action-queue")
+def get_action_queue(clinic_id: Optional[str] = Query(None)):
+    """
+    T015/T011: Return timeblocks where confirmation_status is
+    unconfirmed or reschedule_requested — the front-desk action queue.
+    """
+    _log1("REMINDER AGENT: Fetching action queue for front-desk review")
+    items = db.get_action_queue(clinic_id=clinic_id)
+    return {"count": len(items), "items": items}
+
+
+@app.post("/api/reminders/sweep")
+def run_reminder_sweep(clinic_id: Optional[str] = Query(None), window_hours: int = Query(48)):
+    """
+    T010: Trigger the ReminderAgent sweep. Sends reminders for all
+    upcoming appointments within the look-ahead window.
+    """
+    from .agents.reminders import ReminderAgent
+    agent = ReminderAgent(db=db, log_fn=_log1, window_hours=window_hours)
+    result = agent.run_reminder_sweep(clinic_id=clinic_id)
+    return result
+
+
+@app.post("/api/reminders/{timeblock_id}/confirm")
+def confirm_appointment(timeblock_id: str):
+    """T012: Owner confirms appointment (webhook / front-desk action)."""
+    from .agents.reminders import ReminderAgent
+    agent = ReminderAgent(db=db, log_fn=_log1)
+    return agent.confirm_appointment(timeblock_id)
+
+
+@app.post("/api/reminders/{timeblock_id}/reschedule")
+def request_reschedule(timeblock_id: str):
+    """T013: Owner requests reschedule — flags timeblock for front desk."""
+    from .agents.reminders import ReminderAgent
+    agent = ReminderAgent(db=db, log_fn=_log1)
+    return agent.request_reschedule(timeblock_id)
+
+
+@app.get("/api/reminders/{timeblock_id}/status")
+def get_reminder_status(timeblock_id: str):
+    """T014: Get confirmation status for a specific appointment."""
+    from .agents.reminders import ReminderAgent
+    agent = ReminderAgent(db=db, log_fn=_log1)
+    return agent.get_confirmation_status(timeblock_id)
+
+
+# ============================================================
+# Phase 4 (F014) — Waitlist & Backfill Agent (T016-T021)
+# ============================================================
+
+@app.get("/api/waitlist")
+def get_waitlist(clinic_id: Optional[str] = Query(None)):
+    """T020: List active waitlist entries, sorted by urgency then join_date."""
+    _log1("WAITLIST AGENT: Fetching waitlist")
+    entries = db.get_active_waitlist(clinic_id=clinic_id)
+    return {"count": len(entries), "entries": entries}
+
+
+@app.post("/api/waitlist")
+async def add_to_waitlist(request: Request):
+    """T020: Add patient to waitlist."""
+    from uuid import uuid4
+    body = await request.json()
+    required = {"patient_id", "clinic_id", "procedure_type"}
+    missing = required - set(body.keys())
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Missing fields: {missing}")
+    entry = {
+        "id": str(uuid4()),
+        "patient_id": body["patient_id"],
+        "clinic_id": body["clinic_id"],
+        "procedure_type": body["procedure_type"],
+        "preferred_vet_id": body.get("preferred_vet_id"),
+        "urgency": body.get("urgency", "flexible"),
+        "offer_status": "waiting",
+        "join_date": datetime.utcnow().isoformat(),
+    }
+    db.add_waitlist_entry(entry)
+    _log1(f"WAITLIST AGENT: Added {body['patient_id']} to waitlist for {body['procedure_type']}")
+    return entry
+
+
+@app.post("/api/waitlist/backfill")
+async def run_backfill(request: Request):
+    """
+    T019/T020: BackfillAgent — matches waitlisted patients to cancelled/open slots
+    within the next 7 days and returns slot-offer pairs.
+    """
+    from .agents.waitlist import WaitlistAgent
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    clinic_id = body.get("clinic_id") or request.query_params.get("clinic_id")
+    agent = WaitlistAgent(db=db, log_fn=_log1)
+    result = agent.run_backfill(clinic_id=clinic_id)
+    return result
+
+
+@app.put("/api/waitlist/{entry_id}/offer")
+async def offer_waitlist_slot(entry_id: str, request: Request):
+    """T021: Mark a waitlist entry as 'offered' (slot offered to patient)."""
+    db.update_waitlist_status(entry_id, "offered")
+    _log1(f"WAITLIST AGENT: Offered slot to waitlist entry {entry_id}")
+    return {"entry_id": entry_id, "offer_status": "offered"}
+
+
+@app.put("/api/waitlist/{entry_id}/accept")
+async def accept_waitlist_offer(entry_id: str, request: Request):
+    """T021: Mark a waitlist entry as 'accepted'."""
+    db.update_waitlist_status(entry_id, "accepted")
+    _log1(f"WAITLIST AGENT: Waitlist entry {entry_id} accepted offer")
+    return {"entry_id": entry_id, "offer_status": "accepted"}
+
+
+@app.delete("/api/waitlist/{entry_id}")
+def remove_from_waitlist(entry_id: str):
+    """T021: Remove an entry from the waitlist."""
+    db.remove_waitlist_entry(entry_id)
+    _log1(f"WAITLIST AGENT: Removed waitlist entry {entry_id}")
+    return {"removed": entry_id}
+
+
+# ============================================================
+# Phase 5 (F018) — Breed Intelligence Agent (T022-T026)
+# ============================================================
+
+@app.get("/api/breed-protocols")
+def get_breed_protocols_list():
+    """T025: List all breed protocols."""
+    protocols = db.get_breed_protocols()
+    return {"count": len(protocols), "protocols": protocols}
+
+
+@app.get("/api/breed-intelligence/{patient_id}")
+def get_breed_intelligence(patient_id: str):
+    """
+    T024/T025: Run the BreedIntelligenceAgent for a patient —
+    returns matched breed alerts based on breed + age + flags.
+    """
+    from .agents.breed_intelligence import BreedIntelligenceAgent
+    agent = BreedIntelligenceAgent(db=db, log_fn=log_step)
+    result = agent.analyse(patient_id)
+    return result
+
+
+@app.get("/api/breed-intelligence/timeblock/{timeblock_id}")
+def get_breed_intelligence_for_timeblock(timeblock_id: str):
+    """T024: Run breed intelligence analysis for the patient booked in a timeblock."""
+    from .agents.breed_intelligence import BreedIntelligenceAgent
+    from .repository import _get_conn
+    with _get_conn() as conn:
+        row = conn.execute("SELECT patient_id FROM timeblocks WHERE id=?", (timeblock_id,)).fetchone()
+    if not row or not row["patient_id"]:
+        return {"alerts": [], "patient_id": None, "timeblock_id": timeblock_id}
+    agent = BreedIntelligenceAgent(db=db, log_fn=log_step)
+    return agent.analyse(row["patient_id"])
+
+
+# ============================================================
+# Phase 6 (F015) — Preventive Care Agent (T027-T031)
+# ============================================================
+
+@app.get("/api/care/protocols")
+def list_care_protocols():
+    """T030: List all care protocols."""
+    return {"protocols": db.get_all_care_protocols()}
+
+
+@app.get("/api/care/patient/{patient_id}")
+def get_patient_care_timeline(patient_id: str):
+    """T028: Full care event history for a patient."""
+    events = db.get_care_events_for_patient(patient_id)
+    return {"patient_id": patient_id, "events": events}
+
+
+@app.post("/api/care/events")
+async def record_care_event(request: Request):
+    """T028: Record an administered care event and compute next due date."""
+    from .agents.preventive_care import PreventiveCareAgent
+    body = await request.json()
+    agent = PreventiveCareAgent(db=db, log_fn=log_step)
+    result = agent.record_care_event(body)
+    return result
+
+
+@app.get("/api/care/overdue")
+def get_overdue_care_list():
+    """T029: Return all patients with overdue care items."""
+    log_step("PREVENTIVE CARE AGENT: Checking overdue care")
+    items = db.get_overdue_care()
+    return {"count": len(items), "items": items}
+
+
+@app.get("/api/care/upcoming")
+def get_upcoming_care_list(days: int = Query(30)):
+    """T031: Return care items due within the next N days."""
+    _log1(f"PREVENTIVE CARE AGENT: Checking care due in next {days} days")
+    items = db.get_care_due_within_days(days=days)
+    return {"count": len(items), "items": items, "window_days": days}
+
+
+# ============================================================
+# Phase 7 (F016) — Prescription Management Agent (T032-T036)
+# ============================================================
+
+@app.get("/api/prescriptions/patient/{patient_id}")
+def get_patient_prescriptions(patient_id: str):
+    """T035: Return all prescriptions for a patient."""
+    rxs = db.get_prescriptions_for_patient(patient_id)
+    return {"patient_id": patient_id, "prescriptions": rxs}
+
+
+@app.post("/api/prescriptions")
+async def create_prescription_route(request: Request):
+    """T033: Create a new prescription. Checks for allergy flags."""
+    from .agents.prescriptions import PrescriptionAgent
+    body = await request.json()
+    agent = PrescriptionAgent(db=db, log_fn=log_step)
+    result = agent.create_prescription(body)
+    return result
+
+
+@app.post("/api/prescriptions/{prescription_id}/refill")
+async def request_refill(prescription_id: str, request: Request):
+    """T034: Initiate a refill request (auto-approved if refills_remaining > 0)."""
+    from .agents.prescriptions import PrescriptionAgent
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    agent = PrescriptionAgent(db=db, log_fn=log_step)
+    result = agent.request_refill(prescription_id, initiated_by=body.get("initiated_by", "front_desk"))
+    return result
+
+
+@app.get("/api/prescriptions/refills/pending")
+def get_pending_refills():
+    """T036: List all pending/vet_review refill requests."""
+    log_step("PRESCRIPTION AGENT: Fetching pending refill requests")
+    items = db.get_pending_refill_requests()
+    return {"count": len(items), "items": items}
+
+
+@app.post("/api/prescriptions/refills/{refill_id}/approve")
+def approve_refill_request(refill_id: str):
+    """T036: Approve a refill request (vet action)."""
+    from .agents.prescriptions import PrescriptionAgent
+    agent = PrescriptionAgent(db=db, log_fn=log_step)
+    result = agent.approve_refill(refill_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Refill request not found")
+    return result
+
+
+@app.post("/api/prescriptions/refills/{refill_id}/flag-vet")
+def flag_refill_for_vet_review(refill_id: str):
+    """T036: Flag a refill for vet review."""
+    db.flag_refill_for_vet(refill_id)
+    _log1(f"PRESCRIPTION AGENT: Refill {refill_id} flagged for vet review")
+    return {"refill_id": refill_id, "status": "vet_review"}
+
+
+# ============================================================
+# Phase 8 (F019) — Capacity Forecasting Agent (T037-T041)
+# ============================================================
+
+@app.get("/api/forecast/{clinic_id}")
+def get_clinic_forecast(clinic_id: str, weeks: int = Query(4)):
+    """
+    T040: Run the ForecastAgent for a clinic — returns N-week projection
+    using linear regression on historical completed appointments.
+    """
+    from .agents.forecast import ForecastAgent
+    agent = ForecastAgent(db=db, log_fn=log_step)
+    result = agent.forecast(clinic_id=clinic_id, project_weeks=weeks)
+    return result

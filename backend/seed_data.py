@@ -447,3 +447,334 @@ def seed_westside_appointment():
         )
     print("[SEED] Seeded 1 Westside appointment (Dr. Chen, Avian Wellness Exam)")
 
+
+
+def seed_phase3_data():
+    """
+    T005 + T006: Seed Phase 3 data.
+    Guards against re-seeding with IF NOT EXISTS check on breed_protocols.
+    G02: All historical dates use datetime.today() - timedelta(weeks=N) -- no hardcoded dates.
+    """
+    with _get_conn() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM breed_protocols").fetchone()[0]
+    if count > 0:
+        return  # Already seeded
+
+    from datetime import date as _date, timedelta as _td
+    import calendar
+
+    today = _date.today()
+
+    def add_months(d, months):
+        y = d.year + (d.month - 1 + months) // 12
+        m = (d.month - 1 + months) % 12 + 1
+        day = min(d.day, calendar.monthrange(y, m)[1])
+        return _date(y, m, day)
+
+    # ------------------------------------------------------------------ #
+    # Breed Protocols -- 12 entries (T005)
+    # ------------------------------------------------------------------ #
+    breed_entries = [
+        ("bp-001", "Bulldog", "brachycephalic", "Anaesthesia Risk",
+         "Brachycephalic breeds have narrow airways and are at elevated risk during general anaesthesia. "
+         "Ensure pre-oxygenation, use short-acting agents, and have reversal agents ready. Monitor SpO2 closely post-procedure.",
+         0, "critical"),
+        ("bp-002", "Pug", "brachycephalic", "Anaesthesia Risk",
+         "Pugs are extremely brachycephalic and require careful pre-anaesthetic workup. "
+         "Avoid sedative pre-medications that suppress respiration. Maintain oxygen delivery throughout recovery.",
+         0, "critical"),
+        ("bp-003", "Boston Terrier", "brachycephalic", "Anaesthesia Risk",
+         "Boston Terriers are brachycephalic. Pre-anaesthetic assessment should include evaluation for elongated soft palate. "
+         "Use low-dose induction agents and ensure rapid intubation.",
+         0, "critical"),
+        ("bp-004", "Shih Tzu", "brachycephalic", "Airway Monitoring",
+         "Shih Tzus are moderately brachycephalic. Monitor closely for respiratory distress in recovery. "
+         "Keep head elevated post-procedure and avoid stress.",
+         0, "warning"),
+        ("bp-005", "Golden Retriever", "oncology", "Oncology Screening",
+         "Golden Retrievers have an elevated lifetime risk of cancer (approx 60%). "
+         "Annual blood panels including CBC and chemistry recommended from age 6. "
+         "Lymph node palpation at every visit. Discuss cancer prevention with owner.",
+         6, "warning"),
+        ("bp-006", "Labrador", "oncology", "Oncology Screening",
+         "Labradors are predisposed to soft-tissue sarcomas and mast cell tumours from age 7+. "
+         "Full-body palpation at each visit. Consider annual chest X-ray for patients >8 years.",
+         7, "info"),
+        ("bp-007", "Cavalier King Charles", "cardiac", "Cardiac Monitoring",
+         "CKCS are predisposed to Mitral Valve Disease (MVD) -- onset typically 4+ years. "
+         "Annual cardiac auscultation mandatory. Refer to cardiologist if murmur detected. Follow EPIC trial protocol.",
+         4, "warning"),
+        ("bp-008", "Doberman", "cardiac", "DCM Screening",
+         "Dobermans are highly predisposed to Dilated Cardiomyopathy (DCM). "
+         "Annual cardiac echo and 24-hour Holter recommended from age 5. "
+         "Holter may reveal occult DCM years before clinical signs.",
+         5, "warning"),
+        ("bp-009", "German Shepherd", "ortho", "Hip Dysplasia Protocol",
+         "German Shepherds have a high rate of canine hip dysplasia (CHD). "
+         "Hip radiographs recommended at 12-18 months for breeding assessment. "
+         "PennHIP or OFA evaluation recommended. Monitor gait at each visit from age 1.",
+         1, "info"),
+        ("bp-010", "Dachshund", "ortho", "IVDD Risk",
+         "Dachshunds are predisposed to intervertebral disc disease (IVDD). "
+         "Avoid activities with excessive spinal loading. Monitor for back pain or hind limb weakness. "
+         "Educate owners on ramp use and weight management from age 3.",
+         3, "warning"),
+        ("bp-011", "Maine Coon", "cardiac", "HCM Screening",
+         "Maine Coons are predisposed to Hypertrophic Cardiomyopathy (HCM). "
+         "Annual cardiac auscultation. Echo recommended every 2 years from age 3. "
+         "MyBPC3 gene mutation screening available.",
+         3, "warning"),
+        ("bp-012", "Persian", "renal", "PKD Monitoring",
+         "Persian cats carry a high prevalence of Polycystic Kidney Disease (PKD). "
+         "DNA test recommended. Annual renal ultrasound from age 2. "
+         "Monitor BUN/creatinine at every wellness visit.",
+         2, "warning"),
+    ]
+
+    with _get_conn() as conn:
+        for bp in breed_entries:
+            conn.execute(
+                "INSERT OR IGNORE INTO breed_protocols (id, breed_pattern, flag_type, title, detail, age_threshold_years, severity) VALUES (?,?,?,?,?,?,?)",
+                bp
+            )
+    print("[SEED] Inserted {} breed protocols".format(len(breed_entries)))
+
+    # ------------------------------------------------------------------ #
+    # Care Protocols -- 8 entries (T005)
+    # ------------------------------------------------------------------ #
+    care_protocol_entries = [
+        ("cp-001", "dog", "DHPP",          12),
+        ("cp-002", "all", "Rabies",         12),
+        ("cp-003", "dog", "Bordetella",      6),
+        ("cp-004", "cat", "FVRCP",          12),
+        ("cp-005", "cat", "FeLV",           12),
+        ("cp-006", "dog", "Leptospirosis",  12),
+        ("cp-007", "dog", "Heartworm Test", 12),
+        ("cp-008", "all", "Dental",         12),
+    ]
+
+    with _get_conn() as conn:
+        for cp in care_protocol_entries:
+            conn.execute(
+                "INSERT OR IGNORE INTO care_protocols (id, species, protocol_name, interval_months) VALUES (?,?,?,?)",
+                cp
+            )
+    print("[SEED] Inserted {} care protocols".format(len(care_protocol_entries)))
+
+    # ------------------------------------------------------------------ #
+    # Lookup patient IDs
+    # ------------------------------------------------------------------ #
+    with _get_conn() as conn:
+        buddy_row    = conn.execute("SELECT id FROM patients WHERE name='Buddy' LIMIT 1").fetchone()
+        rex_row      = conn.execute("SELECT id FROM patients WHERE name='Rex' LIMIT 1").fetchone()
+        luna_row     = conn.execute("SELECT id FROM patients WHERE name='Luna' LIMIT 1").fetchone()
+        daisy_row    = conn.execute("SELECT id FROM patients WHERE name='Daisy' LIMIT 1").fetchone()
+        whiskers_row = conn.execute("SELECT id FROM patients WHERE name='Whiskers' LIMIT 1").fetchone()
+
+    buddy_id    = buddy_row["id"]    if buddy_row    else None
+    rex_id      = rex_row["id"]      if rex_row      else None
+    luna_id     = luna_row["id"]     if luna_row     else None
+    daisy_id    = daisy_row["id"]    if daisy_row    else None
+    whiskers_id = whiskers_row["id"] if whiskers_row else None
+
+    # ------------------------------------------------------------------ #
+    # Care Events (T005) -- overdue and upcoming
+    # SC-P3-004: >= 2 overdue on startup
+    # ------------------------------------------------------------------ #
+    care_event_entries = []
+
+    if buddy_id:
+        buddy_dhpp_admin = add_months(today, -14)
+        buddy_dhpp_due   = add_months(buddy_dhpp_admin, 12)
+        care_event_entries.append({
+            "id": "ce-buddy-dhpp", "patient_id": buddy_id, "protocol_id": "cp-001",
+            "timeblock_id": None,
+            "administered_date": buddy_dhpp_admin.isoformat(),
+            "next_due_date":     buddy_dhpp_due.isoformat(),
+            "batch_number": "LOT-4421", "administered_by": "Dr. Smith",
+        })
+        buddy_rabies_admin = add_months(today, -11)
+        buddy_rabies_due   = today + _td(days=15)
+        care_event_entries.append({
+            "id": "ce-buddy-rabies", "patient_id": buddy_id, "protocol_id": "cp-002",
+            "timeblock_id": None,
+            "administered_date": buddy_rabies_admin.isoformat(),
+            "next_due_date":     buddy_rabies_due.isoformat(),
+            "batch_number": "LOT-7812", "administered_by": "Dr. Smith",
+        })
+
+    if rex_id:
+        rex_dhpp_admin = add_months(today, -15)
+        rex_dhpp_due   = add_months(rex_dhpp_admin, 12)
+        care_event_entries.append({
+            "id": "ce-rex-dhpp", "patient_id": rex_id, "protocol_id": "cp-001",
+            "timeblock_id": None,
+            "administered_date": rex_dhpp_admin.isoformat(),
+            "next_due_date":     rex_dhpp_due.isoformat(),
+            "batch_number": "LOT-3319", "administered_by": "Dr. Smith",
+        })
+        rex_bord_admin = add_months(today, -5)
+        rex_bord_due   = today + _td(days=20)
+        care_event_entries.append({
+            "id": "ce-rex-bordetella", "patient_id": rex_id, "protocol_id": "cp-003",
+            "timeblock_id": None,
+            "administered_date": rex_bord_admin.isoformat(),
+            "next_due_date":     rex_bord_due.isoformat(),
+            "batch_number": "LOT-5502", "administered_by": "Dr. Smith",
+        })
+
+    if luna_id:
+        luna_fvrcp_admin = add_months(today, -11)
+        luna_fvrcp_due   = today + _td(days=10)
+        care_event_entries.append({
+            "id": "ce-luna-fvrcp", "patient_id": luna_id, "protocol_id": "cp-004",
+            "timeblock_id": None,
+            "administered_date": luna_fvrcp_admin.isoformat(),
+            "next_due_date":     luna_fvrcp_due.isoformat(),
+            "batch_number": "LOT-8891", "administered_by": "Dr. Jones",
+        })
+
+    if whiskers_id:
+        wh_admin = add_months(today, -13)
+        wh_due   = add_months(wh_admin, 12)
+        care_event_entries.append({
+            "id": "ce-whiskers-felv", "patient_id": whiskers_id, "protocol_id": "cp-005",
+            "timeblock_id": None,
+            "administered_date": wh_admin.isoformat(),
+            "next_due_date":     wh_due.isoformat(),
+            "batch_number": "LOT-2201", "administered_by": "Dr. Jones",
+        })
+
+    with _get_conn() as conn:
+        for ce in care_event_entries:
+            conn.execute(
+                "INSERT OR IGNORE INTO care_events (id, patient_id, protocol_id, timeblock_id, administered_date, next_due_date, batch_number, administered_by) VALUES (?,?,?,?,?,?,?,?)",
+                (ce["id"], ce["patient_id"], ce["protocol_id"], ce.get("timeblock_id"),
+                 ce["administered_date"], ce["next_due_date"], ce["batch_number"], ce["administered_by"])
+            )
+    print("[SEED] Inserted {} care events".format(len(care_event_entries)))
+
+    # ------------------------------------------------------------------ #
+    # Waitlist -- 3 entries with varied urgency (T005)
+    # ------------------------------------------------------------------ #
+    waitlist_entries = []
+    if daisy_id:
+        waitlist_entries.append({
+            "id": "wl-daisy-dental", "patient_id": daisy_id,
+            "clinic_id": "clinic-downtown", "procedure_type": "Dental Cleaning",
+            "preferred_vet_id": None, "urgency": "asap", "offer_status": "waiting",
+            "join_date": (datetime.today() - timedelta(days=5)).isoformat(),
+        })
+    if rex_id:
+        waitlist_entries.append({
+            "id": "wl-rex-wellness", "patient_id": rex_id,
+            "clinic_id": "clinic-downtown", "procedure_type": "Wellness Exam",
+            "preferred_vet_id": None, "urgency": "within_week", "offer_status": "waiting",
+            "join_date": (datetime.today() - timedelta(days=3)).isoformat(),
+        })
+    if luna_id:
+        waitlist_entries.append({
+            "id": "wl-luna-vaccination", "patient_id": luna_id,
+            "clinic_id": "clinic-downtown", "procedure_type": "Vaccination",
+            "preferred_vet_id": None, "urgency": "flexible", "offer_status": "waiting",
+            "join_date": (datetime.today() - timedelta(days=1)).isoformat(),
+        })
+
+    with _get_conn() as conn:
+        for wl in waitlist_entries:
+            conn.execute(
+                "INSERT OR IGNORE INTO waitlist (id, patient_id, clinic_id, procedure_type, preferred_vet_id, urgency, offer_status, join_date) VALUES (?,?,?,?,?,?,?,?)",
+                (wl["id"], wl["patient_id"], wl["clinic_id"], wl["procedure_type"],
+                 wl.get("preferred_vet_id"), wl["urgency"], wl["offer_status"], wl["join_date"])
+            )
+    print("[SEED] Inserted {} waitlist entries".format(len(waitlist_entries)))
+
+    # ------------------------------------------------------------------ #
+    # Prescriptions -- 2 active Rx (T005)
+    # ------------------------------------------------------------------ #
+    rx_entries = []
+    if buddy_id:
+        rx_entries.append({
+            "id": "rx-buddy-carprofen", "patient_id": buddy_id, "timeblock_id": None,
+            "drug_name": "Carprofen", "dose": "25mg", "frequency": "BID",
+            "duration_days": 14, "refills_remaining": 2,
+            "supply_ends_at": (today + _td(days=7)).isoformat(),
+            "issued_by": "Dr. Smith",
+            "issued_date": (today - _td(days=7)).isoformat(),
+        })
+    if rex_id:
+        rx_entries.append({
+            "id": "rx-rex-gabapentin", "patient_id": rex_id, "timeblock_id": None,
+            "drug_name": "Gabapentin", "dose": "100mg", "frequency": "TID",
+            "duration_days": 14, "refills_remaining": 1,
+            "supply_ends_at": (today + _td(days=7)).isoformat(),
+            "issued_by": "Dr. Smith",
+            "issued_date": (today - _td(days=14)).isoformat(),
+        })
+
+    with _get_conn() as conn:
+        for rx in rx_entries:
+            conn.execute(
+                "INSERT OR IGNORE INTO prescriptions (id, patient_id, timeblock_id, drug_name, dose, frequency, duration_days, refills_remaining, supply_ends_at, issued_by, issued_date) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (rx["id"], rx["patient_id"], rx.get("timeblock_id"), rx["drug_name"],
+                 rx["dose"], rx["frequency"], rx["duration_days"], rx["refills_remaining"],
+                 rx["supply_ends_at"], rx["issued_by"], rx["issued_date"])
+            )
+    print("[SEED] Inserted {} prescriptions".format(len(rx_entries)))
+
+    # ------------------------------------------------------------------ #
+    # T006: Historical completed timeblocks for forecast linear regression
+    # 8 weeks, clinic-downtown, slight upward trend
+    # G02: All dates use datetime.today() - timedelta(weeks=N) -- no hardcoded dates
+    # ------------------------------------------------------------------ #
+    weekly_counts = [8, 9, 9, 10, 10, 11, 12, 13]  # oldest-first
+
+    with _get_conn() as conn:
+        smith_row = conn.execute("SELECT id FROM resources WHERE name='Dr. Smith' LIMIT 1").fetchone()
+        room_row  = conn.execute("SELECT id FROM resources WHERE name='Exam Room 1' LIMIT 1").fetchone()
+        existing_count = conn.execute(
+            "SELECT COUNT(*) FROM timeblocks WHERE status='complete' AND clinic_id='clinic-downtown'"
+        ).fetchone()[0]
+
+    if existing_count < 10 and smith_row and room_row:
+        smith_id  = smith_row["id"]
+        room_id   = room_row["id"]
+        resource_ids_json = json.dumps([smith_id, room_id])
+
+        hist_entries = []
+        for week_back, appt_count in enumerate(reversed(weekly_counts), start=1):
+            week_start = datetime.today() - timedelta(weeks=week_back)
+            for appt_idx in range(appt_count):
+                hour_offset = 8 + (appt_idx % 8)
+                start_dt = week_start.replace(
+                    hour=hour_offset, minute=0, second=0, microsecond=0
+                ) + timedelta(days=appt_idx // 8)
+                end_dt = start_dt + timedelta(minutes=60)
+                tb_id  = str(_uuid.uuid4())
+                job_id = str(_uuid.uuid4())
+                job_data = json.dumps({
+                    "id": job_id, "required_skills": ["General Practice"],
+                    "estimated_duration": 60, "patient_name": None,
+                    "procedure": "Wellness Exam", "soft_requirements": "",
+                    "scheduled_date": None, "scheduled_time": None,
+                })
+                hist_entries.append((tb_id, job_id, job_data, start_dt, end_dt))
+
+        with _get_conn() as conn:
+            for tb_id, job_id, job_data, start_dt, end_dt in hist_entries:
+                conn.execute("INSERT OR IGNORE INTO jobs VALUES (?,?)", (job_id, job_data))
+                conn.execute(
+                    """INSERT OR IGNORE INTO timeblocks
+                       (id, job_id, resource_ids, start_time, end_time,
+                        patient_id, intake_status, followup_status, risk_level, status, clinic_id)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    (tb_id, job_id, resource_ids_json,
+                     start_dt.isoformat(), end_dt.isoformat(),
+                     None, "not_started", "not_started", "low", "complete",
+                     "clinic-downtown"),
+                )
+        print("[SEED] Inserted {} historical completed timeblocks for forecast regression".format(len(hist_entries)))
+    else:
+        print("[SEED] Skipping historical timeblock seed -- already {} complete records".format(existing_count))
+
+    print("[SEED] Phase 3 seed complete.")

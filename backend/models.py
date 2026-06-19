@@ -152,3 +152,88 @@ class VetClinicAssignment(BaseModel):
     clinic_id: str
     schedule_days: List[str] = Field(default_factory=list)
     is_primary: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 (vpma-v1.1) — Clinical Operations Models (T003)
+# ---------------------------------------------------------------------------
+
+class BreedProtocol(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    breed_pattern: str
+    flag_type: str  # brachycephalic | oncology | cardiac | ortho | renal
+    title: str
+    detail: str
+    age_threshold_years: float = 0.0
+    severity: str = "info"  # info | warning | critical
+
+
+class WaitlistEntry(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    patient_id: str
+    clinic_id: str
+    procedure_type: str
+    preferred_vet_id: Optional[str] = None
+    urgency: str = "flexible"   # flexible | within_week | asap
+    offer_status: str = "waiting"  # waiting | offered | accepted | expired
+    join_date: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+class CareProtocol(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    species: str   # dog | cat | all
+    protocol_name: str
+    interval_months: int
+
+
+class CareEvent(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    patient_id: str
+    protocol_id: str
+    timeblock_id: Optional[str] = None
+    administered_date: str   # ISO date
+    next_due_date: str       # ISO date; computed = administered_date + interval_months
+    batch_number: str = ""
+    administered_by: str = ""
+
+
+class Prescription(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    patient_id: str
+    timeblock_id: Optional[str] = None
+    drug_name: str
+    dose: str           # e.g. "25mg"
+    frequency: str      # e.g. "BID"
+    duration_days: int
+    refills_remaining: int = 0
+    supply_ends_at: str  # ISO date; issued_date + duration_days
+    issued_by: str
+    issued_date: str    # ISO date
+
+
+class RefillRequest(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    prescription_id: str
+    initiated_by: str   # "vet" | "front_desk"
+    status: str = "pending"  # pending | auto_approved | vet_review | approved | declined
+    requested_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[str] = None
+
+
+class ForecastWeek(BaseModel):
+    week_label: str
+    booked_slots: int
+    projected_slots: int
+    capacity_slots: int
+    utilisation_pct: float
+    projected_revenue: float
+
+
+class ForecastResult(BaseModel):
+    clinic_id: str
+    clinic_name: str
+    trend: str  # on_track | action_needed | strong_growth
+    forecast_weeks: List[ForecastWeek]
+    insight: str
+    verbose_log: List[str] = Field(default_factory=list)

@@ -150,6 +150,63 @@ def _init_db():
             submitted_at TEXT NOT NULL,
             source TEXT DEFAULT 'owner'
         );
+        CREATE TABLE IF NOT EXISTS breed_protocols (
+            id          TEXT PRIMARY KEY,
+            breed_pattern       TEXT NOT NULL,
+            flag_type           TEXT NOT NULL,
+            title               TEXT NOT NULL,
+            detail              TEXT NOT NULL,
+            age_threshold_years REAL DEFAULT 0,
+            severity            TEXT DEFAULT 'info'
+        );
+        CREATE TABLE IF NOT EXISTS waitlist (
+            id                TEXT PRIMARY KEY,
+            patient_id        TEXT NOT NULL,
+            clinic_id         TEXT NOT NULL,
+            procedure_type    TEXT NOT NULL,
+            preferred_vet_id  TEXT,
+            urgency           TEXT DEFAULT 'flexible',
+            offer_status      TEXT DEFAULT 'waiting',
+            join_date         TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS care_protocols (
+            id              TEXT PRIMARY KEY,
+            species         TEXT NOT NULL,
+            protocol_name   TEXT NOT NULL,
+            interval_months INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS care_events (
+            id               TEXT PRIMARY KEY,
+            patient_id       TEXT NOT NULL,
+            protocol_id      TEXT NOT NULL,
+            timeblock_id     TEXT,
+            administered_date TEXT NOT NULL,
+            next_due_date     TEXT NOT NULL,
+            batch_number      TEXT DEFAULT '',
+            administered_by   TEXT DEFAULT ''
+        );
+        CREATE TABLE IF NOT EXISTS prescriptions (
+            id               TEXT PRIMARY KEY,
+            patient_id       TEXT NOT NULL,
+            timeblock_id     TEXT,
+            drug_name        TEXT NOT NULL,
+            dose             TEXT NOT NULL,
+            frequency        TEXT NOT NULL,
+            duration_days    INTEGER NOT NULL,
+            refills_remaining INTEGER DEFAULT 0,
+            supply_ends_at   TEXT NOT NULL,
+            issued_by        TEXT NOT NULL,
+            issued_date      TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS refill_requests (
+            id               TEXT PRIMARY KEY,
+            prescription_id  TEXT NOT NULL,
+            initiated_by     TEXT NOT NULL,
+            status           TEXT DEFAULT 'pending',
+            requested_at     TEXT NOT NULL,
+            reviewed_by      TEXT,
+            reviewed_at      TEXT
+        );
         """)
         # Migrate existing resources table to add status columns if missing
         try:
@@ -185,6 +242,19 @@ def _init_db():
         # Migrate: add home_clinic_id to patients
         try:
             conn.execute("ALTER TABLE patients ADD COLUMN home_clinic_id TEXT")
+        except Exception:
+            pass
+        # T002 — Phase 3: confirmation columns on timeblocks
+        try:
+            conn.execute("ALTER TABLE timeblocks ADD COLUMN confirmation_status TEXT DEFAULT 'not_sent'")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE timeblocks ADD COLUMN confirmed_at TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE timeblocks ADD COLUMN reminder_sent_at TEXT")
         except Exception:
             pass
 
@@ -326,6 +396,10 @@ class InMemoryRepository(BaseRepository):
     def __init__(self):
         _init_db()
         self._seed_if_empty()
+
+    def _get_conn(self):
+        """Expose module-level _get_conn for agent raw queries."""
+        return _get_conn()
 
     def _seed_if_empty(self):
         with _get_conn() as conn:
@@ -811,6 +885,268 @@ class InMemoryRepository(BaseRepository):
                 "SELECT id, timeblock_id, patient_id, filename, content_type, data, caption, submitted_at, source FROM owner_images WHERE timeblock_id=? ORDER BY submitted_at ASC",
                 (timeblock_id,)
             ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ #
+    #  T002/T009 — Confirmation status (F013 Reminders)
+    # ------------------------------------------------------------------ #
+
+    def update_confirmation_status(self, timeblock_id: str, status: str, timestamp: str = None) -> None:
+        """Update confirmation_status and optionally confirmed_at or reminder_sent_at."""
+        with _get_conn() as conn:
+            if status == 'sent':
+                conn.execute(
+                    "UPDATE timeblocks SET confirmation_status=?, reminder_sent_at=? WHERE id=?",
+                    (status, timestamp, timeblock_id)
+                )
+            elif status == 'confirmed':
+                conn.execute(
+                    "UPDATE timeblocks SET confirmation_status=?, confirmed_at=? WHERE id=?",
+                    (status, timestamp, timeblock_id)
+                )
+            else:
+                conn.execute(
+                    "UPDATE timeblocks SET confirmation_status=? WHERE id=?",
+                    (status, timeblock_id)
+                )
+
+    def get_action_queue(self, clinic_id: str = None) -> list:
+        """Return timeblocks where confirmation_status is unconfirmed or reschedule_requested."""
+        with _get_conn() as conn:
+            if clinic_id:
+                rows = conn.execute(
+                    """SELECT t.*, p.name as patient_name, o.name as owner_name
+                       FROM timeblocks t
+                       LEFT JOIN patients p ON p.id = t.patient_id
+                       LEFT JOIN owners o ON o.id = p.owner_id
+                       WHERE t.confirmation_status IN ('unconfirmed','reschedule_requested')
+                       AND t.clinic_id=?""",
+                    (clinic_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT t.*, p.name as patient_name, o.name as owner_name
+                       FROM timeblocks t
+                       LEFT JOIN patients p ON p.id = t.patient_id
+                       LEFT JOIN owners o ON o.id = p.owner_id
+                       WHERE t.confirmation_status IN ('unconfirmed','reschedule_requested')"""
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ #
+    #  T004/T017 — Waitlist CRUD (F014)
+    # ------------------------------------------------------------------ #
+
+    def get_active_waitlist(self, clinic_id: str = None) -> list:
+        with _get_conn() as conn:
+            if clinic_id:
+                rows = conn.execute(
+                    "SELECT w.*, p.name as patient_name, o.name as owner_name FROM waitlist w "
+                    "LEFT JOIN patients p ON p.id=w.patient_id "
+                    "LEFT JOIN owners o ON o.id=p.owner_id "
+                    "WHERE w.offer_status NOT IN ('accepted') AND w.clinic_id=? ORDER BY w.join_date ASC",
+                    (clinic_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT w.*, p.name as patient_name, o.name as owner_name FROM waitlist w "
+                    "LEFT JOIN patients p ON p.id=w.patient_id "
+                    "LEFT JOIN owners o ON o.id=p.owner_id "
+                    "WHERE w.offer_status NOT IN ('accepted') ORDER BY w.join_date ASC"
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+    def add_waitlist_entry(self, entry: dict) -> dict:
+        with _get_conn() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO waitlist (id, patient_id, clinic_id, procedure_type, preferred_vet_id, urgency, offer_status, join_date) VALUES (?,?,?,?,?,?,?,?)",
+                (entry['id'], entry['patient_id'], entry['clinic_id'], entry['procedure_type'],
+                 entry.get('preferred_vet_id'), entry.get('urgency','flexible'),
+                 entry.get('offer_status','waiting'), entry['join_date'])
+            )
+        return entry
+
+    def update_waitlist_status(self, entry_id: str, status: str) -> None:
+        with _get_conn() as conn:
+            conn.execute("UPDATE waitlist SET offer_status=? WHERE id=?", (status, entry_id))
+
+    def remove_waitlist_entry(self, entry_id: str) -> None:
+        with _get_conn() as conn:
+            conn.execute("DELETE FROM waitlist WHERE id=?", (entry_id,))
+
+    def get_waitlist_entry(self, entry_id: str) -> dict:
+        with _get_conn() as conn:
+            row = conn.execute("SELECT * FROM waitlist WHERE id=?", (entry_id,)).fetchone()
+        return dict(row) if row else None
+
+    # ------------------------------------------------------------------ #
+    #  T004/T028 — Care Protocol & Events CRUD (F015)
+    # ------------------------------------------------------------------ #
+
+    def get_all_care_protocols(self) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute("SELECT * FROM care_protocols ORDER BY protocol_name ASC").fetchall()
+        return [dict(r) for r in rows]
+
+    def get_care_protocol(self, protocol_id: str) -> dict:
+        with _get_conn() as conn:
+            row = conn.execute("SELECT * FROM care_protocols WHERE id=?", (protocol_id,)).fetchone()
+        return dict(row) if row else None
+
+    def get_care_events_for_patient(self, patient_id: str) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                """SELECT ce.*, cp.protocol_name, cp.interval_months
+                   FROM care_events ce
+                   JOIN care_protocols cp ON cp.id = ce.protocol_id
+                   WHERE ce.patient_id=? ORDER BY ce.administered_date DESC""",
+                (patient_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def create_care_event(self, event: dict) -> dict:
+        with _get_conn() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO care_events (id, patient_id, protocol_id, timeblock_id, administered_date, next_due_date, batch_number, administered_by) VALUES (?,?,?,?,?,?,?,?)",
+                (event['id'], event['patient_id'], event['protocol_id'], event.get('timeblock_id'),
+                 event['administered_date'], event['next_due_date'],
+                 event.get('batch_number',''), event.get('administered_by',''))
+            )
+        return event
+
+    def get_overdue_care(self) -> list:
+        """Return patients with any care event where next_due_date < today."""
+        with _get_conn() as conn:
+            rows = conn.execute(
+                """SELECT ce.*, cp.protocol_name, cp.interval_months,
+                          p.name as patient_name, o.name as owner_name
+                   FROM care_events ce
+                   JOIN care_protocols cp ON cp.id = ce.protocol_id
+                   JOIN patients p ON p.id = ce.patient_id
+                   LEFT JOIN owners o ON o.id = p.owner_id
+                   WHERE ce.next_due_date < date('now')
+                   ORDER BY ce.next_due_date ASC"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_care_due_within_days(self, days: int = 30) -> list:
+        """Return care events due within the next N days (includes overdue)."""
+        with _get_conn() as conn:
+            rows = conn.execute(
+                """SELECT ce.*, cp.protocol_name, cp.interval_months,
+                          p.name as patient_name, o.name as owner_name
+                   FROM care_events ce
+                   JOIN care_protocols cp ON cp.id = ce.protocol_id
+                   JOIN patients p ON p.id = ce.patient_id
+                   LEFT JOIN owners o ON o.id = p.owner_id
+                   WHERE ce.next_due_date <= date('now', '+' || ? || ' days')
+                   ORDER BY ce.next_due_date ASC""",
+                (days,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ #
+    #  T004/T033 — Prescriptions & Refill Requests CRUD (F016)
+    # ------------------------------------------------------------------ #
+
+    def get_prescriptions_for_patient(self, patient_id: str) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM prescriptions WHERE patient_id=? ORDER BY issued_date DESC",
+                (patient_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def create_prescription(self, rx: dict) -> dict:
+        with _get_conn() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO prescriptions (id, patient_id, timeblock_id, drug_name, dose, frequency, duration_days, refills_remaining, supply_ends_at, issued_by, issued_date) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (rx['id'], rx['patient_id'], rx.get('timeblock_id'), rx['drug_name'],
+                 rx['dose'], rx['frequency'], rx['duration_days'], rx.get('refills_remaining',0),
+                 rx['supply_ends_at'], rx['issued_by'], rx['issued_date'])
+            )
+        return rx
+
+    def get_prescription(self, prescription_id: str) -> dict:
+        with _get_conn() as conn:
+            row = conn.execute("SELECT * FROM prescriptions WHERE id=?", (prescription_id,)).fetchone()
+        return dict(row) if row else None
+
+    def create_refill_request(self, req: dict) -> dict:
+        with _get_conn() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO refill_requests (id, prescription_id, initiated_by, status, requested_at, reviewed_by, reviewed_at) VALUES (?,?,?,?,?,?,?)",
+                (req['id'], req['prescription_id'], req['initiated_by'], req.get('status','pending'),
+                 req['requested_at'], req.get('reviewed_by'), req.get('reviewed_at'))
+            )
+        return req
+
+    def get_pending_refill_requests(self) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                """SELECT rr.*, pr.drug_name, pr.dose, pr.frequency, pr.refills_remaining,
+                          pr.patient_id, p.name as patient_name
+                   FROM refill_requests rr
+                   JOIN prescriptions pr ON pr.id = rr.prescription_id
+                   JOIN patients p ON p.id = pr.patient_id
+                   WHERE rr.status IN ('pending','auto_approved','vet_review')
+                   ORDER BY rr.requested_at DESC"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def approve_refill(self, refill_id: str) -> dict:
+        """Approve a refill request and decrement refills_remaining on the prescription."""
+        with _get_conn() as conn:
+            row = conn.execute("SELECT * FROM refill_requests WHERE id=?", (refill_id,)).fetchone()
+            if not row:
+                return None
+            rr = dict(row)
+            conn.execute(
+                "UPDATE refill_requests SET status='approved', reviewed_at=? WHERE id=?",
+                (datetime.utcnow().isoformat(), refill_id)
+            )
+            conn.execute(
+                "UPDATE prescriptions SET refills_remaining = MAX(0, refills_remaining - 1) WHERE id=?",
+                (rr['prescription_id'],)
+            )
+            pr_row = conn.execute("SELECT * FROM prescriptions WHERE id=?", (rr['prescription_id'],)).fetchone()
+        return dict(pr_row) if pr_row else None
+
+    def flag_refill_for_vet(self, refill_id: str) -> None:
+        with _get_conn() as conn:
+            conn.execute(
+                "UPDATE refill_requests SET status='vet_review' WHERE id=?",
+                (refill_id,)
+            )
+
+    # ------------------------------------------------------------------ #
+    #  T004/T038 — Forecast historical data (F019)
+    # ------------------------------------------------------------------ #
+
+    def get_historical_weekly_counts(self, clinic_id: str, weeks: int = 8) -> list:
+        """G04: Bucket completed timeblocks by ISO week of start_time WHERE status='complete'."""
+        # Compute cutoff in Python — SQLite string concat for modifiers is unreliable
+        cutoff = (datetime.utcnow() - timedelta(weeks=weeks)).isoformat()
+        with _get_conn() as conn:
+            rows = conn.execute(
+                """SELECT strftime('%Y-%W', start_time) as week_label,
+                          COUNT(*) as count
+                   FROM timeblocks
+                   WHERE clinic_id=? AND status='complete'
+                     AND start_time >= ?
+                   GROUP BY strftime('%Y-%W', start_time)
+                   ORDER BY week_label ASC""",
+                (clinic_id, cutoff)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ #
+    #  Breed Protocol CRUD (F018)
+    # ------------------------------------------------------------------ #
+
+    def get_breed_protocols(self) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute("SELECT * FROM breed_protocols").fetchall()
         return [dict(r) for r in rows]
 
 
