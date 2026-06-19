@@ -22,9 +22,9 @@ export default function MockLogin({ onLogin }: { onLogin: () => void }) {
         className="w-full max-w-md p-8 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl backdrop-blur-xl"
       >
         <h1 className="text-3xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
-          Agentic Scheduler
+          VPMA
         </h1>
-        <p className="text-zinc-400 mb-8">Sign in to the Veterinary Management System.</p>
+        <p className="text-zinc-400 mb-8">Veterinary Practice Management Agent — Sign in to continue.</p>
         
         <div className="space-y-4">
           <div>

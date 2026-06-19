@@ -207,7 +207,7 @@ export default function ClinicInfo({ onEnter }: { onEnter: () => void }) {
           onClick={onEnter}
           className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold px-8 py-3.5 rounded-xl transition-all duration-200 hover:scale-[1.03] active:scale-95 shadow-lg shadow-emerald-500/20"
         >
-          Enter the Scheduler
+          Enter VPMA
           <ChevronRight size={18} />
         </button>
         <p className="text-zinc-600 text-xs mt-3">Type anything in natural language to book an appointment</p>

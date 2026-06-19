@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uuid as _uuid
 from datetime import datetime, date as _date
 
-app = FastAPI(title="General Scheduler API")
+app = FastAPI(title="VPMA — Veterinary Practice Management Agent")
 
 app.add_middleware(
     CORSMiddleware,
