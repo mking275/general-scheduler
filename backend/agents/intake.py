@@ -276,7 +276,120 @@ def _parse_time(text: str) -> time | None:
 # IntakeAgent
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# T021 — Symptom extraction helpers
+# ---------------------------------------------------------------------------
+
+SYMPTOM_KEYWORDS = [
+    "lethargy", "vomiting", "diarrhea", "anorexia", "coughing",
+    "limping", "scratching", "seizure", "collapse", "bleeding",
+    "drinking", "urinating", "sneezing", "wheezing", "discharge",
+    "swelling", "lameness", "trembling", "shaking",
+]
+
+SYMPTOM_FOCUS_MAP = {
+    "lethargy":   ["Metabolic", "GI", "hematology"],
+    "vomiting":   ["GI", "metabolic panel"],
+    "diarrhea":   ["GI", "parasitology"],
+    "anorexia":   ["GI", "metabolic panel"],
+    "coughing":   ["Respiratory", "cardiovascular"],
+    "limping":    ["Orthopedic", "pain management"],
+    "scratching": ["Dermatology", "allergy panel"],
+    "seizure":    ["Neurology", "brain imaging"],
+    "collapse":   ["Cardiovascular", "emergency triage"],
+    "bleeding":   ["Hematology", "coagulation panel"],
+    "drinking":   ["Endocrinology", "renal panel"],
+    "urinating":  ["Renal panel", "urinalysis"],
+    "sneezing":   ["Respiratory", "upper respiratory"],
+    "wheezing":   ["Respiratory", "bronchoscopy"],
+    "discharge":  ["Infection panel", "cytology"],
+    "swelling":   ["Orthopedic", "inflammation"],
+    "lameness":   ["Orthopedic", "radiography"],
+    "trembling":  ["Neurology", "pain assessment"],
+    "shaking":    ["Neurology", "ear exam"],
+}
+
+_DURATION_RE = re.compile(
+    r"(\d+)\s*(day|week|hour)s?\s*(ago|since)?",
+    re.IGNORECASE,
+)
+
+_SEVERITY_HIGH = {"severe", "emergency", "critical", "extreme", "urgent", "very bad", "terrible"}
+_SEVERITY_LOW  = {"little", "mild", "slight", "minor", "barely", "bit", "somewhat"}
+
+
+def _extract_duration_days(text: str, symptom: str) -> int:
+    """Attempt to find duration near the symptom mention."""
+    lower = text.lower()
+    idx = lower.find(symptom)
+    context = lower[max(0, idx - 40): idx + 80]
+    m = _DURATION_RE.search(context)
+    if not m:
+        return 1  # default 1 day
+    amount = int(m.group(1))
+    unit = m.group(2).lower()
+    if unit == "week":
+        return amount * 7
+    if unit == "hour":
+        return max(1, amount // 24)
+    return amount
+
+
+def _extract_severity(text: str, symptom: str) -> str:
+    lower = text.lower()
+    idx = lower.find(symptom)
+    context = lower[max(0, idx - 30): idx + 60]
+    for word in _SEVERITY_HIGH:
+        if word in context:
+            return "high"
+    for word in _SEVERITY_LOW:
+        if word in context:
+            return "low"
+    return "mild"
+
+
 class IntakeAgent:
+    def extract_symptoms(self, text: str):
+        """
+        T021: Extract structured symptoms from owner free-text response.
+        Returns a PreExamBrief-compatible dict.
+        """
+        from ..models import PreExamBrief
+        lower = text.lower()
+        found_symptoms = []
+        focus_set: set = set()
+
+        for sym in SYMPTOM_KEYWORDS:
+            if sym in lower:
+                duration = _extract_duration_days(text, sym)
+                severity = _extract_severity(text, sym)
+                found_symptoms.append({
+                    "name": sym,
+                    "duration_days": duration,
+                    "severity": severity,
+                })
+                for area in SYMPTOM_FOCUS_MAP.get(sym, []):
+                    focus_set.add(area)
+
+        # Build chief complaint
+        if found_symptoms:
+            symptom_names = [s["name"].capitalize() for s in found_symptoms]
+            if len(symptom_names) == 1:
+                chief = symptom_names[0]
+            elif len(symptom_names) == 2:
+                chief = f"{symptom_names[0]} and {symptom_names[1]}"
+            else:
+                chief = ", ".join(symptom_names[:-1]) + f", and {symptom_names[-1]}"
+        else:
+            chief = "General complaint — no specific symptoms identified"
+
+        return {
+            "chief_complaint": chief,
+            "symptoms": found_symptoms,
+            "owner_verbatim": text.strip(),
+            "suggested_focus": sorted(focus_set),
+        }
+
     def parse_request(self, text: str) -> Job:
         lower = text.lower()
 

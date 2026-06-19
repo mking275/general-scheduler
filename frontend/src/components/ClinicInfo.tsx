@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import {
   Stethoscope, DoorOpen, ChevronRight, Cpu, Brain,
   Microscope, Scissors, Radio, Shield, Zap, Heart,
@@ -45,13 +45,13 @@ function getRoomIcon(skills: string[]) {
   return <DoorOpen size={22} className="text-zinc-400" />;
 }
 
-const container = {
+const container: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.08 } },
 };
-const item = {
+const item: Variants = {
   hidden: { opacity: 0, y: 24 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.45 } },
 };
 
 export default function ClinicInfo({ onEnter }: { onEnter: () => void }) {

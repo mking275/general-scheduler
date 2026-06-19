@@ -1,85 +1,226 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Calendar, User, Clock, CheckCircle2, FileText } from "lucide-react";
+import { useState } from "react";
+import { Calendar } from "lucide-react";
+import AppointmentCard from "./AppointmentCard";
+import RoleSelector from "./RoleSelector";
+import RoomBoard from "./RoomBoard";
+import VetView from "./VetView";
+import ClinicSwitcher from "./ClinicSwitcher";
+import RegionalManagerView from "./RegionalManagerView";
+import FilterBar, { FilterState, DEFAULT_FILTERS, applyFilters } from "./FilterBar";
 
-export default function Dashboard({ scheduledItems }: { scheduledItems: any[] }) {
+type Role = "front_desk" | "vet_tech" | "vet" | "regional_manager";
+
+interface Clinic {
+  id: string;
+  name: string;
+  color_hex: string;
+  address?: string;
+}
+
+interface DashboardProps {
+  scheduledItems: any[];
+  patientMap: Record<string, any>;
+  role: Role;
+  onRoleChange: (r: Role) => void;
+  onLogEntry?: (entry: string) => void;
+  selectedClinic?: Clinic | null;
+  onClinicChange?: (clinic: Clinic) => void;
+}
+
+export default function Dashboard({
+  scheduledItems,
+  patientMap,
+  role,
+  onRoleChange,
+  onLogEntry,
+  selectedClinic,
+  onClinicChange,
+}: DashboardProps) {
+
+  const clinicColor = selectedClinic?.color_hex ?? "#6C63FF";
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  const allItems = scheduledItems;
+  const filteredItems = applyFilters(allItems, filters);
+
+  // When regional manager drills into a clinic, switch to front_desk view
+  const handleClinicSelect = (clinicId: string) => {
+    if (onClinicChange) {
+      // Find the clinic from the switcher data (we rely on external handler)
+      onRoleChange("front_desk");
+      // Signal the parent to switch to this clinic
+      const fakeClinic = { id: clinicId, name: clinicId, color_hex: "#6C63FF" };
+      onClinicChange(fakeClinic);
+    }
+  };
+
   return (
-    <div className="flex-1 p-6 overflow-y-auto bg-zinc-950 text-white">
-      <div className="flex items-center justify-between mb-8">
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#09090b", color: "#f4f4f5", overflow: "hidden" }}>
+      {/* Header */}
+      <div style={{
+        padding: "16px 20px 12px",
+        borderBottom: "1px solid rgba(63,63,70,0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexShrink: 0,
+        background: "rgba(9,9,11,0.95)",
+        backdropFilter: "blur(8px)",
+        borderTop: `3px solid ${clinicColor}`,
+        transition: "border-color 0.4s ease",
+      }}>
         <div>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-zinc-100 to-zinc-500">
-            Vet Clinic Schedule
+          <h1 style={{
+            fontSize: "1.3rem",
+            fontWeight: 800,
+            margin: 0,
+            color: clinicColor,
+            transition: "color 0.4s ease",
+          }}>
+            {selectedClinic?.name ?? "Vet Clinic Schedule"}
           </h1>
-          <p className="text-zinc-400 mt-1">Neuro-Symbolic Agentic Dispatch System</p>
+          <p style={{ color: "#52525b", fontSize: "0.72rem", margin: "2px 0 0" }}>
+            Neuro-Symbolic Agentic Dispatch System
+          </p>
         </div>
-        <div className="bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-full text-sm font-medium border border-emerald-500/20 flex items-center gap-2 shadow-lg">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          System Online
+
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {/* Clinic Switcher */}
+          {onClinicChange && (
+            <ClinicSwitcher
+              selectedClinic={selectedClinic ?? null}
+              onClinicChange={onClinicChange}
+            />
+          )}
+
+          <RoleSelector role={role} onRoleChange={onRoleChange} />
+
+          <div style={{
+            background: "rgba(16,185,129,0.08)",
+            color: "#10b981",
+            padding: "5px 12px",
+            borderRadius: "20px",
+            fontSize: "0.72rem",
+            fontWeight: 600,
+            border: "1px solid rgba(16,185,129,0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+          }}>
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", display: "inline-block", animation: "pulse 2s infinite" }} />
+            Online
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {scheduledItems.length === 0 ? (
-          <div className="col-span-full py-20 flex flex-col items-center justify-center border-2 border-dashed border-zinc-800 rounded-2xl">
-            <Calendar size={48} className="text-zinc-700 mb-4" />
-            <p className="text-zinc-500">No appointments scheduled yet today.</p>
-          </div>
-        ) : (
-          scheduledItems.map((item, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.1 }}
-              className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 shadow-xl relative overflow-hidden"
-            >
-              <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500" />
-              <div className="flex items-center justify-between mb-3">
-                <span className="bg-blue-500/10 text-blue-400 text-xs px-2 py-1 rounded font-medium tracking-wide uppercase">
-                  {item.job.required_skills.join(", ")}
-                </span>
-                <CheckCircle2 size={16} className="text-emerald-500" />
-              </div>
+      {/* Filter bar — shown only in front_desk view */}
+      {role === "front_desk" && (
+        <FilterBar
+          filters={filters}
+          onChange={setFilters}
+          allItems={allItems}
+          visibleCount={filteredItems.length}
+          clinicColor={clinicColor}
+        />
+      )}
 
-              {/* Patient / Task description */}
-              <div className="mb-3 space-y-1.5">
-                {item.job.procedure && (
-                  <div className="flex items-center gap-2">
-                    <FileText size={13} className="text-zinc-500 flex-shrink-0" />
-                    <span className="text-sm font-medium text-white">{item.job.procedure}</span>
-                  </div>
-                )}
-                {item.job.patient_name && (
-                  <div className="flex items-center gap-2">
-                    <User size={13} className="text-zinc-500 flex-shrink-0" />
-                    <span className="text-sm text-zinc-300">Patient: <span className="text-zinc-100 font-medium">{item.job.patient_name}</span></span>
-                  </div>
-                )}
-              </div>
+      {/* Content area - animated role switch */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        {/* Front Desk View */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: role === "front_desk" ? 1 : 0,
+            transform: role === "front_desk" ? "translateX(0)" : "translateX(-20px)",
+            transition: "opacity 0.3s ease, transform 0.3s ease",
+            pointerEvents: role === "front_desk" ? "auto" : "none",
+            overflow: "auto",
+            padding: "16px",
+          }}
+        >
+          {filteredItems.length === 0 ? (
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center",
+              justifyContent: "center", height: "200px", border: "2px dashed rgba(63,63,70,0.4)",
+              borderRadius: "16px", color: "#52525b",
+            }}>
+              <Calendar size={40} style={{ marginBottom: "12px", opacity: 0.5 }} />
+              <p style={{ margin: 0 }}>{allItems.length > 0 ? "No appointments match the current filters." : "No appointments scheduled yet. Use the chat below to book one."}</p>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "12px" }}>
+              {filteredItems.map((item: any, i: number) => {
+                const patient = item.patient_id ? patientMap[item.patient_id] : null;
+                return (
+                  <AppointmentCard
+                    key={item.timeblock_id ?? i}
+                    item={item}
+                    patient={patient}
+                    role="front_desk"
+                    onLogEntry={onLogEntry}
+                    currentClinicId={selectedClinic?.id}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-              <h3 className="text-base font-semibold mb-3 flex items-center gap-2 text-zinc-300">
-                <Clock size={15} className="text-zinc-500" />
-                <span>
-                  {new Date(item.start_time).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
-                  {" · "}
-                  {new Date(item.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(item.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </h3>
-              <div className="space-y-2 mt-4 text-sm text-zinc-400">
-                {item.resources.map((res: any, idx: number) => (
-                  <div key={idx} className="flex items-center gap-2 bg-zinc-900 p-2 rounded border border-zinc-800/50">
-                    <User size={14} className="text-zinc-500" />
-                    <span>{res.name}</span>
-                    <span className="text-xs px-1.5 py-0.5 bg-zinc-800 rounded ml-auto text-zinc-500">
-                      {res.type}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          ))
-        )}
+        {/* Vet Tech View */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: role === "vet_tech" ? 1 : 0,
+            transform: role === "vet_tech" ? "translateX(0)" : "translateX(20px)",
+            transition: "opacity 0.3s ease, transform 0.3s ease",
+            pointerEvents: role === "vet_tech" ? "auto" : "none",
+            overflow: "auto",
+          }}
+        >
+          <RoomBoard
+            onLogEntry={onLogEntry}
+            clinicId={selectedClinic?.id}
+            scheduledItems={scheduledItems}
+          />
+        </div>
+
+        {/* Vet View */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: role === "vet" ? 1 : 0,
+            transform: role === "vet" ? "translateX(0)" : "translateX(20px)",
+            transition: "opacity 0.3s ease, transform 0.3s ease",
+            pointerEvents: role === "vet" ? "auto" : "none",
+            overflow: "hidden",
+          }}
+        >
+          <VetView
+            scheduledItems={allItems}
+            patientMap={patientMap}
+            onLogEntry={onLogEntry}
+            clinicColor={clinicColor}
+          />
+        </div>
+
+        {/* Regional Manager View */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: role === "regional_manager" ? 1 : 0,
+            transform: role === "regional_manager" ? "translateX(0)" : "translateX(20px)",
+            transition: "opacity 0.3s ease, transform 0.3s ease",
+            pointerEvents: role === "regional_manager" ? "auto" : "none",
+            overflow: "auto",
+          }}
+        >
+          <RegionalManagerView onClinicSelect={handleClinicSelect} />
+        </div>
       </div>
     </div>
   );

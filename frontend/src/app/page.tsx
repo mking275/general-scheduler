@@ -9,18 +9,89 @@ import Dashboard from "../components/Dashboard";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 
+type Role = "front_desk" | "vet_tech" | "vet" | "regional_manager";
+
+interface Clinic {
+  id: string;
+  name: string;
+  color_hex: string;
+  address?: string;
+  is_active?: boolean;
+}
+
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [scheduledItems, setScheduledItems] = useState<any[]>([]);
+  const [patientMap, setPatientMap] = useState<Record<string, any>>({});
+  const [role, setRole] = useState<Role>("front_desk");
+  const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
   const sessionRef = useRef<string | null>(null);
 
   // Clarification state
   const [mode, setMode] = useState<"idle" | "clarifying" | "processing">("idle");
   const [pendingQuery, setPendingQuery] = useState("");
-  const [agentQuestions, setAgentQuestions] = useState<string[]>([]);
+
+
+  // Wire vet follow-up agent suggestion to chat input
+  useEffect(() => {
+    const handler = (e: any) => setPendingQuery(e.detail.message);
+    window.addEventListener("vet-suggest-message", handler);
+    return () => window.removeEventListener("vet-suggest-message", handler);
+  }, [setPendingQuery]);  const [agentQuestions, setAgentQuestions] = useState<string[]>([]);
+
+  // Load patients and seed appointments on login
+  const loadInitialData = async (clinicId?: string) => {
+    try {
+      // Load patient map
+      const pRes = await fetch(`${API}/api/patients`);
+      if (pRes.ok) {
+        const patients = await pRes.json();
+        const map: Record<string, any> = {};
+        patients.forEach((p: any) => { map[p.id] = p; });
+        setPatientMap(map);
+      }
+
+      // Load seeded timeblocks as items (filtered by clinic if provided)
+      const tbUrl = clinicId
+        ? `${API}/api/timeblocks`  // filter client-side for now
+        : `${API}/api/timeblocks`;
+      const tbRes = await fetch(tbUrl);
+      if (tbRes.ok) {
+        const tbs = await tbRes.json();
+        // Filter by clinicId if selected
+        const filtered = clinicId
+          ? tbs.filter((t: any) => !t.clinic_id || t.clinic_id === clinicId)
+          : tbs;
+        setScheduledItems(filtered);
+      }
+    } catch {
+      // Non-fatal
+    }
+  };
+
+  // Load clinics and set default
+  const loadClinics = async () => {
+    try {
+      const res = await fetch(`${API}/api/clinics`);
+      if (res.ok) {
+        const data: Clinic[] = await res.json();
+        setClinics(data);
+        if (data.length > 0) {
+          const defaultClinic = data[0]; // alphabetically first (sorted by backend)
+          setSelectedClinic(defaultClinic);
+          document.body.style.setProperty("--clinic-color", defaultClinic.color_hex);
+          return defaultClinic;
+        }
+      }
+    } catch {
+      // Non-fatal
+    }
+    return null;
+  };
 
   const syncSession = async () => {
     try {
@@ -32,6 +103,8 @@ export default function Home() {
         setMode("idle");
         setAgentQuestions([]);
         setPendingQuery("");
+        // Reload patient data
+        await loadInitialData();
       }
       sessionRef.current = session_id;
     } catch {
@@ -40,10 +113,28 @@ export default function Home() {
   };
 
   useEffect(() => {
-    syncSession();
+    syncSession().then(() => {
+      if (isLoggedIn) {
+        loadClinics().then((clinic) => loadInitialData(clinic?.id));
+      }
+    });
   }, []);
 
+  useEffect(() => {
+    if (isLoggedIn) {
+      loadClinics().then((clinic) => loadInitialData(clinic?.id));
+    }
+  }, [isLoggedIn]);
+
+  const handleClinicChange = (clinic: Clinic) => {
+    setSelectedClinic(clinic);
+    document.body.style.setProperty("--clinic-color", clinic.color_hex);
+    loadInitialData(clinic.id);
+  };
+
   const handleLogin = () => setShowInfo(true);
+
+  const addLog = (entry: string) => setLogs(prev => [...prev, entry]);
 
   const runSchedule = async (fullText: string) => {
     setMode("processing");
@@ -65,6 +156,15 @@ export default function Home() {
         const errorMsg = detail.error || "Failed to schedule.";
         setLogs(prev => [...prev, ...errorLogs, `ERROR: ${errorMsg}`]);
       } else {
+        // Also update patient map if new patient info
+        if (data.patient_id && !patientMap[data.patient_id]) {
+          const pRes = await fetch(`${API}/api/patients/${data.patient_id}`);
+          if (pRes.ok) {
+            const p = await pRes.json();
+            setPatientMap(prev => ({ ...prev, [p.id]: p }));
+          }
+        }
+
         let index = 0;
         const processLog = () => {
           if (index < data.verbose_log.length) {
@@ -114,7 +214,6 @@ export default function Home() {
       const clarifyData = await clarifyRes.json();
 
       if (clarifyData.needs_clarification) {
-        // Enter clarifying mode — stream questions into log + bubbles
         setPendingQuery(text);
         setMode("clarifying");
         setIsProcessing(false);
@@ -124,7 +223,6 @@ export default function Home() {
           setLogs(prev => [...prev, `INTAKE: Partial parse — skill(s): ${partial.skills.join(", ")}${partial.date ? `, date: ${partial.date}` : ""}`]);
         }
 
-        // Stream questions into log with delay, then set bubbles
         let i = 0;
         const streamQ = () => {
           if (i < clarifyData.questions.length) {
@@ -139,7 +237,6 @@ export default function Home() {
         return;
       }
 
-      // No clarification needed — proceed directly
       await runSchedule(text);
     } catch {
       setLogs(prev => [...prev, "ERROR: Network or Server Error. Ensure backend is running on port 8080."]);
@@ -157,9 +254,17 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-zinc-950 overflow-hidden font-sans">
-      <div className="flex flex-col w-2/3 h-full">
-        <Dashboard scheduledItems={scheduledItems} />
+    <div style={{ display: "flex", height: "100vh", width: "100%", background: "#09090b", overflow: "hidden", fontFamily: "var(--font-geist-sans, sans-serif)" }}>
+      <div style={{ display: "flex", flexDirection: "column", width: "67%", height: "100%" }}>
+        <Dashboard
+          scheduledItems={scheduledItems}
+          patientMap={patientMap}
+          role={role}
+          onRoleChange={setRole}
+          onLogEntry={addLog}
+          selectedClinic={selectedClinic}
+          onClinicChange={handleClinicChange}
+        />
         <ChatInput
           onSend={handleSend}
           isProcessing={isProcessing}
@@ -167,7 +272,7 @@ export default function Home() {
           agentQuestions={agentQuestions}
         />
       </div>
-      <div className="w-1/3 h-full">
+      <div style={{ width: "33%", height: "100%" }}>
         <VerboseLog logs={logs} />
       </div>
     </div>
