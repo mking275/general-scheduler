@@ -9,6 +9,7 @@ from .models import (
     Patient, PatientWithOwner, Owner, OwnerSummary,
     PreExamBrief, RiskScore, SoapNote, FollowUpDraft,
     Clinic, VetClinicAssignment,
+    IntegrationDefinition, IntegrationStatus, MigrationRun, MigrationFlag,
 )
 from .interfaces import BaseRepository
 
@@ -207,7 +208,86 @@ def _init_db():
             reviewed_by      TEXT,
             reviewed_at      TEXT
         );
+        CREATE TABLE IF NOT EXISTS integration_definitions (
+            id            TEXT PRIMARY KEY,
+            name          TEXT NOT NULL,
+            module        TEXT NOT NULL DEFAULT 'core',
+            tier          TEXT NOT NULL DEFAULT 'standard',
+            required_keys TEXT NOT NULL DEFAULT '[]',
+            test_endpoint TEXT DEFAULT ''
+        );
+        CREATE TABLE IF NOT EXISTS integration_credentials (
+            id               TEXT PRIMARY KEY,
+            clinic_id        TEXT NOT NULL,
+            integration_id   TEXT NOT NULL,
+            key_name         TEXT NOT NULL,
+            encrypted_value  TEXT NOT NULL,
+            last_verified_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS integration_statuses (
+            id               TEXT PRIMARY KEY,
+            clinic_id        TEXT NOT NULL,
+            integration_id   TEXT NOT NULL,
+            status           TEXT NOT NULL DEFAULT 'unconfigured',
+            latency_ms       INTEGER DEFAULT 0,
+            error_message    TEXT DEFAULT '',
+            last_checked_at  TEXT
+        );
+        CREATE TABLE IF NOT EXISTS migration_runs (
+            id                   TEXT PRIMARY KEY,
+            clinic_id            TEXT NOT NULL,
+            source_system        TEXT NOT NULL,
+            status               TEXT NOT NULL DEFAULT 'pending',
+            phase                TEXT DEFAULT '',
+            imported_owners      INTEGER DEFAULT 0,
+            imported_patients    INTEGER DEFAULT 0,
+            imported_visits      INTEGER DEFAULT 0,
+            imported_vaccines    INTEGER DEFAULT 0,
+            imported_rx          INTEGER DEFAULT 0,
+            flagged_count        INTEGER DEFAULT 0,
+            started_at           TEXT,
+            completed_at         TEXT,
+            error_message        TEXT DEFAULT ''
+        );
+        CREATE TABLE IF NOT EXISTS migration_flags (
+            id               TEXT PRIMARY KEY,
+            migration_run_id TEXT NOT NULL,
+            record_type      TEXT NOT NULL,
+            source_row       TEXT NOT NULL DEFAULT '{}',
+            reason           TEXT NOT NULL
+        );
         """)
+        # T003 — Extend labs table with integration fields
+        for col_def in [
+            "provider TEXT DEFAULT 'manual'",
+            "lab_order_id TEXT",
+            "clinic_id TEXT",
+            "flagged_values TEXT DEFAULT '[]'",
+            "is_critical INTEGER DEFAULT 0",
+            "acknowledged_by TEXT",
+            "acknowledged_at TEXT",
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE labs ADD COLUMN {col_def}")
+            except Exception:
+                pass
+        # T004 — Extend owner_images table with imaging fields
+        for col_def in [
+            "modality TEXT",
+            "report_text TEXT",
+            "dicom_study_uid TEXT",
+            "imaging_system TEXT",
+            "study_date TEXT",
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE owner_images ADD COLUMN {col_def}")
+            except Exception:
+                pass
+        # T055 — Extend timeblocks with lab_order_id
+        try:
+            conn.execute("ALTER TABLE timeblocks ADD COLUMN lab_order_id TEXT")
+        except Exception:
+            pass
         # Migrate existing resources table to add status columns if missing
         try:
             conn.execute("ALTER TABLE resources ADD COLUMN status TEXT DEFAULT 'available'")
@@ -1148,6 +1228,330 @@ class InMemoryRepository(BaseRepository):
         with _get_conn() as conn:
             rows = conn.execute("SELECT * FROM breed_protocols").fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ #
+    #  T006 — Integration Credentials
+    # ------------------------------------------------------------------ #
+
+    def save_integration_credential(self, clinic_id: str, integration_id: str,
+                                     key_name: str, encrypted_value: str) -> None:
+        cred_id = str(uuid4())
+        with _get_conn() as conn:
+            # Upsert by clinic_id + integration_id + key_name
+            existing = conn.execute(
+                "SELECT id FROM integration_credentials WHERE clinic_id=? AND integration_id=? AND key_name=?",
+                (clinic_id, integration_id, key_name)
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE integration_credentials SET encrypted_value=?, last_verified_at=? WHERE id=?",
+                    (encrypted_value, datetime.utcnow().isoformat(), existing["id"])
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO integration_credentials (id, clinic_id, integration_id, key_name, encrypted_value, last_verified_at) VALUES (?,?,?,?,?,?)",
+                    (cred_id, clinic_id, integration_id, key_name, encrypted_value, datetime.utcnow().isoformat())
+                )
+
+    def get_integration_credentials(self, clinic_id: str, integration_id: str) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT key_name, encrypted_value FROM integration_credentials WHERE clinic_id=? AND integration_id=?",
+                (clinic_id, integration_id)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_integration_credentials(self, clinic_id: str, integration_id: str) -> None:
+        with _get_conn() as conn:
+            conn.execute(
+                "DELETE FROM integration_credentials WHERE clinic_id=? AND integration_id=?",
+                (clinic_id, integration_id)
+            )
+
+    def get_credential_value(self, clinic_id: str, integration_id: str, key_name: str) -> Optional[str]:
+        """Return single encrypted value for decryption."""
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT encrypted_value FROM integration_credentials WHERE clinic_id=? AND integration_id=? AND key_name=?",
+                (clinic_id, integration_id, key_name)
+            ).fetchone()
+        return row["encrypted_value"] if row else None
+
+    # T009 W-02: resolve clinic_id from a credential value
+    def get_clinic_id_by_credential(self, integration_id: str, key_name: str, value: str) -> Optional[str]:
+        """Find the clinic that stored `value` as the given credential key for this integration."""
+        from .agents.integration_health import decrypt
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT clinic_id, encrypted_value FROM integration_credentials WHERE integration_id=? AND key_name=?",
+                (integration_id, key_name)
+            ).fetchall()
+        for row in rows:
+            try:
+                if decrypt(row["encrypted_value"]) == value:
+                    return row["clinic_id"]
+            except Exception:
+                pass
+        return None
+
+    # ------------------------------------------------------------------ #
+    #  T007 — Integration Statuses
+    # ------------------------------------------------------------------ #
+
+    def upsert_integration_status(self, status: 'IntegrationStatus') -> None:
+        with _get_conn() as conn:
+            existing = conn.execute(
+                "SELECT id FROM integration_statuses WHERE clinic_id=? AND integration_id=?",
+                (status.clinic_id, status.integration_id)
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    """UPDATE integration_statuses
+                       SET status=?, latency_ms=?, error_message=?, last_checked_at=?
+                       WHERE id=?""",
+                    (status.status, status.latency_ms, status.error_message,
+                     status.last_checked_at, existing["id"])
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO integration_statuses
+                       (id, clinic_id, integration_id, status, latency_ms, error_message, last_checked_at)
+                       VALUES (?,?,?,?,?,?,?)""",
+                    (str(uuid4()), status.clinic_id, status.integration_id,
+                     status.status, status.latency_ms, status.error_message,
+                     status.last_checked_at)
+                )
+
+    def get_integration_status(self, clinic_id: str, integration_id: str) -> Optional[dict]:
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM integration_statuses WHERE clinic_id=? AND integration_id=?",
+                (clinic_id, integration_id)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_all_integration_statuses(self, clinic_id: str) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM integration_statuses WHERE clinic_id=?",
+                (clinic_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ #
+    #  T008 — Integration Definitions
+    # ------------------------------------------------------------------ #
+
+    def seed_integration_definitions(self) -> None:
+        """Insert all 11 integration definitions. Called on startup if table is empty."""
+        with _get_conn() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM integration_definitions").fetchone()[0]
+        if count > 0:
+            return
+        definitions = [
+            ("idexx",      "IDEXX Laboratories",       "labs",      "standard", ["IDEXX_PRACTICE_ID", "IDEXX_WEBHOOK_SECRET"],    ""),
+            ("antech",     "Antech Diagnostics",        "labs",      "standard", ["ANTECH_PRACTICE_ID", "ANTECH_API_KEY"],          ""),
+            ("heska",      "Heska VetLab",              "labs",      "standard", ["HESKA_PRACTICE_ID", "HESKA_WEBHOOK_SECRET"],     ""),
+            ("vetscan",    "Zoetis Vetscan",            "labs",      "standard", ["VETSCAN_DEVICE_ID"],                             ""),
+            ("imaging",    "DICOM Imaging System",      "imaging",   "standard", ["IMAGING_WEBHOOK_SECRET"],                        ""),
+            ("twilio",     "Twilio SMS",                "comms",     "standard", ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER"], ""),
+            ("sendgrid",   "SendGrid Email",            "comms",     "standard", ["SENDGRID_API_KEY", "SENDGRID_FROM_EMAIL"],       ""),
+            ("stripe",     "Stripe Payments",           "payments",  "standard", ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],    ""),
+            ("avimark",    "Avimark PMS Migration",     "migration", "standard", [],                                               ""),
+            ("cornerstone","Cornerstone PMS Migration", "migration", "standard", [],                                               ""),
+            ("ezyvet",     "ezyVet PMS Migration",      "migration", "standard", ["EZYVET_API_KEY", "EZYVET_PRACTICE_ID"],          ""),
+        ]
+        with _get_conn() as conn:
+            for (did, name, module, tier, keys, endpoint) in definitions:
+                conn.execute(
+                    "INSERT OR IGNORE INTO integration_definitions (id, name, module, tier, required_keys, test_endpoint) VALUES (?,?,?,?,?,?)",
+                    (did, name, module, tier, json.dumps(keys), endpoint)
+                )
+
+    def get_all_integration_definitions(self) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute("SELECT * FROM integration_definitions ORDER BY module, name").fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["required_keys"] = json.loads(d["required_keys"])
+            except Exception:
+                d["required_keys"] = []
+            result.append(d)
+        return result
+
+    # ------------------------------------------------------------------ #
+    #  T015 — Migration Run CRUD
+    # ------------------------------------------------------------------ #
+
+    def create_migration_run(self, run: dict) -> dict:
+        with _get_conn() as conn:
+            conn.execute(
+                """INSERT INTO migration_runs
+                   (id, clinic_id, source_system, status, phase,
+                    imported_owners, imported_patients, imported_visits,
+                    imported_vaccines, imported_rx, flagged_count,
+                    started_at, completed_at, error_message)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (run["id"], run["clinic_id"], run["source_system"],
+                 run.get("status", "pending"), run.get("phase", ""),
+                 0, 0, 0, 0, 0, 0,
+                 run.get("started_at"), run.get("completed_at"),
+                 run.get("error_message", ""))
+            )
+        return run
+
+    def update_migration_run(self, run_id: str, updates: dict) -> None:
+        allowed = {"status", "phase", "imported_owners", "imported_patients",
+                   "imported_visits", "imported_vaccines", "imported_rx",
+                   "flagged_count", "completed_at", "error_message"}
+        cols = {k: v for k, v in updates.items() if k in allowed}
+        if not cols:
+            return
+        set_clause = ", ".join(f"{k}=?" for k in cols)
+        with _get_conn() as conn:
+            conn.execute(
+                f"UPDATE migration_runs SET {set_clause} WHERE id=?",
+                list(cols.values()) + [run_id]
+            )
+
+    def get_migration_run(self, run_id: str) -> Optional[dict]:
+        with _get_conn() as conn:
+            row = conn.execute("SELECT * FROM migration_runs WHERE id=?", (run_id,)).fetchone()
+        return dict(row) if row else None
+
+    def save_migration_flag(self, flag: dict) -> None:
+        with _get_conn() as conn:
+            conn.execute(
+                "INSERT INTO migration_flags (id, migration_run_id, record_type, source_row, reason) VALUES (?,?,?,?,?)",
+                (str(uuid4()), flag["migration_run_id"], flag["record_type"],
+                 json.dumps(flag.get("source_row", {})), flag["reason"])
+            )
+
+    def get_migration_flags(self, run_id: str) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM migration_flags WHERE migration_run_id=? ORDER BY rowid ASC",
+                (run_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ #
+    #  T022 — Labs extended CRUD (B-01 fix)
+    # ------------------------------------------------------------------ #
+
+    def save_lab(self, lab_dict: dict) -> dict:
+        """Write/upsert a lab result to the existing labs table."""
+        lab_id = lab_dict.get("id") or str(uuid4())
+        with _get_conn() as conn:
+            existing = conn.execute("SELECT id FROM labs WHERE id=?", (lab_id,)).fetchone()
+            if existing:
+                conn.execute(
+                    """UPDATE labs SET
+                       patient_id=?, timeblock_id=?, panel_name=?, status=?,
+                       ordered_by=?, ordered_at=?, resulted_at=?, results=?,
+                       provider=?, lab_order_id=?, clinic_id=?,
+                       flagged_values=?, is_critical=?, acknowledged_by=?, acknowledged_at=?
+                       WHERE id=?""",
+                    (
+                        lab_dict.get("patient_id"), lab_dict.get("timeblock_id"),
+                        lab_dict.get("panel_name"), lab_dict.get("status", "resulted"),
+                        lab_dict.get("ordered_by", ""), lab_dict.get("ordered_at"),
+                        lab_dict.get("resulted_at"), lab_dict.get("results", "{}"),
+                        lab_dict.get("provider", "manual"), lab_dict.get("lab_order_id"),
+                        lab_dict.get("clinic_id"),
+                        json.dumps(lab_dict.get("flagged_values", [])),
+                        1 if lab_dict.get("is_critical") else 0,
+                        lab_dict.get("acknowledged_by"), lab_dict.get("acknowledged_at"),
+                        lab_id
+                    )
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO labs
+                       (id, patient_id, timeblock_id, panel_name, status,
+                        ordered_by, ordered_at, resulted_at, results,
+                        provider, lab_order_id, clinic_id,
+                        flagged_values, is_critical, acknowledged_by, acknowledged_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        lab_id, lab_dict.get("patient_id"), lab_dict.get("timeblock_id"),
+                        lab_dict.get("panel_name"), lab_dict.get("status", "resulted"),
+                        lab_dict.get("ordered_by", ""), lab_dict.get("ordered_at"),
+                        lab_dict.get("resulted_at"),
+                        lab_dict.get("results", "{}") if isinstance(lab_dict.get("results"), str)
+                            else json.dumps(lab_dict.get("results", {})),
+                        lab_dict.get("provider", "manual"), lab_dict.get("lab_order_id"),
+                        lab_dict.get("clinic_id"),
+                        json.dumps(lab_dict.get("flagged_values", [])),
+                        1 if lab_dict.get("is_critical") else 0,
+                        lab_dict.get("acknowledged_by"), lab_dict.get("acknowledged_at")
+                    )
+                )
+        lab_dict["id"] = lab_id
+        return lab_dict
+
+    def acknowledge_lab(self, lab_id: str, vet_id: str) -> bool:
+        acknowledged_at = datetime.utcnow().isoformat()
+        with _get_conn() as conn:
+            conn.execute(
+                "UPDATE labs SET status='acknowledged', acknowledged_by=?, acknowledged_at=? WHERE id=?",
+                (vet_id, acknowledged_at, lab_id)
+            )
+            changed = conn.execute("SELECT changes()").fetchone()[0]
+        return changed > 0
+
+    def patch_lab(self, lab_id: str, updates: dict) -> Optional[dict]:
+        allowed = {"patient_id", "timeblock_id", "status"}
+        cols = {k: v for k, v in updates.items() if k in allowed}
+        if not cols:
+            return None
+        set_clause = ", ".join(f"{k}=?" for k in cols)
+        with _get_conn() as conn:
+            conn.execute(
+                f"UPDATE labs SET {set_clause} WHERE id=?",
+                list(cols.values()) + [lab_id]
+            )
+            row = conn.execute("SELECT * FROM labs WHERE id=?", (lab_id,)).fetchone()
+        return dict(row) if row else None
+
+    # ------------------------------------------------------------------ #
+    #  W-09 — Images for patient
+    # ------------------------------------------------------------------ #
+
+    def get_images_for_patient(self, patient_id: str) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM owner_images WHERE patient_id=? ORDER BY submitted_at ASC",
+                (patient_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def save_clinical_image(self, img: dict) -> dict:
+        """Save a clinical image (X-ray, ultrasound, etc.) to owner_images."""
+        img_id = img.get("id") or str(uuid4())
+        with _get_conn() as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO owner_images
+                   (id, timeblock_id, patient_id, filename, content_type, data,
+                    caption, submitted_at, source, modality, report_text,
+                    dicom_study_uid, imaging_system, study_date)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    img_id, img.get("timeblock_id", ""), img.get("patient_id"),
+                    img.get("filename", "imaging.dcm"),
+                    img.get("content_type", "application/dicom"),
+                    img.get("data", ""), img.get("caption", ""),
+                    img.get("submitted_at", datetime.utcnow().isoformat()),
+                    img.get("source", "xray"),
+                    img.get("modality"), img.get("report_text"),
+                    img.get("dicom_study_uid"), img.get("imaging_system"),
+                    img.get("study_date")
+                )
+            )
+        img["id"] = img_id
+        return img
 
 
 # ── Module-level helpers for Clinic + Assignment rows ──────────────────────

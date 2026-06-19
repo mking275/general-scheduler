@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar } from "lucide-react";
+import { Calendar, Settings, WifiOff } from "lucide-react";
 import AppointmentCard from "./AppointmentCard";
 import RoleSelector from "./RoleSelector";
 import RoomBoard from "./RoomBoard";
@@ -9,6 +9,9 @@ import VetView from "./VetView";
 import ClinicSwitcher from "./ClinicSwitcher";
 import RegionalManagerView from "./RegionalManagerView";
 import FilterBar, { FilterState, DEFAULT_FILTERS, applyFilters } from "./FilterBar";
+import IntegrationsPanel from "./IntegrationsPanel";
+import DataMigrationPanel from "./DataMigrationPanel";
+
 
 type Role = "front_desk" | "vet_tech" | "vet" | "regional_manager";
 
@@ -41,8 +44,10 @@ export default function Dashboard({
 
   const clinicColor = selectedClinic?.color_hex ?? "#6C63FF";
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  const [settingsTab, setSettingsTab] = useState<"integrations" | "migration">("integrations");
   const allItems = scheduledItems;
   const filteredItems = applyFilters(allItems, filters);
+
 
   // When regional manager drills into a clinic, switch to front_desk view
   const handleClinicSelect = (clinicId: string) => {
@@ -96,6 +101,21 @@ export default function Dashboard({
 
           <RoleSelector role={role} onRoleChange={onRoleChange} />
 
+          {/* Settings button — only shown for vet / regional */}
+          {(role === "vet" || role === "regional_manager") && (
+            <button
+              onClick={() => onRoleChange("regional_manager")}
+              style={{
+                padding: "5px 10px", borderRadius: "8px",
+                background: "rgba(39,39,42,0.6)", border: "1px solid rgba(63,63,70,0.4)",
+                color: "#71717a", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px",
+                fontSize: "0.7rem",
+              }}
+            >
+              <Settings size={11} />
+            </button>
+          )}
+
           <div style={{
             background: "rgba(16,185,129,0.08)",
             color: "#10b981",
@@ -112,6 +132,7 @@ export default function Dashboard({
             Online
           </div>
         </div>
+
       </div>
 
       {/* Filter bar — shown only in front_desk view */}
@@ -221,6 +242,87 @@ export default function Dashboard({
         >
           <RegionalManagerView onClinicSelect={handleClinicSelect} />
         </div>
+
+        {/* Settings View */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: role === ("settings" as any) ? 1 : 0,
+            transform: role === ("settings" as any) ? "translateX(0)" : "translateX(20px)",
+            transition: "opacity 0.3s ease, transform 0.3s ease",
+            pointerEvents: role === ("settings" as any) ? "auto" : "none",
+            overflow: "hidden",
+            display: "flex", flexDirection: "column",
+          }}
+        >
+          {/* Settings sub-tabs */}
+          <div style={{
+            padding: "8px 16px", borderBottom: "1px solid rgba(63,63,70,0.3)",
+            display: "flex", gap: "6px", flexShrink: 0, background: "rgba(9,9,11,0.7)",
+          }}>
+            {(["integrations", "migration"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setSettingsTab(tab)}
+                style={{
+                  padding: "5px 12px", borderRadius: "7px", fontSize: "0.72rem", fontWeight: 600,
+                  background: settingsTab === tab ? "rgba(129,140,248,0.15)" : "transparent",
+                  border: `1px solid ${settingsTab === tab ? "rgba(129,140,248,0.35)" : "transparent"}`,
+                  color: settingsTab === tab ? "#a5b4fc" : "#71717a",
+                  cursor: "pointer", textTransform: "capitalize", transition: "all 0.15s ease",
+                }}
+              >
+                {tab === "integrations" ? "🔌 Integrations" : "📦 Data Migration"}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            {settingsTab === "integrations" && (
+              <IntegrationsPanel onLog={onLogEntry} />
+            )}
+            {settingsTab === "migration" && (
+              <DataMigrationPanel onLog={onLogEntry} />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Settings toggle button (floating) */}
+      <div style={{
+        position: "absolute", bottom: "16px", right: "16px", zIndex: 50,
+      }}>
+        {role !== ("settings" as any) ? (
+          <button
+            onClick={() => onRoleChange("settings" as any)}
+            title="Settings — Integrations &amp; Migration"
+            style={{
+              width: "38px", height: "38px", borderRadius: "50%",
+              background: "rgba(39,39,42,0.9)", border: "1px solid rgba(63,63,70,0.6)",
+              color: "#71717a", cursor: "pointer", display: "flex", alignItems: "center",
+              justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "#a5b4fc"; e.currentTarget.style.borderColor = "rgba(129,140,248,0.5)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "#71717a"; e.currentTarget.style.borderColor = "rgba(63,63,70,0.6)"; }}
+          >
+            <Settings size={16} />
+          </button>
+        ) : (
+          <button
+            onClick={() => onRoleChange("front_desk")}
+            style={{
+              width: "38px", height: "38px", borderRadius: "50%",
+              background: "rgba(129,140,248,0.15)", border: "1px solid rgba(129,140,248,0.5)",
+              color: "#a5b4fc", cursor: "pointer", display: "flex", alignItems: "center",
+              justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            ✕
+          </button>
+        )}
       </div>
     </div>
   );

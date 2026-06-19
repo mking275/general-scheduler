@@ -237,3 +237,114 @@ class ForecastResult(BaseModel):
     forecast_weeks: List[ForecastWeek]
     insight: str
     verbose_log: List[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Integration Batch 0 — T005 Models
+# ---------------------------------------------------------------------------
+
+class IntegrationDefinition(BaseModel):
+    id: str
+    name: str
+    module: str = "core"
+    tier: str = "standard"
+    required_keys: List[str] = Field(default_factory=list)
+    test_endpoint: str = ""
+
+
+class IntegrationCredentialSave(BaseModel):
+    credentials: Dict[str, str]  # key_name → raw value (will be encrypted)
+
+
+class IntegrationStatus(BaseModel):
+    id: Optional[str] = None
+    clinic_id: str
+    integration_id: str
+    status: str = "unconfigured"   # connected | degraded | disconnected | unconfigured
+    latency_ms: int = 0
+    error_message: str = ""
+    last_checked_at: Optional[str] = None
+
+
+class LabAnalyte(BaseModel):
+    name: str
+    value: float
+    unit: str = ""
+    low: float = 0.0     # B-02 fix: field names are low/high
+    high: float = 0.0
+    flag: str = ""       # H | L | HH | LL | ""
+
+
+class LabPanel(BaseModel):
+    name: str
+    analytes: List[LabAnalyte] = Field(default_factory=list)
+
+
+class LabResultPayload(BaseModel):
+    """Normalised inbound lab result from any provider webhook."""
+    lab_order_id: Optional[str] = None
+    patient_id: Optional[str] = None
+    patient_name: Optional[str] = None
+    owner_name: Optional[str] = None
+    panel_name: str = "Lab Panel"
+    provider: str = "manual"
+    panels: List[LabPanel] = Field(default_factory=list)
+    received_at: Optional[str] = None
+
+
+class MigrationRun(BaseModel):
+    id: Optional[str] = None
+    clinic_id: str
+    source_system: str  # avimark | cornerstone | ezyvet
+    status: str = "pending"
+    phase: str = ""
+    imported_owners: int = 0
+    imported_patients: int = 0
+    imported_visits: int = 0
+    imported_vaccines: int = 0
+    imported_rx: int = 0
+    flagged_count: int = 0
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    error_message: str = ""
+
+
+class MigrationFlag(BaseModel):
+    id: Optional[str] = None
+    migration_run_id: str
+    record_type: str
+    source_row: Dict[str, Any] = Field(default_factory=dict)
+    reason: str
+
+
+class ImagingWebhookPayload(BaseModel):
+    """Inbound imaging result from DICOM/PACS system."""
+    patient_id: Optional[str] = None
+    patient_name: Optional[str] = None
+    owner_name: Optional[str] = None
+    modality: str = "xray"          # xray | ultrasound | ct | mri
+    report_text: Optional[str] = None
+    dicom_study_uid: Optional[str] = None
+    imaging_system: Optional[str] = None
+    study_date: Optional[str] = None
+    image_url: Optional[str] = None
+    provider: str = "clinical"
+
+
+class LabAcknowledgeRequest(BaseModel):
+    vet_id: str
+
+
+class LabAssignRequest(BaseModel):
+    patient_id: str
+    timeblock_id: Optional[str] = None
+
+
+class VetscanCSVRow(BaseModel):
+    """Single row from a Vetscan/Abaxis CSV export."""
+    test_name: str
+    value: str
+    unit: str = ""
+    reference_range: str = ""
+    flag: str = ""
+

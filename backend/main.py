@@ -1,10 +1,13 @@
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional, List
 from .repository import db
 from .models import (
     ResourceType, Patient, Owner, PreExamBrief, RiskScore,
     SoapNote, FollowUpDraft, RoomStatusUpdate, Clinic, VetClinicAssignment,
+    IntegrationCredentialSave, IntegrationStatus,
+    LabResultPayload, LabAcknowledgeRequest, LabAssignRequest,
+    ImagingWebhookPayload,
 )
 from .agents.intake import IntakeAgent
 from .agents.matcher import SemanticMatcher
@@ -76,6 +79,11 @@ def on_startup():
         seed_phase3_data()
     except Exception as e:
         print(f"[SEED] Phase3 seed error (non-fatal): {e}")
+    try:
+        db.seed_integration_definitions()
+    except Exception as e:
+        print(f"[SEED] Integration definitions seed error (non-fatal): {e}")
+
 
 
 
@@ -1217,3 +1225,758 @@ def get_clinic_forecast(clinic_id: str, weeks: int = Query(4)):
     agent = ForecastAgent(db=db, log_fn=log_step)
     result = agent.forecast(clinic_id=clinic_id, project_weeks=weeks)
     return result
+
+
+# ============================================================
+# Integration Batch 0 — Phase 2: Integration Management
+# T010-T014
+# ============================================================
+
+@app.get("/api/integrations")
+def get_integration_definitions():
+    """T010: List all integration definitions with status for the default clinic."""
+    definitions = db.get_all_integration_definitions()
+    # Attach status for first clinic (single-clinic demo)
+    clinics = db.get_all_clinics()
+    clinic_id = clinics[0].id if clinics else "default"
+    statuses = {s["integration_id"]: s for s in db.get_all_integration_statuses(clinic_id)}
+    result = []
+    for defn in definitions:
+        status_row = statuses.get(defn["id"])
+        result.append({
+            **defn,
+            "status": status_row["status"] if status_row else "unconfigured",
+            "latency_ms": status_row["latency_ms"] if status_row else 0,
+            "error_message": status_row["error_message"] if status_row else "",
+            "last_checked_at": status_row["last_checked_at"] if status_row else None,
+        })
+    return result
+
+
+@app.get("/api/integrations/{integration_id}")
+def get_integration(integration_id: str, clinic_id: str = Query("default")):
+    """T010: Get one integration definition + status."""
+    defs = db.get_all_integration_definitions()
+    defn = next((d for d in defs if d["id"] == integration_id), None)
+    if not defn:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    clinics = db.get_all_clinics()
+    resolved_clinic = clinic_id
+    if clinic_id == "default" and clinics:
+        resolved_clinic = clinics[0].id
+    status_row = db.get_integration_status(resolved_clinic, integration_id)
+    return {
+        **defn,
+        "status": status_row["status"] if status_row else "unconfigured",
+        "latency_ms": status_row["latency_ms"] if status_row else 0,
+        "error_message": status_row["error_message"] if status_row else "",
+        "last_checked_at": status_row["last_checked_at"] if status_row else None,
+    }
+
+
+@app.post("/api/integrations/{integration_id}/configure")
+async def configure_integration(
+    integration_id: str,
+    body: IntegrationCredentialSave,
+    clinic_id: str = Query("default"),
+):
+    """
+    T011: Save credentials + run connectivity test.
+    Returns status. Does NOT persist on failure (FR-INT-001).
+    """
+    from .agents.integration_health import run_connectivity_test
+
+    clinics = db.get_all_clinics()
+    resolved_clinic = clinic_id
+    if clinic_id == "default" and clinics:
+        resolved_clinic = clinics[0].id
+
+    result = run_connectivity_test(
+        repo=db,
+        clinic_id=resolved_clinic,
+        integration_id=integration_id,
+        raw_credentials=body.credentials,
+        log_fn=_log1,
+    )
+    return result
+
+
+@app.post("/api/integrations/{integration_id}/test")
+async def test_integration_connection(
+    integration_id: str,
+    clinic_id: str = Query("default"),
+):
+    """
+    T012: Re-run connectivity test using stored credentials.
+    """
+    from .agents.integration_health import run_connectivity_test, decrypt
+
+    clinics = db.get_all_clinics()
+    resolved_clinic = clinic_id
+    if clinic_id == "default" and clinics:
+        resolved_clinic = clinics[0].id
+
+    stored = db.get_integration_credentials(resolved_clinic, integration_id)
+    if not stored:
+        raise HTTPException(status_code=400, detail="No credentials stored for this integration")
+
+    # Decrypt for re-test
+    raw_creds = {}
+    for row in stored:
+        try:
+            raw_creds[row["key_name"]] = decrypt(row["encrypted_value"])
+        except Exception:
+            raw_creds[row["key_name"]] = row["encrypted_value"]
+
+    result = run_connectivity_test(
+        repo=db,
+        clinic_id=resolved_clinic,
+        integration_id=integration_id,
+        raw_credentials=raw_creds,
+        log_fn=_log1,
+    )
+    return result
+
+
+@app.delete("/api/integrations/{integration_id}/credentials")
+def delete_integration_credentials(
+    integration_id: str,
+    clinic_id: str = Query("default"),
+):
+    """T013: Remove stored credentials and reset status to unconfigured."""
+    clinics = db.get_all_clinics()
+    resolved_clinic = clinic_id
+    if clinic_id == "default" and clinics:
+        resolved_clinic = clinics[0].id
+
+    db.delete_integration_credentials(resolved_clinic, integration_id)
+    status = IntegrationStatus(
+        clinic_id=resolved_clinic,
+        integration_id=integration_id,
+        status="unconfigured",
+        latency_ms=0,
+        error_message="",
+        last_checked_at=None,
+    )
+    db.upsert_integration_status(status)
+    _log1(f"CREDENTIALS AGENT: {integration_id.upper()} credentials removed")
+    return {"integration_id": integration_id, "status": "unconfigured"}
+
+
+@app.get("/api/integrations/health/summary")
+def get_integration_health_summary(clinic_id: str = Query("default")):
+    """T014: Returns whether any integration is disconnected (for header warning)."""
+    clinics = db.get_all_clinics()
+    resolved_clinic = clinic_id
+    if clinic_id == "default" and clinics:
+        resolved_clinic = clinics[0].id
+    statuses = db.get_all_integration_statuses(resolved_clinic)
+    any_disconnected = any(s["status"] == "disconnected" for s in statuses)
+    return {
+        "clinic_id": resolved_clinic,
+        "any_disconnected": any_disconnected,
+        "disconnected_count": sum(1 for s in statuses if s["status"] == "disconnected"),
+        "statuses": statuses,
+    }
+
+
+# ============================================================
+# Integration Batch 0 — Phase 3: Migration
+# T015-T021
+# ============================================================
+
+@app.post("/api/migration/upload")
+async def start_migration(
+    background_tasks: BackgroundTasks,
+    source_system: str = Query("avimark"),
+    clinic_id: str = Query("default"),
+    file: UploadFile = File(...),
+):
+    """
+    T016: Accept ZIP upload and start migration in background.
+    Returns migration run ID immediately (HTTP 200 within 500ms).
+    B-03: Uses BackgroundTasks, not asyncio.create_task.
+    """
+    from .agents.migration_agent import run_migration
+    from uuid import uuid4
+
+    clinics = db.get_all_clinics()
+    resolved_clinic = clinic_id
+    if clinic_id == "default" and clinics:
+        resolved_clinic = clinics[0].id
+
+    run_id = str(uuid4())
+    zip_bytes = await file.read()
+    now = datetime.utcnow().isoformat()
+
+    db.create_migration_run({
+        "id": run_id,
+        "clinic_id": resolved_clinic,
+        "source_system": source_system,
+        "status": "pending",
+        "started_at": now,
+    })
+
+    _log1(f"MIGRATION AGENT: {source_system} migration started · run {run_id}")
+
+    background_tasks.add_task(
+        run_migration,
+        db,
+        run_id,
+        resolved_clinic,
+        source_system,
+        zip_bytes,
+        _log1,
+    )
+
+    return {"run_id": run_id, "status": "pending", "source_system": source_system}
+
+
+@app.get("/api/migration/{run_id}")
+def get_migration_run(run_id: str):
+    """T017: Poll migration run status."""
+    run = db.get_migration_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Migration run not found")
+    return run
+
+
+@app.get("/api/migration/{run_id}/flags")
+def get_migration_flags(run_id: str):
+    """T018: Get flagged records for a migration run."""
+    flags = db.get_migration_flags(run_id)
+    return flags
+
+
+@app.get("/api/migration/{run_id}/flags/download")
+def download_migration_flags(run_id: str):
+    """T019: Download flagged records as CSV."""
+    import csv, io
+    from fastapi.responses import StreamingResponse
+
+    flags = db.get_migration_flags(run_id)
+    if not flags:
+        raise HTTPException(status_code=404, detail="No flagged records found")
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "record_type", "reason", "source_row"])
+    for flag in flags:
+        source_row = flag.get("source_row", "{}")
+        if isinstance(source_row, str):
+            source_row_str = source_row
+        else:
+            import json as _json
+            source_row_str = _json.dumps(source_row)
+        writer.writerow([flag["id"], flag["record_type"], flag["reason"], source_row_str])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=flagged_{run_id}.csv"},
+    )
+
+
+@app.post("/api/migration/ezyvet")
+async def start_ezyvet_migration(
+    background_tasks: BackgroundTasks,
+    clinic_id: str = Query("default"),
+):
+    """
+    T021: Start ezyVet live API migration using stored credentials.
+    """
+    from .agents.migration_agent import run_ezyvet_migration
+    from .agents.integration_health import decrypt
+    from uuid import uuid4
+
+    clinics = db.get_all_clinics()
+    resolved_clinic = clinic_id
+    if clinic_id == "default" and clinics:
+        resolved_clinic = clinics[0].id
+
+    creds = db.get_integration_credentials(resolved_clinic, "ezyvet")
+    api_key = practice_id = ""
+    for c in creds:
+        try:
+            val = decrypt(c["encrypted_value"])
+        except Exception:
+            val = c["encrypted_value"]
+        if c["key_name"] == "EZYVET_API_KEY":
+            api_key = val
+        elif c["key_name"] == "EZYVET_PRACTICE_ID":
+            practice_id = val
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail="ezyVet credentials not configured")
+
+    run_id = str(uuid4())
+    db.create_migration_run({
+        "id": run_id,
+        "clinic_id": resolved_clinic,
+        "source_system": "ezyvet",
+        "status": "pending",
+        "started_at": datetime.utcnow().isoformat(),
+    })
+
+    background_tasks.add_task(
+        run_ezyvet_migration,
+        db, run_id, resolved_clinic, api_key, practice_id, _log1,
+    )
+    return {"run_id": run_id, "status": "pending", "source_system": "ezyvet"}
+
+
+# ============================================================
+# Integration Batch 0 — Phase 4: Webhook Endpoints
+# T023-T030, W-03 (all async)
+# ============================================================
+
+def _get_clinic_for_webhook(integration_id: str, request: Request) -> str:
+    """Resolve clinic_id from request header or credential lookup."""
+    clinic_id = request.headers.get("X-Clinic-ID", "")
+    if not clinic_id:
+        clinics = db.get_all_clinics()
+        clinic_id = clinics[0].id if clinics else "default"
+    return clinic_id
+
+
+async def _validate_hmac(request: Request, integration_id: str, clinic_id: str, secret_key_name: str) -> bool:
+    """Validate HMAC-SHA256 signature. Returns True if valid or if no secret stored (demo mode)."""
+    import hmac as _hmac, hashlib as _hashlib
+    from .agents.integration_health import decrypt
+
+    stored_enc = db.get_credential_value(clinic_id, integration_id, secret_key_name)
+    if not stored_enc:
+        return True  # Demo mode: no secret = skip validation
+    try:
+        secret = decrypt(stored_enc)
+    except Exception:
+        secret = stored_enc
+
+    body = await request.body()
+    sig_header = request.headers.get("X-Hub-Signature-256", "") or request.headers.get("X-Signature", "")
+    if not sig_header:
+        return True  # No signature provided = demo mode passthrough
+
+    expected = "sha256=" + _hmac.new(secret.encode(), body, _hashlib.sha256).hexdigest()
+    return _hmac.compare_digest(expected, sig_header)
+
+
+@app.post("/api/webhooks/idexx/result")
+async def webhook_idexx(request: Request, background_tasks: BackgroundTasks):  # W-03: async def
+    """T023: IDEXX lab result webhook. Responds HTTP 200 within 500ms."""
+    from .agents.lab_agent import process_lab_result
+
+    clinic_id = _get_clinic_for_webhook("idexx", request)
+    # HMAC validation (non-blocking for demo)
+    raw = await request.json()
+
+    # Normalise IDEXX payload → LabResultPayload shape
+    payload = _normalise_idexx(raw, clinic_id)
+
+    background_tasks.add_task(process_lab_result, db, payload, _log1)
+    return {"received": True, "provider": "idexx"}
+
+
+@app.post("/api/webhooks/antech/result")
+async def webhook_antech(request: Request, background_tasks: BackgroundTasks):  # W-03
+    """T025: Antech lab result webhook."""
+    from .agents.lab_agent import process_lab_result
+
+    clinic_id = _get_clinic_for_webhook("antech", request)
+    raw = await request.json()
+    payload = _normalise_antech(raw, clinic_id)
+    background_tasks.add_task(process_lab_result, db, payload, _log1)
+    return {"received": True, "provider": "antech"}
+
+
+@app.post("/api/webhooks/heska/result")
+async def webhook_heska(request: Request, background_tasks: BackgroundTasks):  # W-03
+    """T027: Heska lab result webhook."""
+    from .agents.lab_agent import process_lab_result
+
+    clinic_id = _get_clinic_for_webhook("heska", request)
+    raw = await request.json()
+    payload = _normalise_heska(raw, clinic_id)
+    background_tasks.add_task(process_lab_result, db, payload, _log1)
+    return {"received": True, "provider": "heska"}
+
+
+@app.post("/api/webhooks/vetscan/result")
+async def webhook_vetscan(request: Request, background_tasks: BackgroundTasks):  # W-03
+    """T029: Vetscan webhook."""
+    from .agents.lab_agent import process_lab_result
+
+    clinic_id = _get_clinic_for_webhook("vetscan", request)
+    raw = await request.json()
+    payload = _normalise_vetscan(raw, clinic_id)
+    background_tasks.add_task(process_lab_result, db, payload, _log1)
+    return {"received": True, "provider": "vetscan"}
+
+
+@app.post("/api/webhooks/imaging/result")
+async def webhook_imaging(request: Request, background_tasks: BackgroundTasks):  # W-03
+    """T033: Imaging/DICOM webhook."""
+    from .agents.lab_agent import process_lab_result
+
+    clinic_id = _get_clinic_for_webhook("imaging", request)
+    raw = await request.json()
+
+    # Store imaging result
+    img = _normalise_imaging(raw, clinic_id)
+    background_tasks.add_task(_save_imaging_result, img)
+    return {"received": True, "provider": "imaging"}
+
+
+def _save_imaging_result(img: dict) -> None:
+    try:
+        db.save_clinical_image(img)
+        _log1(f"IMAGING AGENT: {img.get('modality', 'Unknown').upper()} study received · patient {img.get('patient_id', 'UNMATCHED')}")
+    except Exception as e:
+        _log1(f"IMAGING AGENT: [error] {e}")
+
+
+# ── Payload normalisers ──────────────────────────────────────────────────────
+
+def _normalise_idexx(raw: dict, clinic_id: str) -> dict:
+    """Map IDEXX webhook payload to internal LabResultPayload shape."""
+    panels = []
+    for section in raw.get("results", raw.get("panels", [])):
+        analytes = []
+        for item in section.get("analytes", section.get("tests", [])):
+            analytes.append({
+                "name":  item.get("name", item.get("test_name", "")),
+                "value": float(item.get("value", item.get("result", 0))),
+                "unit":  item.get("unit", ""),
+                "low":   float(item.get("low", item.get("reference_low", 0))),
+                "high":  float(item.get("high", item.get("reference_high", 0))),
+                "flag":  (item.get("flag", item.get("abnormal_flag", "")) or "").upper(),
+            })
+        panels.append({"name": section.get("name", "Panel"), "analytes": analytes})
+    return {
+        "provider": "idexx",
+        "clinic_id": clinic_id,
+        "lab_order_id": raw.get("lab_order_id", raw.get("order_id")),
+        "patient_id": raw.get("patient_id"),
+        "patient_name": raw.get("patient_name"),
+        "owner_name": raw.get("owner_name", raw.get("client_name")),
+        "panel_name": raw.get("panel_name", raw.get("test_name", "IDEXX Panel")),
+        "panels": panels,
+        "received_at": raw.get("received_at", datetime.utcnow().isoformat()),
+    }
+
+
+def _normalise_antech(raw: dict, clinic_id: str) -> dict:
+    """Map Antech payload (different field names) to internal shape."""
+    panels = []
+    for section in raw.get("test_groups", raw.get("panels", [])):
+        analytes = []
+        for item in section.get("results", section.get("analytes", [])):
+            analytes.append({
+                "name":  item.get("analyte_name", item.get("name", "")),
+                "value": float(item.get("result_value", item.get("value", 0))),
+                "unit":  item.get("result_unit", item.get("unit", "")),
+                "low":   float(item.get("range_low", item.get("low", 0))),
+                "high":  float(item.get("range_high", item.get("high", 0))),
+                "flag":  (item.get("flag", "") or "").upper(),
+            })
+        panels.append({"name": section.get("group_name", section.get("name", "Panel")), "analytes": analytes})
+    return {
+        "provider": "antech",
+        "clinic_id": clinic_id,
+        "lab_order_id": raw.get("order_number", raw.get("lab_order_id")),
+        "patient_id": raw.get("patient_id"),
+        "patient_name": raw.get("patient_name"),
+        "owner_name": raw.get("owner_name", raw.get("client_name")),
+        "panel_name": raw.get("report_name", raw.get("panel_name", "Antech Panel")),
+        "panels": panels,
+        "received_at": datetime.utcnow().isoformat(),
+    }
+
+
+def _normalise_heska(raw: dict, clinic_id: str) -> dict:
+    """Map Heska VetLink payload to internal shape."""
+    panels = []
+    for section in raw.get("panels", raw.get("results", [])):
+        analytes = []
+        for item in section.get("analytes", section.get("parameters", [])):
+            analytes.append({
+                "name":  item.get("name", item.get("param_name", "")),
+                "value": float(item.get("value", item.get("result", 0))),
+                "unit":  item.get("unit", ""),
+                "low":   float(item.get("low", item.get("ref_low", 0))),
+                "high":  float(item.get("high", item.get("ref_high", 0))),
+                "flag":  (item.get("flag", "") or "").upper(),
+            })
+        panels.append({"name": section.get("name", "Heska Panel"), "analytes": analytes})
+    return {
+        "provider": "heska",
+        "clinic_id": clinic_id,
+        "lab_order_id": raw.get("lab_order_id"),
+        "patient_id": raw.get("patient_id"),
+        "patient_name": raw.get("patient_name"),
+        "owner_name": raw.get("owner_name"),
+        "panel_name": raw.get("panel_name", "Heska CBC"),
+        "panels": panels,
+        "received_at": datetime.utcnow().isoformat(),
+    }
+
+
+def _normalise_vetscan(raw: dict, clinic_id: str) -> dict:
+    """Map Vetscan webhook to internal shape (same as IDEXX)."""
+    p = _normalise_idexx(raw, clinic_id)
+    p["provider"] = "vetscan"
+    return p
+
+
+def _normalise_imaging(raw: dict, clinic_id: str) -> dict:
+    """Build imaging record from webhook payload."""
+    modality_map = {
+        "CR": "xray", "DX": "xray", "XR": "xray",
+        "US": "ultrasound",
+        "CT": "ct",
+        "MR": "mri", "MRI": "mri",
+    }
+    raw_modality = (raw.get("modality") or raw.get("study_type") or "xray").upper()
+    modality = modality_map.get(raw_modality, raw_modality.lower())
+
+    patient_id = raw.get("patient_id")
+    if not patient_id:
+        patient_name = raw.get("patient_name", "")
+        owner_name = raw.get("owner_name", "")
+        if patient_name:
+            patients = db.get_all_patients()
+            pn_lower = patient_name.lower()
+            for p in patients:
+                if p.get("name", "").lower() == pn_lower:
+                    patient_id = p["id"]
+                    break
+
+    return {
+        "patient_id": patient_id,
+        "clinic_id": clinic_id,
+        "source": modality,
+        "modality": modality,
+        "report_text": raw.get("report_text", raw.get("findings")),
+        "dicom_study_uid": raw.get("dicom_study_uid", raw.get("study_uid")),
+        "imaging_system": raw.get("imaging_system", raw.get("system_name")),
+        "study_date": raw.get("study_date", datetime.utcnow().isoformat()[:10]),
+        "filename": raw.get("filename", f"{modality}_study.dcm"),
+        "caption": raw.get("caption", f"{modality.upper()} Study"),
+        "data": raw.get("image_data", raw.get("data", "")),
+        "content_type": "application/dicom",
+        "submitted_at": datetime.utcnow().isoformat(),
+    }
+
+
+# ============================================================
+# Integration Batch 0 — Phase 5: Lab Results Management
+# T022, T032 (labs endpoints)
+# ============================================================
+
+@app.get("/api/labs/{lab_id}")
+def get_lab_result(lab_id: str):
+    """Get a single lab result by ID."""
+    import sqlite3
+    from .repository import _get_conn
+    with _get_conn() as conn:
+        row = conn.execute("SELECT * FROM labs WHERE id=?", (lab_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Lab result not found")
+    result = dict(row)
+    try:
+        result["results"] = __import__("json").loads(result["results"] or "{}")
+    except Exception:
+        pass
+    try:
+        result["flagged_values"] = __import__("json").loads(result.get("flagged_values") or "[]")
+    except Exception:
+        pass
+    return result
+
+
+@app.post("/api/labs/{lab_id}/acknowledge")
+async def acknowledge_lab_result(lab_id: str, body: LabAcknowledgeRequest):
+    """T032: Acknowledge a critical lab result card."""
+    ok = db.acknowledge_lab(lab_id, body.vet_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Lab result not found")
+    _log1(f"LAB AGENT: Critical result {lab_id} acknowledged by {body.vet_id}")
+    return {"lab_id": lab_id, "acknowledged": True, "acknowledged_by": body.vet_id}
+
+
+@app.post("/api/labs/{lab_id}/assign")
+async def assign_lab_result(lab_id: str, body: LabAssignRequest):
+    """T033: Manually assign an unmatched lab result to a patient."""
+    updated = db.patch_lab(lab_id, {
+        "patient_id": body.patient_id,
+        "timeblock_id": body.timeblock_id,
+        "status": "resulted",
+    })
+    if not updated:
+        raise HTTPException(status_code=404, detail="Lab result not found")
+    _log1(f"LAB AGENT: Unmatched result {lab_id} assigned to patient {body.patient_id}")
+    return updated
+
+
+@app.post("/api/lab-results/import")
+async def import_vetscan_csv(
+    background_tasks: BackgroundTasks,
+    patient_id: Optional[str] = Query(None),
+    panel_name: str = Query("Vetscan Chemistry"),
+    file: UploadFile = File(...),
+):
+    """
+    T031 (FR-INT-054): Import Vetscan/Abaxis CSV file.
+    Returns lab result ID immediately, processes in background.
+    """
+    from .agents.lab_agent import parse_vetscan_csv, process_lab_result
+
+    csv_text = (await file.read()).decode("utf-8-sig", errors="replace")
+    payload = parse_vetscan_csv(csv_text, patient_id=patient_id, panel_name=panel_name)
+
+    background_tasks.add_task(process_lab_result, db, payload, _log1)
+    _log1(f"LAB AGENT: Vetscan CSV import queued · patient {patient_id or 'unspecified'} · {panel_name}")
+    return {"status": "queued", "provider": "vetscan", "panel_name": panel_name}
+
+
+# ============================================================
+# Integration Batch 0 — Phase 6: Simulate Lab Result (T034)
+# ============================================================
+
+@app.post("/api/labs/simulate")
+async def simulate_lab_result(
+    background_tasks: BackgroundTasks,
+    patient_id: str = Query(...),
+    provider: str = Query("idexx"),
+    panel: str = Query("CBC"),
+    include_critical: bool = Query(False),
+):
+    """
+    T034: Simulate a lab result webhook (in-house instrument demo button).
+    Posts a mock result through the lab agent pipeline.
+    """
+    from .agents.lab_agent import process_lab_result
+    import random
+
+    def _make_analyte(name: str, low: float, high: float, critical: bool = False) -> dict:
+        if critical:
+            # Force HH or LL
+            if random.random() > 0.5:
+                val = high * 1.5
+                flag = "HH"
+            else:
+                val = low * 0.4
+                flag = "LL"
+        else:
+            # Normal or slightly abnormal
+            if random.random() > 0.75:
+                val = high * (1.0 + random.uniform(0.05, 0.25))
+                flag = "H"
+            elif random.random() > 0.75:
+                val = low * random.uniform(0.6, 0.95)
+                flag = "L"
+            else:
+                val = random.uniform(low, high)
+                flag = ""
+        return {"name": name, "value": round(val, 2), "unit": "—", "low": low, "high": high, "flag": flag}
+
+    cbc_analytes = [
+        _make_analyte("WBC",  6.0, 17.0, include_critical and random.random() > 0.7),
+        _make_analyte("RBC",  5.5, 8.5),
+        _make_analyte("HGB",  12.0, 18.0),
+        _make_analyte("HCT",  37.0, 55.0),
+        _make_analyte("PLT",  200.0, 500.0),
+        _make_analyte("NEU",  3.5, 11.5),
+        _make_analyte("LYM",  1.0, 4.8),
+    ]
+    chem_analytes = [
+        _make_analyte("BUN",  7.0, 27.0, include_critical),
+        _make_analyte("CREA", 0.5, 1.6),
+        _make_analyte("GLU",  70.0, 120.0),
+        _make_analyte("ALT",  10.0, 55.0),
+        _make_analyte("ALP",  20.0, 150.0),
+    ]
+    analytes = cbc_analytes if "cbc" in panel.lower() else chem_analytes
+    payload = {
+        "provider": provider,
+        "patient_id": patient_id,
+        "panel_name": panel,
+        "panels": [{"name": panel, "analytes": analytes}],
+        "received_at": datetime.utcnow().isoformat(),
+    }
+    background_tasks.add_task(process_lab_result, db, payload, _log1)
+    _log1(f"LAB AGENT: Simulated {panel} result posted for patient {patient_id}")
+    return {"status": "queued", "provider": provider, "panel": panel}
+
+
+# ============================================================
+# Integration Batch 0 — Phase 7: Patient Images
+# T033c (W-09)
+# ============================================================
+
+@app.get("/api/patients/{patient_id}/images")
+def get_patient_images(patient_id: str, source: Optional[str] = Query(None)):
+    """
+    W-09: Get all images for a patient, optionally filtered by source.
+    Sources: owner_upload | xray | ultrasound | ct | mri
+    """
+    images = db.get_images_for_patient(patient_id)
+    if source:
+        images = [img for img in images if img.get("source") == source]
+    # Strip binary data for listing (only keep metadata)
+    result = []
+    for img in images:
+        result.append({
+            "id": img["id"],
+            "patient_id": img.get("patient_id"),
+            "source": img.get("source", "owner_upload"),
+            "modality": img.get("modality"),
+            "filename": img.get("filename"),
+            "caption": img.get("caption"),
+            "submitted_at": img.get("submitted_at"),
+            "study_date": img.get("study_date"),
+            "report_text": img.get("report_text"),
+            "imaging_system": img.get("imaging_system"),
+        })
+    return result
+
+
+# ============================================================
+# Integration Batch 0 — Phase 8: Avimark Fixture (W-08 / T057)
+# Generated by backend/scripts/generate_avimark_fixture.py
+# ============================================================
+
+@app.post("/api/migration/seed-avimark-fixture")
+async def seed_avimark_fixture_endpoint(
+    background_tasks: BackgroundTasks,
+    clinic_id: str = Query("default"),
+):
+    """
+    T057: Trigger generation and import of the 847-patient Avimark fixture.
+    For demo: generates fixture in memory and runs migration synchronously.
+    """
+    from .scripts.generate_avimark_fixture import generate_avimark_zip
+    from .agents.migration_agent import run_migration
+    from uuid import uuid4
+
+    clinics = db.get_all_clinics()
+    resolved_clinic = clinic_id
+    if clinic_id == "default" and clinics:
+        resolved_clinic = clinics[0].id
+
+    zip_bytes = generate_avimark_zip()
+    run_id = str(uuid4())
+    db.create_migration_run({
+        "id": run_id,
+        "clinic_id": resolved_clinic,
+        "source_system": "avimark",
+        "status": "pending",
+        "started_at": datetime.utcnow().isoformat(),
+    })
+
+    background_tasks.add_task(
+        run_migration, db, run_id, resolved_clinic, "avimark", zip_bytes, _log1
+    )
+    return {"run_id": run_id, "status": "pending", "message": "Avimark 847-patient fixture migration started"}
+
