@@ -1,6 +1,7 @@
-# Integration Batch 0 — Data Model
+# Integration Batch 0 — Data Model (Remediated)
 
 **Feature**: integration-batch0
+> **Remediation applied**: B-01, B-02, B-04, W-02, W-07, W-09 — aligned with live DB schema
 **Date**: 2026-06-19
 
 ---
@@ -36,6 +37,10 @@ CREATE TABLE IF NOT EXISTS integration_definitions (
 | `quickbooks` | QuickBooks Online | MOD-FIN | native |
 | `covetrus` | Covetrus | MOD-INV | native |
 | `mwi` | MWI Animal Health | MOD-INV | native |
+
+---
+
+> **W-07 note**: `required_keys` is stored as a JSON TEXT column. Repository methods MUST call `json.dumps(list)` on write and `json.loads(str)` on read for this field. Pydantic model handles this transparently but raw `sqlite3.Row` access does not.
 
 ---
 
@@ -114,49 +119,64 @@ CREATE TABLE IF NOT EXISTS migration_flags (
 
 ---
 
-### `lab_results`
+### `labs` table extensions (B-01, B-02 remediation)
+
+> **B-01 fix**: The spec originally defined a new `lab_results` table. The real table is `labs` (repository.py:131), already used by `LabsPanel.tsx` at `/api/labs/patient/{id}`. We EXTEND the existing table via ALTER TABLE instead of creating a new one.
+
+> **B-02 fix**: Analyte schema changed from `ref_low`/`ref_high` (flat) to `low`/`high` stored nested inside `results` JSON blob as `{"panels": [{"name": str, "analytes": [{name, value, unit, low, high, flag}]}]}` — matching what `LabsPanel.tsx` already reads as `lab.results?.panels`.
 
 ```sql
-CREATE TABLE IF NOT EXISTS lab_results (
-    id                TEXT PRIMARY KEY,
-    patient_id        TEXT NOT NULL REFERENCES patients(id),
-    timeblock_id      TEXT REFERENCES timeblocks(id),  -- nullable
-    clinic_id         TEXT NOT NULL,
-    provider          TEXT NOT NULL,   -- 'idexx' | 'antech' | 'heska' | 'vetscan' | 'imported'
-    lab_order_id      TEXT,            -- provider's reference; used for matching
-    panel_name        TEXT NOT NULL,   -- e.g. "Complete Blood Count"
-    analytes          TEXT NOT NULL DEFAULT '[]',
-                      -- JSON: [{name, value, unit, ref_low, ref_high, flag}]
-                      -- flag: '' | 'L' | 'H' | 'LL' | 'HH'
-    flagged_values    TEXT NOT NULL DEFAULT '[]',
-                      -- JSON: subset of analytes with non-empty flag
-    is_critical       INTEGER NOT NULL DEFAULT 0,  -- 1 if any LL/HH flag present
-    status            TEXT NOT NULL DEFAULT 'received',
-                      -- 'received' | 'unmatched' | 'acknowledged'
-    acknowledged_by   TEXT,            -- resource.id of acknowledging vet
-    acknowledged_at   TEXT,
-    received_at       TEXT NOT NULL DEFAULT (datetime('now'))
-);
+-- REAL table name: labs (not lab_results)
+-- Extend via ALTER TABLE (each wrapped in try/except):
+ALTER TABLE labs ADD COLUMN provider TEXT DEFAULT 'manual';
+    -- 'manual' (existing) | 'idexx' | 'antech' | 'heska' | 'vetscan' | 'imported'
+ALTER TABLE labs ADD COLUMN lab_order_id TEXT;
+    -- provider's reference; used for patient matching on inbound webhooks
+ALTER TABLE labs ADD COLUMN clinic_id TEXT;
+    -- resolved from credential vault on webhook receipt
+ALTER TABLE labs ADD COLUMN flagged_values TEXT DEFAULT '[]';
+    -- JSON: flat list of analytes with non-empty flag (for quick critical check)
+ALTER TABLE labs ADD COLUMN is_critical INTEGER DEFAULT 0;
+    -- 1 if any LL/HH flag present in results
+ALTER TABLE labs ADD COLUMN acknowledged_by TEXT;
+ALTER TABLE labs ADD COLUMN acknowledged_at TEXT;
+```
+
+**Existing columns already usable as-is**:
+- `id`, `patient_id`, `timeblock_id`, `panel_name`, `status`, `ordered_by`, `ordered_at`, `resulted_at` — all present
+- `results TEXT DEFAULT '{}'` — already stores JSON; Lab Agent writes `{"panels": [{"name": ..., "analytes": [{name, value, unit, low, high, flag}]}]}`
+
+**Status field reuse**: existing `status` values (`pending`, `resulted`) extended with `received`, `unmatched`, `acknowledged` for webhook-sourced results.
+
+```sql
+-- No new table needed. All endpoints use the existing labs table.
+-- GET /api/labs/patient/{patient_id} — already exists, will return webhook results too
+-- GET /api/labs/timeblock/{timeblock_id} — already exists
+-- POST /api/labs — already exists (manual order path unchanged)
 ```
 
 ---
 
 ## Extended Tables
 
-### `patient_images` extensions
+### `owner_images` extensions (B-04 remediation)
+
+> **B-04 fix**: The spec originally referenced a `patient_images` table that does not exist. The real table is `owner_images` (repository.py:142). Clinical imaging columns are added to this table via ALTER TABLE.
 
 ```sql
--- Existing table; add columns via ALTER TABLE (wrap in try/except):
-ALTER TABLE patient_images ADD COLUMN source TEXT DEFAULT 'owner_upload';
-    -- 'owner_upload' | 'xray' | 'ultrasound' | 'ct' | 'mri'
-ALTER TABLE patient_images ADD COLUMN modality TEXT;
+-- REAL table name: owner_images (not patient_images)
+-- Add columns via ALTER TABLE (each wrapped in try/except):
+ALTER TABLE owner_images ADD COLUMN modality TEXT;
     -- DICOM modality code: 'CR' | 'US' | 'CT' | 'MR' | NULL for owner uploads
-ALTER TABLE patient_images ADD COLUMN report_text TEXT;
-ALTER TABLE patient_images ADD COLUMN dicom_study_uid TEXT;
-ALTER TABLE patient_images ADD COLUMN imaging_system TEXT;
+    -- source column already exists: DEFAULT 'owner' → extend enum to include 'xray'|'ultrasound'|'ct'|'mri'
+ALTER TABLE owner_images ADD COLUMN report_text TEXT;
+ALTER TABLE owner_images ADD COLUMN dicom_study_uid TEXT;
+ALTER TABLE owner_images ADD COLUMN imaging_system TEXT;
     -- 'sound' | 'idexx_pacs' | 'heska' | 'other'
-ALTER TABLE patient_images ADD COLUMN study_date TEXT;
+ALTER TABLE owner_images ADD COLUMN study_date TEXT;
 ```
+
+> Existing `source` column already present (`DEFAULT 'owner'`). Imaging webhooks write `source='xray'` etc. No ALTER needed for `source` — just use the new values.
 
 ---
 
@@ -170,7 +190,7 @@ class IntegrationDefinition(BaseModel):
     tier: str
     description: str = ""
     logo_emoji: str = "🔌"
-    required_keys: List[str] = []
+    required_keys: List[str] = []  # Stored as JSON TEXT in DB; json.dumps on write, json.loads on read
 
 class IntegrationStatus(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
@@ -183,14 +203,19 @@ class IntegrationStatus(BaseModel):
     last_connected_at: Optional[str] = None
 
 class LabAnalyte(BaseModel):
+    # B-02 remediation: field names match existing LabsPanel.tsx (a.low, a.high)
     name: str
     value: float
     unit: str
-    ref_low: Optional[float] = None
-    ref_high: Optional[float] = None
+    low: Optional[float] = None    # was ref_low in original spec — CHANGED to match frontend
+    high: Optional[float] = None   # was ref_high in original spec — CHANGED to match frontend
     flag: str = ""  # "" | "L" | "H" | "LL" | "HH"
 
 class LabResult(BaseModel):
+    # B-01 remediation: extends existing `labs` table (not a new table)
+    # B-02 remediation: results stored in existing labs.results JSON blob as:
+    #   { "panels": [{ "name": str, "analytes": [{name,value,unit,low,high,flag}] }] }
+    # This matches the nested structure LabsPanel.tsx already reads: lab.results?.panels
     id: str = Field(default_factory=lambda: str(uuid4()))
     patient_id: str
     timeblock_id: Optional[str] = None
@@ -198,8 +223,9 @@ class LabResult(BaseModel):
     provider: str  # idexx|antech|heska|vetscan|imported
     lab_order_id: Optional[str] = None
     panel_name: str
-    analytes: List[LabAnalyte] = []
-    flagged_values: List[LabAnalyte] = []
+    # analytes stored NESTED under results JSON to match LabsPanel: lab.results.panels[].analytes[]
+    results: dict = Field(default_factory=dict)  # {"panels": [{"name": str, "analytes": [LabAnalyte]}]}
+    flagged_values: List[LabAnalyte] = []  # flat list for quick access
     is_critical: bool = False
     status: str = "received"  # received|unmatched|acknowledged
     acknowledged_by: Optional[str] = None

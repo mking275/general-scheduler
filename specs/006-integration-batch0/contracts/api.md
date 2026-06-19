@@ -1,7 +1,8 @@
-# Integration Batch 0 — API Contracts
+# Integration Batch 0 — API Contracts (Remediated)
 
 **Feature**: integration-batch0
 **Date**: 2026-06-19
+> **Remediation applied**: B-01, B-02, B-04, W-02, W-03, W-04, W-09
 
 ---
 
@@ -182,6 +183,20 @@ Download flagged records as CSV. Returns `Content-Type: text/csv`.
 
 ## Lab Results (INT-050–054)
 
+> **B-01 remediation**: All lab result endpoints use the EXISTING `/api/labs/...` routes. No new `/api/patients/{id}/lab-results` route is created. Webhook-delivered results write to the existing `labs` table and are immediately visible via the existing `LabsPanel.tsx`.
+
+> **B-02 remediation**: Analyte schema in all webhook payloads uses `low`/`high` (not `ref_low`/`ref_high`). Results JSON blob uses nested structure `{"panels": [{"name": ..., "analytes": [...]}]}` to match what `LabsPanel.tsx` reads as `lab.results?.panels`.
+
+> **W-02 remediation**: Inbound webhooks do not include `clinic_id`. Lab Agent resolves clinic by looking up which clinic has a matching `practice_id` in `integration_credentials`. Repository method: `get_clinic_id_by_credential(integration_id='idexx', key_name='IDEXX_PRACTICE_ID', value=payload['practice_id'])`.
+
+> **W-03 remediation**: All webhook endpoints must read raw bytes BEFORE JSON parsing for HMAC validation:
+> ```python
+> body_bytes = await request.body()
+> validate_hmac(body_bytes, request.headers.get("X-IDEXX-Signature", ""), secret)
+> data = json.loads(body_bytes)
+> ```
+> Webhook endpoints MUST be `async def` to use `await request.body()`.
+
 ### POST /api/webhooks/idexx/result
 Inbound webhook from IDEXX Laboratories.
 
@@ -198,12 +213,33 @@ Inbound webhook from IDEXX Laboratories.
     {
       "name": "Complete Blood Count",
       "analytes": [
-        { "name": "WBC", "value": 14.2, "unit": "K/uL", "ref_low": 6.0, "ref_high": 17.0, "flag": "H" },
-        { "name": "RBC", "value": 7.1,  "unit": "M/uL", "ref_low": 5.5, "ref_high": 8.5, "flag": "" },
-        { "name": "BUN", "value": 85.0, "unit": "mg/dL","ref_low": 7.0, "ref_high": 27.0,"flag": "HH" }
+        { "name": "WBC",  "value": 14.2, "unit": "K/uL",  "low": 6.0,  "high": 17.0, "flag": "H"  },
+        { "name": "RBC",  "value": 7.1,  "unit": "M/uL",  "low": 5.5,  "high": 8.5,  "flag": ""   },
+        { "name": "BUN",  "value": 85.0, "unit": "mg/dL", "low": 7.0,  "high": 27.0, "flag": "HH" }
       ]
     }
   ]
+}
+```
+
+**Lab Agent normalises to existing `labs` table row**:
+```json
+{
+  "id": "<uuid>",
+  "patient_id": "pat-buddy-001",
+  "timeblock_id": "tb-001",
+  "panel_name": "Complete Blood Count",
+  "provider": "idexx",
+  "lab_order_id": "ORD-IDEXX-001",
+  "status": "received",
+  "ordered_at": "2026-06-19T10:30:00",
+  "resulted_at": "2026-06-19T10:30:00",
+  "results": {"panels": [{"name": "Complete Blood Count", "analytes": [
+    {"name": "WBC", "value": 14.2, "unit": "K/uL", "low": 6.0, "high": 17.0, "flag": "H"},
+    {"name": "BUN", "value": 85.0, "unit": "mg/dL", "low": 7.0, "high": 27.0, "flag": "HH"}
+  ]}]},
+  "is_critical": 1,
+  "flagged_values": [{"name": "BUN", "value": 85.0, "flag": "HH"}]
 }
 ```
 
@@ -291,40 +327,44 @@ CSV upload for Vetscan/Abaxis point-of-care import.
 
 ---
 
-### GET /api/patients/{patient_id}/lab-results
-All lab results for a patient.
+### GET /api/labs/patient/{patient_id}
+> **B-01 remediation**: EXISTING endpoint (main.py:862). No new route. Lab Agent writes webhook results to `labs` table; this endpoint returns them alongside manually-ordered labs.
 
-**Response**:
+**Response** (unchanged from existing):
 ```json
-{
-  "patient_id": "pat-buddy-001",
-  "results": [
-    {
-      "id": "lr-001",
-      "panel_name": "Complete Blood Count",
-      "provider": "idexx",
-      "received_at": "2026-06-19T10:30:00",
-      "is_critical": true,
-      "status": "received",
-      "flagged_values": [
-        { "name": "BUN", "value": 85.0, "unit": "mg/dL", "ref_low": 7, "ref_high": 27, "flag": "HH" }
-      ],
-      "analytes": [ /* full list */ ]
-    }
-  ]
-}
+[
+  {
+    "id": "lr-001",
+    "panel_name": "Complete Blood Count",
+    "provider": "idexx",
+    "status": "received",
+    "is_critical": 1,
+    "ordered_at": "2026-06-19T10:30:00",
+    "resulted_at": "2026-06-19T10:30:00",
+    "results": {
+      "panels": [{
+        "name": "Complete Blood Count",
+        "analytes": [
+          { "name": "WBC",  "value": 14.2, "unit": "K/uL",  "low": 6.0,  "high": 17.0, "flag": "H"  },
+          { "name": "BUN",  "value": 85.0, "unit": "mg/dL", "low": 7.0,  "high": 27.0, "flag": "HH" }
+        ]
+      }]
+    },
+    "flagged_values": [{"name": "BUN", "value": 85.0, "flag": "HH"}]
+  }
+]
 ```
 
 ---
 
-### GET /api/timeblocks/{timeblock_id}/lab-results
-Lab results linked to a specific appointment.
-
-**Response**: Same shape as patient lab results, filtered by `timeblock_id`.
+### GET /api/labs/timeblock/{timeblock_id}
+> **B-01 remediation**: EXISTING endpoint (main.py:872). No new route.
 
 ---
 
-### POST /api/lab-results/{id}/acknowledge
+### POST /api/labs/{id}/acknowledge
+> **B-01 remediation**: Uses `labs` table ID (not `lab_results`). Replaces `/api/lab-results/{id}/acknowledge` from original spec.
+
 Vet acknowledges a critical lab result, clearing the action queue card.
 
 **Request**:
@@ -359,4 +399,47 @@ For demo use only — simulates an IDEXX result arriving for a given patient wit
 }
 ```
 
-**Response**: Same as `POST /api/webhooks/idexx/result` response + the created `LabResult` object.
+**Response**: Same as `POST /api/webhooks/idexx/result` response + the created lab row object.
+
+---
+
+## Missing Endpoints Added by Remediation
+
+### PATCH /api/labs/{id} (W-04 remediation)
+Manually assign an unmatched lab result to a patient.
+
+**Request**:
+```json
+{ "patient_id": "pat-buddy-001", "timeblock_id": "tb-001" }
+```
+
+**Response**: Updated lab row with `status='received'`.
+
+---
+
+### GET /api/patients/{patient_id}/images (W-09 remediation)
+Return all images for a patient from the `owner_images` table, including clinical imaging (modality != NULL).
+
+**Response**:
+```json
+[
+  {
+    "id": "img-001",
+    "patient_id": "pat-luna-001",
+    "timeblock_id": "tb-001",
+    "filename": "thoracic_xray.jpg",
+    "source": "xray",
+    "modality": "CR",
+    "report_text": "Mild cardiomegaly. Recommend echocardiogram.",
+    "study_date": "2026-06-19",
+    "caption": "Thoracic X-Ray",
+    "submitted_at": "2026-06-19T10:00:00"
+  },
+  {
+    "id": "img-002",
+    "source": "owner",
+    "modality": null,
+    "caption": "Owner-submitted photo"
+  }
+]
+```

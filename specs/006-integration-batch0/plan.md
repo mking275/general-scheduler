@@ -1,8 +1,9 @@
-# Integration Batch 0 — Implementation Plan
+# Integration Batch 0 — Implementation Plan (Remediated)
 
 **Feature**: integration-batch0
 **Date**: 2026-06-19
 **Status**: Ready for tasks
+> **Remediation applied**: B-03, W-01, W-02, W-03, W-05
 
 ---
 
@@ -97,12 +98,26 @@ Phase 11 — Git & Cleanup
 
 ## Key Technical Decisions
 
-### Encryption
-Use Python `cryptography` library (`Fernet` symmetric encryption). Key stored as env var `VPMA_ENCRYPTION_KEY`. If not set, fall back to base64 obfuscation with a logged warning (demo mode).
+### Encryption (W-01 remediation)
+
+> **W-01 fix**: Original plan generated a new key on every restart, making previously-encrypted credentials unreadable. Fixed: key is persisted to `backend/.vpma_key` on first generation and reloaded on subsequent starts.
 
 ```python
+import os
 from cryptography.fernet import Fernet
-FERNET_KEY = os.environ.get("VPMA_ENCRYPTION_KEY") or Fernet.generate_key()
+
+_KEY_FILE = os.path.join(os.path.dirname(__file__), ".vpma_key")
+
+def _load_or_create_key() -> bytes:
+    if os.path.exists(_KEY_FILE):
+        with open(_KEY_FILE, "rb") as f:
+            return f.read().strip()
+    key = Fernet.generate_key()
+    with open(_KEY_FILE, "wb") as f:
+        f.write(key)
+    return key
+
+FERNET_KEY = os.environ.get("VPMA_ENCRYPTION_KEY", "").encode() or _load_or_create_key()
 cipher = Fernet(FERNET_KEY)
 
 def encrypt(value: str) -> str:
@@ -119,44 +134,82 @@ class LabAgent:
         self.db = db
         self.log_fn = log_fn
 
-    def process(self, payload: dict, provider: str) -> LabResult:
-        # 1. Normalise provider-specific format → LabResult
-        result = self._normalise(payload, provider)
-        # 2. Match to patient
+    def process(self, payload: dict, provider: str) -> dict:
+        # 1. Resolve clinic_id from payload practice_id (W-02)
+        clinic_id = self.db.get_clinic_id_by_credential(
+            integration_id=provider, key_name=f"{provider.upper()}_PRACTICE_ID",
+            value=payload.get("practice_id", "")
+        )
+        # 2. Normalise provider-specific format → labs table row
+        result = self._normalise(payload, provider, clinic_id)
+        # 3. Match to patient by lab_order_id (fallback: name match)
         result = self._match_patient(result)
-        # 3. Classify flags
+        # 4. Classify flags; compute is_critical
         result = self._classify_flags(result)
-        # 4. Save
-        self.db.save_lab_result(result)
-        # 5. Update risk score
+        # 5. Save to existing labs table (extend existing row or insert new)
+        self.db.save_lab(result)
+        # 6. Update risk score
         self._update_risk_score(result)
-        # 6. Raise alerts if critical
-        if result.is_critical:
+        # 7. Raise alerts if critical
+        if result['is_critical']:
             self._raise_critical_alert(result)
-        # 7. Log
-        self.log_fn(f"LAB AGENT: {result.panel_name} for {patient_name} · {flag_summary}")
+        # 8. Log
+        patient_name = result.get('_patient_name', 'Unknown')
+        flag_summary = ', '.join(f"{a['name']} {a['flag']}" for a in result.get('flagged_values', []))
+        self.log_fn(f"LAB AGENT: {result['panel_name']} for {patient_name} · {flag_summary or 'all normal'}")
         return result
 ```
 
-### Webhook HMAC Validation
+### Webhook HMAC Validation (W-03 remediation)
+
+> **W-03 fix**: Webhook endpoints MUST be `async def` to read raw bytes before JSON parsing. Raw bytes are needed for HMAC validation.
+
 ```python
-def validate_idexx_signature(request_body: bytes, signature_header: str, secret: str) -> bool:
-    expected = hmac.new(secret.encode(), request_body, hashlib.sha256).hexdigest()
+import hmac, hashlib, json
+
+def validate_webhook_signature(body_bytes: bytes, signature_header: str, secret: str) -> bool:
+    expected = hmac.new(secret.encode(), body_bytes, hashlib.sha256).hexdigest()
     received = signature_header.replace("sha256=", "")
     return hmac.compare_digest(expected, received)
+
+# In the endpoint:
+@app.post("/api/webhooks/idexx/result")
+async def webhook_idexx(request: Request):          # MUST be async
+    body_bytes = await request.body()               # Read raw bytes FIRST
+    sig = request.headers.get("X-IDEXX-Signature", "")
+    secret = db.get_credential(clinic_id, 'idexx', 'IDEXX_WEBHOOK_SECRET')
+    if secret and not validate_webhook_signature(body_bytes, sig, secret):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+    data = json.loads(body_bytes)                   # Parse AFTER validation
+    background_tasks.add_task(lab_agent.process, data, 'idexx')
+    return {"received": True}
 ```
-In demo mode (no secret configured): skip validation and log warning.
 
-### Migration Agent Pattern
+### Migration Agent Pattern (B-03, W-05 remediation)
+
+> **B-03 fix**: `asyncio.create_task` is replaced with FastAPI `BackgroundTasks`. The endpoint stays `def` (sync), consistent with all existing routes.
+
+> **W-05 fix**: Migration background task opens its OWN SQLite connection (not the shared `db` singleton) to avoid thread-safety issues.
+
 ```python
-class AvimarkMigrationAgent:
-    PHASES = ["owners", "patients", "visits", "care_events", "prescriptions"]
+from fastapi import BackgroundTasks
 
-    def run(self, zip_path: str, run_id: str, clinic_id: str):
-        for phase in self.PHASES:
-            self.db.update_migration_phase(run_id, phase)
-            self._import_phase(phase, zip_path, run_id, clinic_id)
-        self.db.complete_migration(run_id)
+@app.post("/api/migration/upload")
+def upload_migration(background_tasks: BackgroundTasks, ...):
+    run = create_migration_run(...)              # sync; writes to shared db OK
+    background_tasks.add_task(run_migration, run.id, zip_path, clinic_id)
+    return {"migration_run_id": run.id, "status": "pending"}
+
+def run_migration(run_id: str, zip_path: str, clinic_id: str):
+    # Opens its own connection — NOT the shared db singleton
+    import sqlite3 as _sqlite3
+    conn = _sqlite3.connect(_DB_PATH)
+    conn.row_factory = _sqlite3.Row
+    try:
+        agent = AvimarkMigrationAgent(conn, _log1)
+        agent.run(zip_path, run_id, clinic_id)
+    finally:
+        conn.close()
 ```
 
 ---
@@ -168,4 +221,17 @@ class AvimarkMigrationAgent:
 | `cryptography` | Fernet symmetric encryption for credentials vault | Yes (single new pip package) |
 | `hmac`, `hashlib` | HMAC-SHA256 webhook signature validation | No (stdlib) |
 | `zipfile`, `csv` | Migration file parsing | No (stdlib) |
+| `BackgroundTasks` | Async migration task (FastAPI built-in — replaces `asyncio.create_task`) | No (already in FastAPI) |
 | All existing | backend/frontend unchanged | No |
+
+---
+
+## New Repository Methods Required
+
+| Method | Purpose | Issue fixed |
+|---|---|---|
+| `get_clinic_id_by_credential(integration_id, key_name, value)` | Resolve clinic from inbound webhook practice_id | W-02 |
+| `save_lab(lab_dict)` | Write lab result to existing `labs` table (extend existing or insert new) | B-01 |
+| `acknowledge_lab(lab_id, vet_id)` | Set `acknowledged_by`, `acknowledged_at`, `status='acknowledged'` | W-04 |
+| `patch_lab(lab_id, updates)` | Update patient_id, timeblock_id for unmatched results | W-04 |
+| `get_images_for_patient(patient_id)` | Return all owner_images rows for a patient | W-09 |
