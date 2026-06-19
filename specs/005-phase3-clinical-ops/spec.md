@@ -16,6 +16,19 @@ Extend the Paws & Claws Agentic Scheduler beyond scheduling into the full clinic
 
 Every feature follows the constitution's core pattern: **every legacy system records; every agent acts.** Each feature must be demonstrable in under 60 seconds, with all agent decisions visible in the Verbose Log.
 
+
+---
+
+## Clarifications
+
+### Session 2026-06-19
+
+- Q: Who initiates refill requests — front desk, vet, or either? → A: Either. Front Desk logs on owner's behalf via Refill Requests panel (new entry); Vet initiates via "Request Refill" button on the Rx tab. Both paths produce the same `refill_requests` record. Updated FR-P3-009, FR-P3-010.
+- Q: Does Phase 3 need to add the Regional Manager role tab? → A: No — it already exists from F007 Multi-Clinic. Phase 3 only adds the 4-Week Forecast section below the existing clinic summary cards. Updated FR-P3-012, US6.
+- Q: Must care events be linked to an appointment (timeblock_id required)? → A: No — standalone allowed. `timeblock_id` is a nullable optional FK. Care Plan tab gains a "Log Historical Care Event" form. Updated FR-P3-008, Key Entities, Assumptions.
+- Q: In demo, does "Send Reminder" appear only within a time window, or on all future appointments with a contextual label? → A: All future appointments. Label is `Early (T-48h+)` when >48h away, `Due (T-24h)` when ≤48h. Computed client-side, no server cron. Updated FR-P3-002, US1, Assumptions.
+- Q: Waitlist tiebreaker when two entries score equally? → A: Urgency descending (asap > within_week > flexible), then join_date ascending (oldest first / FIFO). Updated FR-P3-005.
+
 ---
 
 ## User Scenarios & Testing
@@ -23,7 +36,7 @@ Every feature follows the constitution's core pattern: **every legacy system rec
 ### US1 — Appointment Reminder & Confirmation (F013)
 
 **Actor**: Front Desk Staff  
-**Trigger**: An appointment exists within 48 hours
+**Trigger**: Any future appointment — button label reflects timing proximity
 
 **Happy path**:
 1. Front desk opens the schedule board — appointment card shows `⏳ Pending` confirmation badge
@@ -169,7 +182,7 @@ Every feature follows the constitution's core pattern: **every legacy system rec
 
 ### US6 — Capacity & Revenue Forecasting (F019)
 
-**Actor**: Regional Manager  
+**Actor**: Regional Manager (existing 4th tab from F007 Multi-Clinic — no new role tab needed)  
 **Trigger**: Opening the Regional Manager view
 
 **On-track path**:
@@ -210,6 +223,7 @@ Every feature follows the constitution's core pattern: **every legacy system rec
 - Mock owner reply panel SHALL provide preset buttons: [YES] [RESCHEDULE] and free-text input
 - Manual override ("Mark Confirmed") SHALL be available for phone-call confirmations
 - All reminder agent steps SHALL appear in the Verbose Log
+- "Send Reminder" button SHALL appear on ALL future appointments regardless of timing; button label SHALL contextually reflect proximity: `Send Reminder (Early — T-48h+)` when appointment is >48h away, `Send Reminder (Due — T-24h)` when ≤48h away
 
 ### FR-P3-003 — Breed Intelligence Data
 - System SHALL maintain a breed protocol table covering ≥10 breed entries at minimum
@@ -228,6 +242,7 @@ Every feature follows the constitution's core pattern: **every legacy system rec
 - Urgency levels: `flexible | within_week | asap`
 - Offer status: `waiting | offered | accepted | expired`
 - Backfill matching SHALL score: exact procedure + vet = 100pts, same procedure any vet = 80pts, same category = 40pts
+- Tiebreaker for equal scores SHALL be: urgency descending (`asap` > `within_week` > `flexible`), then `join_date` ascending (oldest entry wins — FIFO within same urgency)
 - System SHALL attempt up to 3 offers before marking a slot as open
 
 ### FR-P3-006 — Waitlist UI
@@ -246,6 +261,7 @@ Every feature follows the constitution's core pattern: **every legacy system rec
 ### FR-P3-008 — Care Tracking UI
 - VetAppointmentCard SHALL include a "Care Plan" tab showing vaccination/care timeline
 - Each care event SHALL display: date, care type, vet who administered, batch number (vaccines)
+- Care Plan tab SHALL include a "Log Historical Care Event" form for standalone events (no appointment required); `timeblock_id` is optional and hidden in this flow
 - Patient cards SHALL show `🔴 OVERDUE` badge when any care item is past due
 - Front Desk view SHALL include a "📋 Care Due This Month" collapsible panel
 - "Book" button in Care panel SHALL pre-populate the quick-book input with correct patient and procedure
@@ -256,12 +272,14 @@ Every feature follows the constitution's core pattern: **every legacy system rec
 - System SHALL auto-compute `supply_ends_at` from duration_days
 - System SHALL classify refill requests as auto-approvable when: refills_remaining > 0 AND last exam within 12 months
 - Refill requests failing auto-approval criteria SHALL be queued for vet review
+- Refill requests MAY be initiated by either Front Desk staff (on owner's behalf via the Refill Requests panel) or by the Veterinarian (from the Rx tab); both paths produce the same `refill_requests` record
 
 ### FR-P3-010 — Prescription UI
 - VetAppointmentCard SHALL include an "Rx" tab with active prescriptions list and issue form
 - Drug name field SHALL provide typeahead from a seeded common vet drug list (≥15 drugs)
 - Allergy conflict SHALL display as a red banner blocking save until acknowledged
-- Front Desk view SHALL include a "💊 Refill Requests" collapsible panel with auto-approve vs. review status
+- Rx tab SHALL include a "Request Refill" button on each active prescription (Vet entry point)
+- Front Desk view SHALL include a "💊 Refill Requests" collapsible panel with auto-approve vs. review status (Front Desk entry point: staff logs request on owner's behalf)
 - One-click approve SHALL update `refills_remaining` and log the action
 
 ### FR-P3-011 — Forecasting Core
@@ -272,6 +290,7 @@ Every feature follows the constitution's core pattern: **every legacy system rec
 - Revenue estimate SHALL use a seeded fee schedule (≥5 procedure types with average values)
 
 ### FR-P3-012 — Forecasting UI
+- The Regional Manager tab already exists (added in F007 Multi-Clinic); Phase 3 SHALL add a "📈 4-Week Forecast" section below the existing clinic summary cards — no new role tab is required
 - Regional Manager view SHALL include a "📈 4-Week Forecast" section below clinic summary cards
 - Each clinic SHALL show 4 forward bars with visually distinct booked vs. projected fill
 - A capacity target line (90% utilisation) SHALL be visible on forecast bars
@@ -291,7 +310,7 @@ Every feature follows the constitution's core pattern: **every legacy system rec
 | BreedProtocol | `breed_protocols` | `breed_pattern`, `flag_type`, `title`, `detail`, `age_threshold_years`, `severity` |
 | WaitlistEntry | `waitlist` | `patient_id`, `clinic_id`, `procedure_type`, `preferred_vet_id`, `urgency`, `offer_status` |
 | CareProtocol | `care_protocols` | `species`, `protocol_name`, `interval_months` |
-| CareEvent | `care_events` | `patient_id`, `protocol_id`, `administered_date`, `next_due_date`, `batch_number` |
+| CareEvent | `care_events` | `patient_id`, `protocol_id`, `administered_date`, `next_due_date`, `batch_number`, `timeblock_id` (nullable FK) |
 | Prescription | `prescriptions` | `patient_id`, `drug_name`, `dose`, `frequency`, `refills_remaining`, `supply_ends_at` |
 | RefillRequest | `refill_requests` | `prescription_id`, `status`, `reviewed_by` |
 
@@ -322,9 +341,11 @@ Every feature follows the constitution's core pattern: **every legacy system rec
 ## Assumptions
 
 1. **Demo scope only**: No real SMS, email, or push notification infrastructure. All outbound communication is simulated in-UI.
+   **Reminder trigger**: "Send Reminder" is available on all future appointments. Label reads `Early (T-48h+)` or `Due (T-24h)` based on days until appointment — computed client-side from appointment date vs. today. No server-side scheduling or cron.
 2. **Breed matching**: Partial string matching is sufficient for demo (no fuzzy edit distance needed). "French Bulldog" matches on "Bulldog".
 3. **Revenue estimates**: Flat average per procedure type from seeded fee schedule — no dynamic pricing, no actual billing integration.
 4. **Care protocol intervals**: Fixed integer months (12, 6) — no breed/age-adjusted intervals in demo scope.
+   **Care event linkage**: `timeblock_id` is an optional nullable FK — care events may be recorded standalone (historical entries) or linked to a completed appointment. Demo primary path uses appointment trigger; standalone form also available.
 5. **Refill auto-approval**: "Last exam within 12 months" is computed against the most recent completed appointment for this patient, regardless of procedure type.
 6. **Forecast trend**: Linear regression over 8 weeks of seeded historical data. R² value not exposed in UI for demo simplicity.
 7. **Waitlist offer expiry**: 30-minute expiry is simulated — in demo, the mock accept/decline panel does not enforce a real timer.
