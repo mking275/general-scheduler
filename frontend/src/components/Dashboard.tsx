@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar, Settings, WifiOff } from "lucide-react";
 import AppointmentCard from "./AppointmentCard";
 import RoleSelector from "./RoleSelector";
@@ -11,9 +11,9 @@ import RegionalManagerView from "./RegionalManagerView";
 import FilterBar, { FilterState, DEFAULT_FILTERS, applyFilters } from "./FilterBar";
 import IntegrationsPanel from "./IntegrationsPanel";
 import DataMigrationPanel from "./DataMigrationPanel";
+import AccountPortal from "./AccountPortal";
 
-
-type Role = "front_desk" | "vet_tech" | "vet" | "regional_manager";
+type Role = "front_desk" | "vet_tech" | "vet" | "regional_manager" | "account_admin";
 
 interface Clinic {
   id: string;
@@ -45,9 +45,23 @@ export default function Dashboard({
   const clinicColor = selectedClinic?.color_hex ?? "#6C63FF";
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [settingsTab, setSettingsTab] = useState<"integrations" | "migration">("integrations");
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [accountBanner, setAccountBanner] = useState<{ status: string; days_remaining?: number } | null>(null);
   const allItems = scheduledItems;
   const filteredItems = applyFilters(allItems, filters);
 
+  // Fetch account status for banner
+  useEffect(() => {
+    const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
+    fetch(`${API}/api/account`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && (data.status === "trial" || data.status === "past_due")) {
+          setAccountBanner({ status: data.status, days_remaining: data.trial_days_remaining });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // When regional manager drills into a clinic, switch to front_desk view
   const handleClinicSelect = (clinicId: string) => {
@@ -101,19 +115,54 @@ export default function Dashboard({
 
           <RoleSelector role={role} onRoleChange={onRoleChange} />
 
-          {/* Settings button — only shown for vet / regional */}
+          {/* Settings button — only shown for vet / regional; account_admin handled by role tab */}
           {(role === "vet" || role === "regional_manager") && (
-            <button
-              onClick={() => onRoleChange("regional_manager")}
-              style={{
-                padding: "5px 10px", borderRadius: "8px",
-                background: "rgba(39,39,42,0.6)", border: "1px solid rgba(63,63,70,0.4)",
-                color: "#71717a", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px",
-                fontSize: "0.7rem",
-              }}
-            >
-              <Settings size={11} />
-            </button>
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setShowSettingsMenu(v => !v)}
+                style={{
+                  padding: "5px 10px", borderRadius: "8px",
+                  background: "rgba(39,39,42,0.6)", border: "1px solid rgba(63,63,70,0.4)",
+                  color: "#71717a", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px",
+                  fontSize: "0.7rem",
+                }}
+              >
+                <Settings size={11} />
+              </button>
+              {showSettingsMenu && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 100,
+                  background: "rgba(24,24,27,0.98)", border: "1px solid rgba(63,63,70,0.5)",
+                  borderRadius: "10px", padding: "6px", minWidth: "180px",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+                }}>
+                  <button
+                    onClick={() => { onRoleChange("settings" as any); setShowSettingsMenu(false); }}
+                    style={{
+                      display: "block", width: "100%", padding: "7px 12px",
+                      background: "transparent", border: "none", color: "#a1a1aa",
+                      cursor: "pointer", textAlign: "left", fontSize: "0.75rem", borderRadius: "6px",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(63,63,70,0.4)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                  >
+                    🔌 Integrations &amp; Migration
+                  </button>
+                  <button
+                    onClick={() => { onRoleChange("account_admin"); setShowSettingsMenu(false); }}
+                    style={{
+                      display: "block", width: "100%", padding: "7px 12px",
+                      background: "transparent", border: "none", color: "#a1a1aa",
+                      cursor: "pointer", textAlign: "left", fontSize: "0.75rem", borderRadius: "6px",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(63,63,70,0.4)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                  >
+                    💳 Account &amp; Billing
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           <div style={{
@@ -135,6 +184,35 @@ export default function Dashboard({
 
       </div>
 
+      {/* Account status banners */}
+      {accountBanner?.status === "past_due" && (
+        <div style={{
+          background: "rgba(239,68,68,0.12)", borderBottom: "1px solid rgba(239,68,68,0.3)",
+          color: "#fca5a5", padding: "6px 20px", fontSize: "0.75rem", fontWeight: 600,
+          display: "flex", alignItems: "center", gap: "8px",
+        }}>
+          ❌ Payment past due — please update your billing information.
+          <button onClick={() => onRoleChange("account_admin")} style={{
+            background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.4)",
+            color: "#fca5a5", borderRadius: "6px", padding: "2px 8px", cursor: "pointer",
+            fontSize: "0.7rem", fontFamily: "inherit",
+          }}>Manage Billing</button>
+        </div>
+      )}
+      {accountBanner?.status === "trial" && (
+        <div style={{
+          background: "rgba(245,158,11,0.1)", borderBottom: "1px solid rgba(245,158,11,0.25)",
+          color: "#fbbf24", padding: "6px 20px", fontSize: "0.75rem", fontWeight: 600,
+          display: "flex", alignItems: "center", gap: "8px",
+        }}>
+          ⏳ Trial active — {accountBanner.days_remaining ?? 0} days remaining.
+          <button onClick={() => onRoleChange("account_admin")} style={{
+            background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.35)",
+            color: "#fbbf24", borderRadius: "6px", padding: "2px 8px", cursor: "pointer",
+            fontSize: "0.7rem", fontFamily: "inherit",
+          }}>View Account</button>
+        </div>
+      )}
       {/* Filter bar — shown only in front_desk view */}
       {role === "front_desk" && (
         <FilterBar
@@ -243,6 +321,21 @@ export default function Dashboard({
           <RegionalManagerView onClinicSelect={handleClinicSelect} />
         </div>
 
+        {/* Account Admin View */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: role === "account_admin" ? 1 : 0,
+            transform: role === "account_admin" ? "translateX(0)" : "translateX(20px)",
+            transition: "opacity 0.3s ease, transform 0.3s ease",
+            pointerEvents: role === "account_admin" ? "auto" : "none",
+            overflow: "hidden",
+          }}
+        >
+          <AccountPortal onBack={() => onRoleChange("front_desk")} />
+        </div>
+
         {/* Settings View */}
         <div
           style={{
@@ -289,14 +382,14 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* Settings toggle button (floating) */}
+      {/* Settings toggle button (floating) — only when not in account_admin or settings */}
       <div style={{
         position: "absolute", bottom: "16px", right: "16px", zIndex: 50,
       }}>
-        {role !== ("settings" as any) ? (
+        {role !== ("settings" as any) && role !== "account_admin" ? (
           <button
-            onClick={() => onRoleChange("settings" as any)}
-            title="Settings — Integrations &amp; Migration"
+            onClick={() => setShowSettingsMenu(v => !v)}
+            title="Settings & Account"
             style={{
               width: "38px", height: "38px", borderRadius: "50%",
               background: "rgba(39,39,42,0.9)", border: "1px solid rgba(63,63,70,0.6)",

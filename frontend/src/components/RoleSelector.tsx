@@ -1,6 +1,6 @@
 "use client";
 
-type Role = "front_desk" | "vet_tech" | "vet" | "regional_manager";
+type Role = "front_desk" | "vet_tech" | "vet" | "regional_manager" | "account_admin";
 
 interface RoleSelectorProps {
   role: Role;
@@ -12,6 +12,7 @@ const ROLES: Array<{ id: Role; label: string; icon: string }> = [
   { id: "vet_tech",         label: "Vet Tech",         icon: "🔬" },
   { id: "vet",              label: "Veterinarian",     icon: "🩺" },
   { id: "regional_manager", label: "Regional Mgr",    icon: "🗺️" },
+  { id: "account_admin",    label: "⚙ Account",       icon: "⚙️" },
 ];
 
 export default function RoleSelector({ role, onRoleChange }: RoleSelectorProps) {
@@ -46,11 +47,23 @@ export default function RoleSelector({ role, onRoleChange }: RoleSelectorProps) 
               fontFamily: "inherit",
               transition: "all 0.2s ease",
               background: isActive
-                ? "linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(59,130,246,0.15) 100%)"
+                ? r.id === "account_admin"
+                  ? "linear-gradient(135deg, rgba(129,140,248,0.3) 0%, rgba(99,102,241,0.2) 100%)"
+                  : "linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(59,130,246,0.15) 100%)"
                 : "transparent",
-              color: isActive ? "#c7d2fe" : "#71717a",
-              boxShadow: isActive ? "0 1px 8px rgba(99,102,241,0.2)" : "none",
-              borderBottom: isActive ? "1px solid rgba(99,102,241,0.4)" : "1px solid transparent",
+              color: isActive
+                ? r.id === "account_admin" ? "#a5b4fc" : "#c7d2fe"
+                : "#71717a",
+              boxShadow: isActive
+                ? r.id === "account_admin"
+                  ? "0 1px 8px rgba(129,140,248,0.3)"
+                  : "0 1px 8px rgba(99,102,241,0.2)"
+                : "none",
+              borderBottom: isActive
+                ? r.id === "account_admin"
+                  ? "1px solid rgba(129,140,248,0.5)"
+                  : "1px solid rgba(99,102,241,0.4)"
+                : "1px solid transparent",
               whiteSpace: "nowrap",
             }}
           >

@@ -348,3 +348,73 @@ class VetscanCSVRow(BaseModel):
     reference_range: str = ""
     flag: str = ""
 
+
+# ---------------------------------------------------------------------------
+# spec-007 — Platform Account & Subscription Models
+# ---------------------------------------------------------------------------
+
+class Account(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str
+    contact_name: str
+    contact_email: str
+    contact_phone: str = ""
+    address: str = ""
+    plan_tier: str = "starter"       # starter | professional | enterprise
+    status: str = "trial"            # trial | active | past_due | suspended | cancelled
+    trial_ends_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    stripe_customer_id: str = ""
+    stripe_subscription_id: str = ""
+
+
+class ModuleLicense(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    account_id: str
+    module_id: str                   # MOD-FIN | MOD-COM | etc.
+    status: str = "active"           # active | suspended | cancelled
+    billing_interval: str = "monthly"
+    price_cents: int = 0
+    purchased_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    expires_at: Optional[str] = None
+    stripe_subscription_item_id: str = ""
+
+
+class AccountInvoice(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    account_id: str
+    invoice_number: str
+    period_start: str
+    period_end: str
+    line_items: List[Dict[str, Any]] = Field(default_factory=list)
+    subtotal_cents: int = 0
+    total_cents: int = 0
+    status: str = "pending"          # pending | paid | failed | void
+    stripe_invoice_id: str = ""
+    paid_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+class AccountUser(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    account_id: str
+    name: str
+    email: str
+    role: str = "admin"              # admin | member
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+class AccountUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    address: Optional[str] = None
+
+
+class ModuleSubscribeRequest(BaseModel):
+    billing_interval: str = "monthly"  # monthly | annual  (W-05 fix: default makes body fully optional)
+
+
+class PlanUpgradeRequest(BaseModel):
+    plan_tier: str   # starter | professional | enterprise

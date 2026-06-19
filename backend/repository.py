@@ -10,6 +10,7 @@ from .models import (
     PreExamBrief, RiskScore, SoapNote, FollowUpDraft,
     Clinic, VetClinicAssignment,
     IntegrationDefinition, IntegrationStatus, MigrationRun, MigrationFlag,
+    Account, ModuleLicense, AccountInvoice, AccountUser,
 )
 from .interfaces import BaseRepository
 
@@ -335,6 +336,64 @@ def _init_db():
             pass
         try:
             conn.execute("ALTER TABLE timeblocks ADD COLUMN reminder_sent_at TEXT")
+        except Exception:
+            pass
+
+        # spec-007 T001 — Account management tables
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS accounts (
+                id                     TEXT PRIMARY KEY,
+                name                   TEXT NOT NULL,
+                contact_name           TEXT NOT NULL,
+                contact_email          TEXT NOT NULL,
+                contact_phone          TEXT DEFAULT '',
+                address                TEXT DEFAULT '',
+                plan_tier              TEXT NOT NULL DEFAULT 'starter',
+                status                 TEXT NOT NULL DEFAULT 'trial',
+                trial_ends_at          TEXT,
+                created_at             TEXT NOT NULL,
+                stripe_customer_id     TEXT DEFAULT '',
+                stripe_subscription_id TEXT DEFAULT ''
+            );
+            CREATE TABLE IF NOT EXISTS module_licenses (
+                id                          TEXT PRIMARY KEY,
+                account_id                  TEXT NOT NULL,
+                module_id                   TEXT NOT NULL,
+                status                      TEXT NOT NULL DEFAULT 'active',
+                billing_interval            TEXT NOT NULL DEFAULT 'monthly',
+                price_cents                 INTEGER NOT NULL DEFAULT 0,
+                purchased_at                TEXT NOT NULL,
+                expires_at                  TEXT,
+                stripe_subscription_item_id TEXT DEFAULT '',
+                UNIQUE(account_id, module_id)
+            );
+            CREATE TABLE IF NOT EXISTS account_invoices (
+                id                TEXT PRIMARY KEY,
+                account_id        TEXT NOT NULL,
+                invoice_number    TEXT NOT NULL,
+                period_start      TEXT NOT NULL,
+                period_end        TEXT NOT NULL,
+                line_items        TEXT NOT NULL DEFAULT '[]',
+                subtotal_cents    INTEGER NOT NULL DEFAULT 0,
+                total_cents       INTEGER NOT NULL DEFAULT 0,
+                status            TEXT NOT NULL DEFAULT 'pending',
+                stripe_invoice_id TEXT DEFAULT '',
+                paid_at           TEXT,
+                created_at        TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS account_users (
+                id         TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                name       TEXT NOT NULL,
+                email      TEXT NOT NULL,
+                role       TEXT NOT NULL DEFAULT 'admin',
+                created_at TEXT NOT NULL,
+                UNIQUE(account_id, email)
+            );
+        """)
+        # spec-007 T002 — Add account_id to clinics
+        try:
+            conn.execute("ALTER TABLE clinics ADD COLUMN account_id TEXT")
         except Exception:
             pass
 
@@ -1552,6 +1611,203 @@ class InMemoryRepository(BaseRepository):
             )
         img["id"] = img_id
         return img
+
+    # ------------------------------------------------------------------ #
+    #  spec-007 — Account repository methods (T009–T020b, T009b)
+    # ------------------------------------------------------------------ #
+
+    def get_default_account(self) -> Optional[dict]:
+        """T009: Return first account row (single-tenant demo pattern)."""
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM accounts ORDER BY created_at ASC LIMIT 1"
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_account(self, account_id: str) -> Optional[dict]:
+        """T010"""
+        with _get_conn() as conn:
+            row = conn.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
+        return dict(row) if row else None
+
+    def create_account(self, account: Account) -> dict:
+        """T011: INSERT OR IGNORE — idempotent."""
+        with _get_conn() as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO accounts
+                   (id, name, contact_name, contact_email, contact_phone, address,
+                    plan_tier, status, trial_ends_at, created_at,
+                    stripe_customer_id, stripe_subscription_id)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    account.id, account.name, account.contact_name,
+                    account.contact_email, account.contact_phone, account.address,
+                    account.plan_tier, account.status, account.trial_ends_at,
+                    account.created_at, account.stripe_customer_id,
+                    account.stripe_subscription_id,
+                )
+            )
+            row = conn.execute("SELECT * FROM accounts WHERE id=?", (account.id,)).fetchone()
+        return dict(row) if row else account.model_dump()
+
+    def update_account(self, account_id: str, updates: dict) -> Optional[dict]:
+        """T012: Update allowed fields."""
+        allowed = {"name", "contact_name", "contact_email", "contact_phone", "address", "plan_tier", "status"}
+        cols = {k: v for k, v in updates.items() if k in allowed}
+        if not cols:
+            return self.get_account(account_id)
+        set_clause = ", ".join(f"{k}=?" for k in cols)
+        with _get_conn() as conn:
+            conn.execute(
+                f"UPDATE accounts SET {set_clause} WHERE id=?",
+                list(cols.values()) + [account_id]
+            )
+            row = conn.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
+        return dict(row) if row else None
+
+    def get_module_licenses(self, account_id: str) -> list:
+        """T013"""
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM module_licenses WHERE account_id=?", (account_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def account_has_module(self, account_id: str, module_id: str) -> bool:
+        """T014"""
+        with _get_conn() as conn:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM module_licenses WHERE account_id=? AND module_id=? AND status='active'",
+                (account_id, module_id)
+            ).fetchone()[0]
+        return count > 0
+
+    def add_module_license(self, account_id: str, module_id: str, price_cents: int, interval: str) -> dict:
+        """T015: INSERT OR REPLACE."""
+        lic_id = str(uuid4())
+        purchased_at = datetime.utcnow().isoformat()
+        with _get_conn() as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO module_licenses
+                   (id, account_id, module_id, status, billing_interval, price_cents, purchased_at)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (lic_id, account_id, module_id, "active", interval, price_cents, purchased_at)
+            )
+            row = conn.execute(
+                "SELECT * FROM module_licenses WHERE account_id=? AND module_id=?",
+                (account_id, module_id)
+            ).fetchone()
+        return dict(row) if row else {}
+
+    def cancel_module_license(self, account_id: str, module_id: str) -> bool:
+        """T016"""
+        with _get_conn() as conn:
+            conn.execute(
+                "UPDATE module_licenses SET status='cancelled' WHERE account_id=? AND module_id=?",
+                (account_id, module_id)
+            )
+            changed = conn.execute("SELECT changes()").fetchone()[0]
+        return changed > 0
+
+    def get_account_invoices(self, account_id: str) -> list:
+        """T017"""
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM account_invoices WHERE account_id=? ORDER BY created_at DESC",
+                (account_id,)
+            ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["line_items"] = json.loads(d.get("line_items", "[]"))
+            except Exception:
+                d["line_items"] = []
+            result.append(d)
+        return result
+
+    def get_account_invoice(self, invoice_id: str) -> Optional[dict]:
+        """T018: Parse line_items JSON on read."""
+        with _get_conn() as conn:
+            row = conn.execute("SELECT * FROM account_invoices WHERE id=?", (invoice_id,)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        try:
+            d["line_items"] = json.loads(d.get("line_items", "[]"))
+        except Exception:
+            d["line_items"] = []
+        return d
+
+    def create_account_invoice(self, invoice: dict) -> dict:
+        """T019: json.dumps line_items on write."""
+        inv_id = invoice.get("id") or str(uuid4())
+        line_items_json = json.dumps(invoice.get("line_items", []))
+        with _get_conn() as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO account_invoices
+                   (id, account_id, invoice_number, period_start, period_end,
+                    line_items, subtotal_cents, total_cents, status,
+                    stripe_invoice_id, paid_at, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    inv_id, invoice["account_id"], invoice["invoice_number"],
+                    invoice["period_start"], invoice["period_end"],
+                    line_items_json,
+                    invoice.get("subtotal_cents", 0), invoice.get("total_cents", 0),
+                    invoice.get("status", "pending"),
+                    invoice.get("stripe_invoice_id", ""),
+                    invoice.get("paid_at"), invoice.get("created_at", datetime.utcnow().isoformat()),
+                )
+            )
+        invoice["id"] = inv_id
+        return invoice
+
+    def get_account_users(self, account_id: str) -> list:
+        """T020"""
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM account_users WHERE account_id=?", (account_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_clinics_for_account(self, account_id: str) -> list:
+        """T020b"""
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM clinics WHERE account_id=?", (account_id,)
+            ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["is_active"] = bool(d.get("is_active", 1))
+            result.append(d)
+        return result
+
+    def set_clinic_account(self, clinic_id: str, account_id: str) -> None:
+        """T009b / B-02 fix: Set account_id on an existing clinic."""
+        with _get_conn() as conn:
+            conn.execute(
+                "UPDATE clinics SET account_id=? WHERE id=?",
+                (account_id, clinic_id)
+            )
+
+    def create_account_user(self, user: dict) -> dict:
+        """Helper for seeding account_users."""
+        user_id = user.get("id") or str(uuid4())
+        with _get_conn() as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO account_users
+                   (id, account_id, name, email, role, created_at)
+                   VALUES (?,?,?,?,?,?)""",
+                (
+                    user_id, user["account_id"], user["name"],
+                    user["email"], user.get("role", "admin"),
+                    user.get("created_at", datetime.utcnow().isoformat()),
+                )
+            )
+        user["id"] = user_id
+        return user
 
 
 # ── Module-level helpers for Clinic + Assignment rows ──────────────────────

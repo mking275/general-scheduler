@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query, Request, BackgroundTasks, UploadFile, File
+from fastapi import FastAPI, HTTPException, Query, Request, BackgroundTasks, UploadFile, File, Body, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 from .repository import db
@@ -8,6 +8,8 @@ from .models import (
     IntegrationCredentialSave, IntegrationStatus,
     LabResultPayload, LabAcknowledgeRequest, LabAssignRequest,
     ImagingWebhookPayload,
+    Account, ModuleLicense, AccountInvoice, AccountUser,
+    AccountUpdateRequest, ModuleSubscribeRequest, PlanUpgradeRequest,
 )
 from .agents.intake import IntakeAgent
 from .agents.matcher import SemanticMatcher
@@ -83,8 +85,25 @@ def on_startup():
         db.seed_integration_definitions()
     except Exception as e:
         print(f"[SEED] Integration definitions seed error (non-fatal): {e}")
+    # spec-007 T028 — Seed demo account
+    try:
+        from .agents.account_agent import seed_demo_account
+        seed_demo_account(db, _log1)
+    except Exception as e:
+        print(f"[SEED] Account seed error (non-fatal): {e}")
 
 
+
+# spec-007 T005 — require_module dependency
+def require_module(module_id: str):
+    def _check():
+        account = db.get_default_account()
+        if not account or account.get("status") == "trial":
+            return  # demo/trial: allow all
+        if not db.account_has_module(account["id"], module_id):
+            _log1(f"ACCOUNT AGENT: {module_id} access denied — not licensed")
+            raise HTTPException(403, f"{module_id} not licensed for this account")
+    return _check
 
 
 # ============================================================
@@ -1980,3 +1999,260 @@ async def seed_avimark_fixture_endpoint(
     )
     return {"run_id": run_id, "status": "pending", "message": "Avimark 847-patient fixture migration started"}
 
+
+# ============================================================
+# spec-007 — Platform Account & Subscription Routes (T029–T041)
+# ============================================================
+
+from .agents.account_agent import (
+    get_modules_with_status as _get_modules_with_status,
+    compute_trial_days_remaining,
+    validate_module_add,
+    generate_invoice_line_items,
+    next_invoice_number as _next_invoice_number,
+    MODULE_PRICING, MODULE_TIER_REQUIREMENTS, PLAN_PRICES, PLAN_ORDER,
+)
+
+
+def _get_demo_account_or_404():
+    account = db.get_default_account()
+    if not account:
+        raise HTTPException(status_code=404, detail="No account found. Seed has not run yet.")
+    return account
+
+
+@app.get("/api/account")
+def get_account():
+    """T029: Return demo account with computed fields."""
+    account = _get_demo_account_or_404()
+    result = dict(account)
+    # Compute trial_days_remaining
+    if result.get("trial_ends_at"):
+        result["trial_days_remaining"] = compute_trial_days_remaining(result["trial_ends_at"])
+    else:
+        result["trial_days_remaining"] = 0
+    # Attach active_module_count
+    licenses = db.get_module_licenses(account["id"])
+    result["active_module_count"] = sum(1 for lic in licenses if lic.get("status") == "active")
+    return result
+
+
+@app.put("/api/account")
+def update_account(body: AccountUpdateRequest):
+    """T030: Update account contact details."""
+    account = _get_demo_account_or_404()
+    updates = body.model_dump(exclude_none=True)
+    updated = db.update_account(account["id"], updates)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _log1(f"ACCOUNT AGENT: Account updated — {updated.get('name', account['name'])}")
+    # Re-fetch with computed fields
+    result = dict(updated)
+    if result.get("trial_ends_at"):
+        result["trial_days_remaining"] = compute_trial_days_remaining(result["trial_ends_at"])
+    else:
+        result["trial_days_remaining"] = 0
+    licenses = db.get_module_licenses(updated["id"])
+    result["active_module_count"] = sum(1 for lic in licenses if lic.get("status") == "active")
+    return result
+
+
+@app.get("/api/account/modules")
+def get_account_modules():
+    """T031: Return all 9 modules with license status."""
+    account = _get_demo_account_or_404()
+    return _get_modules_with_status(db, account["id"])
+
+
+@app.post("/api/account/modules/{module_id}")
+async def subscribe_module(
+    module_id: str,
+    body: ModuleSubscribeRequest = Body(default=ModuleSubscribeRequest()),
+):
+    """T032 (W-05 fix): Purchase a module license. Empty body is accepted."""
+    account = _get_demo_account_or_404()
+
+    # validate_module_add: check already active (409), plan tier (403)
+    if db.account_has_module(account["id"], module_id):
+        raise HTTPException(status_code=409, detail=f"{module_id} is already active for this account.")
+
+    err = validate_module_add(account, module_id, db)
+    if err:
+        _log1(f"ACCOUNT AGENT: {module_id} add blocked — {err}")
+        raise HTTPException(status_code=403, detail=err)
+
+    price_cents = MODULE_PRICING.get(module_id, 0)
+    lic = db.add_module_license(account["id"], module_id, price_cents, body.billing_interval)
+    _log1(f"ACCOUNT AGENT: {module_id} license added · ${price_cents / 100:.0f}/mo")
+    return {
+        "module_id": module_id,
+        "status": "active",
+        "price_cents": price_cents,
+        "purchased_at": lic.get("purchased_at"),
+    }
+
+
+@app.delete("/api/account/modules/{module_id}")
+def cancel_module(module_id: str):
+    """T033: Cancel a module license."""
+    account = _get_demo_account_or_404()
+    success = db.cancel_module_license(account["id"], module_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"{module_id} is not licensed for this account.")
+    _log1(f"ACCOUNT AGENT: {module_id} license cancelled")
+    return {"module_id": module_id, "status": "cancelled"}
+
+
+@app.get("/api/account/invoices")
+def get_account_invoices():
+    """T034: List invoices newest first."""
+    account = _get_demo_account_or_404()
+    return db.get_account_invoices(account["id"])
+
+
+@app.get("/api/account/invoices/{invoice_id}")
+def get_account_invoice(invoice_id: str):
+    """T035: Single invoice detail."""
+    inv = db.get_account_invoice(invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return inv
+
+
+@app.get("/api/account/clinics")
+def get_account_clinics():
+    """T036: All clinics for this account."""
+    account = _get_demo_account_or_404()
+    return db.get_clinics_for_account(account["id"])
+
+
+@app.post("/api/account/clinics", status_code=201)
+def create_account_clinic(body: Clinic):
+    """T037: Add clinic to account. Professional+ only. B-02 fix: set account_id after create."""
+    account = _get_demo_account_or_404()
+    tier = account.get("plan_tier", "starter")
+    if tier == "starter":
+        raise HTTPException(status_code=403, detail="Adding clinics requires Professional or Enterprise plan.")
+    # Create the clinic
+    created = db.create_clinic(body)
+    # B-02 fix: set account_id separately
+    db.set_clinic_account(body.id, account["id"])
+    result = created.model_dump()
+    result["account_id"] = account["id"]
+    _log1(f"ACCOUNT AGENT: New clinic added — {body.name}")
+    return result
+
+
+@app.get("/api/account/plan")
+def get_account_plan():
+    """T038: Return current tier, price, upgrade/downgrade options."""
+    account = _get_demo_account_or_404()
+    current_tier = account.get("plan_tier", "starter")
+    current_price = PLAN_PRICES.get(current_tier, 0)
+    current_idx = PLAN_ORDER.index(current_tier)
+
+    upgrade_options = []
+    downgrade_options = []
+    tier_features = {
+        "starter": ["1 clinic", "Core scheduling", "Basic reporting"],
+        "professional": ["Up to 5 clinics", "All professional modules", "Advanced analytics"],
+        "enterprise": ["Unlimited clinics", "MOD-ENT included", "Priority support", "SSO"],
+    }
+    for tier in PLAN_ORDER:
+        if tier == current_tier:
+            continue
+        price = PLAN_PRICES[tier]
+        delta = price - current_price
+        idx = PLAN_ORDER.index(tier)
+        if idx > current_idx:
+            upgrade_options.append({
+                "tier": tier,
+                "price_cents": price,
+                "delta_cents": delta,
+                "features": tier_features.get(tier, []),
+            })
+        else:
+            downgrade_options.append({
+                "tier": tier,
+                "price_cents": price,
+                "delta_cents": delta,
+                "note": "Downgrading will cancel all active module licenses",
+            })
+
+    return {
+        "current_tier": current_tier,
+        "current_price_cents": current_price,
+        "upgrade_options": upgrade_options,
+        "downgrade_options": downgrade_options,
+    }
+
+
+@app.post("/api/account/plan/upgrade")
+def upgrade_account_plan(body: PlanUpgradeRequest):
+    """T039: Change plan tier. Auto-add MOD-ENT if upgrading to Enterprise."""
+    account = _get_demo_account_or_404()
+    if body.plan_tier not in PLAN_PRICES:
+        raise HTTPException(status_code=400, detail=f"Invalid plan tier: {body.plan_tier}")
+    old_tier = account.get("plan_tier", "starter")
+    new_tier = body.plan_tier
+
+    current_price = PLAN_PRICES.get(old_tier, 0)
+    new_price = PLAN_PRICES.get(new_tier, 0)
+    proration = abs(new_price - current_price) // 2
+
+    db.update_account(account["id"], {"plan_tier": new_tier})
+    _log1(f"ACCOUNT AGENT: Plan upgraded {old_tier.capitalize()} → {new_tier.capitalize()}")
+
+    message = f"Plan changed to {new_tier.capitalize()}."
+    # Auto-add MOD-ENT on Enterprise upgrade
+    if new_tier == "enterprise" and not db.account_has_module(account["id"], "MOD-ENT"):
+        db.add_module_license(account["id"], "MOD-ENT", MODULE_PRICING["MOD-ENT"], "monthly")
+        _log1("ACCOUNT AGENT: MOD-ENT license added · $149/mo (Enterprise included)")
+        message = "Plan upgraded to Enterprise. MOD-ENT has been added at no extra charge."
+
+    return {
+        "account_id": account["id"],
+        "old_tier": old_tier,
+        "new_tier": new_tier,
+        "proration_cents": proration,
+        "message": message,
+    }
+
+
+# ── T040: Module access stub routes (require_module enforcement) ────────────
+
+@app.get("/api/mods/fin/status")
+def mod_fin_status(_=Depends(require_module("MOD-FIN"))):
+    return {"module": "MOD-FIN", "access": "granted"}
+
+@app.get("/api/mods/com/status")
+def mod_com_status(_=Depends(require_module("MOD-COM"))):
+    return {"module": "MOD-COM", "access": "granted"}
+
+@app.get("/api/mods/inv/status")
+def mod_inv_status(_=Depends(require_module("MOD-INV"))):
+    return {"module": "MOD-INV", "access": "granted"}
+
+@app.get("/api/mods/tel/status")
+def mod_tel_status(_=Depends(require_module("MOD-TEL"))):
+    return {"module": "MOD-TEL", "access": "granted"}
+
+@app.get("/api/mods/anl/status")
+def mod_anl_status(_=Depends(require_module("MOD-ANL"))):
+    return {"module": "MOD-ANL", "access": "granted"}
+
+@app.get("/api/mods/mar/status")
+def mod_mar_status(_=Depends(require_module("MOD-MAR"))):
+    return {"module": "MOD-MAR", "access": "granted"}
+
+@app.get("/api/mods/stf/status")
+def mod_stf_status(_=Depends(require_module("MOD-STF"))):
+    return {"module": "MOD-STF", "access": "granted"}
+
+@app.get("/api/mods/ref/status")
+def mod_ref_status(_=Depends(require_module("MOD-REF"))):
+    return {"module": "MOD-REF", "access": "granted"}
+
+@app.get("/api/mods/ent/status")
+def mod_ent_status(_=Depends(require_module("MOD-ENT"))):
+    return {"module": "MOD-ENT", "access": "granted"}

@@ -9,7 +9,7 @@ import Dashboard from "../components/Dashboard";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 
-type Role = "front_desk" | "vet_tech" | "vet" | "regional_manager";
+type Role = "front_desk" | "vet_tech" | "vet" | "regional_manager" | "account_admin";
 
 interface Clinic {
   id: string;
