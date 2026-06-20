@@ -23,6 +23,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import uuid as _uuid
 from datetime import datetime, date as _date
 
+# SMS gateway — uses Twilio when credentials are set, simulation fallback otherwise
+try:
+    from .sms_gateway import sms as _sms
+except Exception:
+    _sms = None  # type: ignore
+
 app = FastAPI(title="VPMA — Veterinary Practice Management Agent")
 
 app.add_middleware(
@@ -1067,10 +1073,31 @@ async def run_backfill(request: Request):
 
 @app.put("/api/waitlist/{entry_id}/offer")
 async def offer_waitlist_slot(entry_id: str, request: Request):
-    """T021: Mark a waitlist entry as 'offered' (slot offered to patient)."""
+    """T021: Mark a waitlist entry as 'offered' (slot offered to patient). Sends SMS to owner."""
+    body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
     db.update_waitlist_status(entry_id, "offered")
     _log1(f"WAITLIST AGENT: Offered slot to waitlist entry {entry_id}")
-    return {"entry_id": entry_id, "offer_status": "offered"}
+
+    # Send SMS notification to owner if gateway is available and slot details provided
+    sms_receipt = None
+    if _sms and body.get("owner_phone") and body.get("slot_start"):
+        slot_start = body["slot_start"]
+        slot_date = slot_start[:10]
+        slot_time = slot_start[11:16] if len(slot_start) > 10 else ""
+        receipt_obj = _sms.send_waitlist_offer(
+            to=body["owner_phone"],
+            owner_name=body.get("owner_name", ""),
+            patient_name=body.get("patient_name", "your pet"),
+            slot_date=slot_date,
+            slot_time=slot_time,
+            accept_url=body.get("accept_url", "https://book.vpma.app/accept"),
+            window_minutes=body.get("window_minutes", 30),
+        )
+        sms_receipt = receipt_obj.to_dict()
+        mode = "[LIVE]" if not receipt_obj.simulated else "[SIMULATED]"
+        _log1(f"WAITLIST AGENT {mode}: Slot offer SMS sent to {body.get('owner_name', entry_id)} for {slot_date} {slot_time}")
+
+    return {"entry_id": entry_id, "offer_status": "offered", "sms": sms_receipt}
 
 
 @app.put("/api/waitlist/{entry_id}/accept")

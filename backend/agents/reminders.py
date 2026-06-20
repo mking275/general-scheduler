@@ -2,40 +2,28 @@
 T008-T014 — ReminderAgent (F013)
 Sends appointment reminders, tracks confirmation status, and manages reschedule requests.
 Implements the 4-state confirmation flow: not_sent → sent → confirmed | reschedule_requested.
+
+SMS is dispatched via sms_gateway.SMSGateway which uses Twilio when credentials are
+present in .env (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER).
+When no credentials are set, the gateway falls back to simulation mode automatically.
 """
 from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
 from typing import List, Optional
-from uuid import uuid4
+
+# Gateway singleton — handles live Twilio or simulation transparently
+try:
+    import sys, os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    from sms_gateway import sms as _sms_gateway
+except Exception:
+    _sms_gateway = None  # type: ignore
 
 
 # ── Confidence thresholds (SC-P3-002: confirmation rate >80% in demo) ──────
 _REMINDER_WINDOW_HOURS_DEFAULT = 48   # send reminder N hours before appointment
-
-
-def _simulate_send_reminder(timeblock_id: str, patient_name: str, owner_name: str, procedure: str,
-                             start_time: str, channel: str = "sms") -> dict:
-    """
-    Simulates outbound reminder dispatch (SMS/email).
-    In production this would call Twilio / SendGrid.
-    Returns a dispatch receipt dict.
-    """
-    return {
-        "dispatch_id": str(uuid4()),
-        "timeblock_id": timeblock_id,
-        "channel": channel,
-        "recipient_name": owner_name or patient_name,
-        "message": (
-            f"Hi {owner_name or 'there'}, this is a reminder that "
-            f"{patient_name} has a {procedure} appointment on "
-            f"{start_time[:10]} at {start_time[11:16]}. "
-            "Reply YES to confirm, NO to reschedule."
-        ),
-        "sent_at": datetime.utcnow().isoformat(),
-        "status": "delivered",
-    }
 
 
 class ReminderAgent:
@@ -118,16 +106,47 @@ class ReminderAgent:
                 pass
 
             # Determine channel — prefer SMS if phone available
-            channel = "sms" if appt.get("phone") else "email"
+            phone  = appt.get("phone") or ""
+            channel = "sms" if phone else "email"
 
-            receipt = _simulate_send_reminder(tb_id, patient_name, owner_name, procedure, start_time, channel)
+            # ── Dispatch via real gateway (Twilio) or simulation fallback ──
+            if channel == "sms" and _sms_gateway:
+                receipt_obj = _sms_gateway.send_reminder(
+                    to=phone,
+                    owner_name=owner_name,
+                    patient_name=patient_name,
+                    procedure=procedure,
+                    appt_date=start_time[:10],
+                    appt_time=start_time[11:16],
+                )
+                receipt = {
+                    **receipt_obj.to_dict(),
+                    "timeblock_id": tb_id,
+                    "recipient_name": owner_name or patient_name,
+                }
+                mode = "[LIVE]" if receipt_obj.simulated is False and not receipt_obj.error else "[SIMULATED]"
+            else:
+                # Email path — placeholder until SendGrid is wired
+                from uuid import uuid4
+                receipt = {
+                    "dispatch_id": str(uuid4()),
+                    "timeblock_id": tb_id,
+                    "channel": "email",
+                    "recipient_name": owner_name or patient_name,
+                    "status": "simulated",
+                    "sent_at": datetime.utcnow().isoformat(),
+                    "simulated": True,
+                }
+                mode = "[SIMULATED-EMAIL]"
+
             self._log(
-                f"REMINDER AGENT: Sent {channel.upper()} reminder to {owner_name or patient_name} "
-                f"for {patient_name} ({procedure}) on {start_time[:10]} [tb={tb_id[:8]}]"
+                f"REMINDER AGENT {mode}: Sent {channel.upper()} reminder to "
+                f"{owner_name or patient_name} for {patient_name} ({procedure}) "
+                f"on {start_time[:10]} [tb={tb_id[:8]}]"
             )
 
             # Mark as sent (unconfirmed) — confirmation comes via /api/reminders/{id}/confirm
-            self._db.update_confirmation_status(tb_id, "sent", receipt["sent_at"])
+            self._db.update_confirmation_status(tb_id, "sent", receipt.get("sent_at", datetime.utcnow().isoformat()))
             sent.append({"timeblock_id": tb_id, "receipt": receipt})
 
         self._log(
@@ -135,13 +154,38 @@ class ReminderAgent:
         )
         return {"sent_count": len(sent), "skipped_count": len(skipped), "sent": sent}
 
-    def confirm_appointment(self, timeblock_id: str) -> dict:
+    def confirm_appointment(self, timeblock_id: str, send_ack: bool = True) -> dict:
         """
         T012: Mark an appointment as confirmed by owner.
+        Optionally sends a confirmation acknowledgement SMS back to the owner.
         """
         ts = datetime.utcnow().isoformat()
         self._db.update_confirmation_status(timeblock_id, "confirmed", ts)
         self._log(f"REMINDER AGENT: Appointment {timeblock_id[:8]} confirmed at {ts}")
+
+        # Send "confirmed ✅" ack back to owner via SMS if gateway available
+        if send_ack and _sms_gateway:
+            try:
+                with self._db._get_conn() as conn:
+                    row = conn.execute(
+                        """SELECT t.start_time, p.name as patient_name, o.phone, o.name as owner_name
+                           FROM timeblocks t
+                           LEFT JOIN patients p ON p.id = t.patient_id
+                           LEFT JOIN owners o ON o.id = p.owner_id
+                           WHERE t.id = ?""",
+                        (timeblock_id,)
+                    ).fetchone()
+                if row and row["phone"]:
+                    _sms_gateway.send_confirmation_ack(
+                        to=row["phone"],
+                        patient_name=row["patient_name"] or "your pet",
+                        appt_date=row["start_time"][:10],
+                        appt_time=row["start_time"][11:16],
+                    )
+                    self._log(f"REMINDER AGENT: Confirmation ack sent to {row['owner_name']} [tb={timeblock_id[:8]}]")
+            except Exception as exc:
+                self._log(f"REMINDER AGENT: Ack send failed (non-critical): {exc}")
+
         return {"timeblock_id": timeblock_id, "confirmation_status": "confirmed", "confirmed_at": ts}
 
     def request_reschedule(self, timeblock_id: str) -> dict:
