@@ -1,0 +1,1736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VPMA — One Platform to Replace Them All | Veterinary Practice Management</title>
+  <meta name="description" content="See how VPMA replaces 6 separate software subscriptions with one intelligent veterinary platform. Full feature comparison against Cornerstone, Avimark, ezyVet, Shepherd, and Provet Cloud.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #09090f;
+      --bg2: #0f0f1a;
+      --bg3: #13131f;
+      --surface: #1a1a2e;
+      --surface2: #1f1f35;
+      --border: rgba(255,255,255,0.08);
+      --border-bright: rgba(255,255,255,0.15);
+      --indigo: #6c63ff;
+      --indigo-light: #8b85ff;
+      --indigo-dim: rgba(108,99,255,0.15);
+      --indigo-glow: rgba(108,99,255,0.3);
+      --gold: #f59e0b;
+      --gold-dim: rgba(245,158,11,0.15);
+      --green: #22c55e;
+      --green-dim: rgba(34,197,94,0.12);
+      --red: #ef4444;
+      --red-dim: rgba(239,68,68,0.12);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245,158,11,0.12);
+      --blue: #3b82f6;
+      --text: #e8e8f0;
+      --text2: #a0a0b8;
+      --text3: #6b6b85;
+      --radius: 16px;
+      --radius-sm: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3, h4 { font-family: 'Outfit', sans-serif; }
+
+    /* ===== NAV ===== */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(9,9,15,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 48px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #6c63ff, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text2);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-cta {
+      background: linear-gradient(135deg, var(--indigo), #a78bfa);
+      color: white !important;
+      padding: 10px 24px;
+      border-radius: 50px;
+      font-weight: 600 !important;
+      font-size: 14px !important;
+      transition: opacity 0.2s, transform 0.2s !important;
+    }
+
+    .nav-cta:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* ===== HERO ===== */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 120px 48px 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -200px; left: 50%;
+      transform: translateX(-50%);
+      width: 800px; height: 800px;
+      background: radial-gradient(circle, rgba(108,99,255,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--indigo-dim);
+      border: 1px solid var(--indigo-glow);
+      color: var(--indigo-light);
+      padding: 6px 16px;
+      border-radius: 50px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 32px;
+      letter-spacing: 0.3px;
+    }
+
+    .hero-badge span { font-size: 16px; }
+
+    .hero h1 {
+      font-size: clamp(48px, 7vw, 88px);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+      max-width: 900px;
+    }
+
+    .hero h1 .accent {
+      background: linear-gradient(135deg, #6c63ff 0%, #a78bfa 50%, #e879f9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: 20px;
+      color: var(--text2);
+      max-width: 600px;
+      margin-bottom: 48px;
+      font-weight: 400;
+      line-height: 1.7;
+    }
+
+    .hero-ctas {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 80px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--indigo), #a78bfa);
+      color: white;
+      padding: 16px 36px;
+      border-radius: 50px;
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.2s;
+      box-shadow: 0 0 40px rgba(108,99,255,0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 60px rgba(108,99,255,0.4);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text);
+      padding: 16px 36px;
+      border-radius: 50px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid var(--border-bright);
+      transition: all 0.2s;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--indigo);
+      color: var(--indigo-light);
+    }
+
+    /* Stack animation */
+    .stack-visual {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      max-width: 600px;
+      position: relative;
+    }
+
+    .stack-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 20px;
+      width: 100%;
+      animation: fadeSlideIn 0.6s ease backwards;
+    }
+
+    .stack-item:nth-child(1) { animation-delay: 0.1s; }
+    .stack-item:nth-child(2) { animation-delay: 0.2s; }
+    .stack-item:nth-child(3) { animation-delay: 0.3s; }
+    .stack-item:nth-child(4) { animation-delay: 0.4s; }
+    .stack-item:nth-child(5) { animation-delay: 0.5s; }
+    .stack-item:nth-child(6) { animation-delay: 0.6s; }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .stack-label {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .stack-icon { font-size: 18px; }
+
+    .stack-cost {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      color: var(--red);
+      font-size: 15px;
+    }
+
+    .stack-total {
+      background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.05));
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 12px;
+      padding: 16px 20px;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .stack-total-label {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--text2);
+    }
+
+    .stack-total-amount {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--red);
+    }
+
+    .arrow-down {
+      font-size: 28px;
+      color: var(--indigo-light);
+      animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(6px); }
+    }
+
+    .vpma-stack {
+      background: linear-gradient(135deg, rgba(108,99,255,0.1), rgba(167,139,250,0.05));
+      border: 1px solid var(--indigo-glow);
+      border-radius: 12px;
+      padding: 20px 24px;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .vpma-stack-label {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .vpma-stack-label small {
+      display: block;
+      font-size: 12px;
+      color: var(--text2);
+      font-weight: 400;
+      margin-top: 2px;
+    }
+
+    .vpma-stack-amount {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--indigo-light);
+    }
+
+    .savings-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--green-dim);
+      border: 1px solid rgba(34,197,94,0.3);
+      color: var(--green);
+      padding: 4px 12px;
+      border-radius: 50px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 12px;
+    }
+
+    /* ===== SECTION COMMON ===== */
+    section { padding: 100px 48px; }
+
+    .section-label {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--indigo-light);
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: clamp(36px, 4vw, 56px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 20px;
+    }
+
+    .section-sub {
+      font-size: 18px;
+      color: var(--text2);
+      max-width: 600px;
+      line-height: 1.7;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .section-header .section-sub { margin: 0 auto; }
+
+    /* ===== STACK PROBLEM SECTION ===== */
+    .stack-section {
+      background: var(--bg2);
+    }
+
+    .stack-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 32px;
+      align-items: center;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .stack-col-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 20px;
+      color: var(--text2);
+    }
+
+    .competitor-stack { display: flex; flex-direction: column; gap: 10px; }
+
+    .comp-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .comp-item-name { font-size: 13px; color: var(--text2); font-weight: 500; }
+    .comp-item-cost { font-size: 14px; font-weight: 700; color: var(--red); font-family: 'Outfit', sans-serif; }
+
+    .comp-total {
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .comp-total-label { font-size: 13px; font-weight: 700; color: var(--text2); }
+    .comp-total-cost { font-size: 20px; font-weight: 800; color: var(--red); font-family: 'Outfit', sans-serif; }
+
+    .vs-divider {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .vs-line {
+      width: 1px;
+      height: 60px;
+      background: linear-gradient(to bottom, transparent, var(--border), transparent);
+    }
+
+    .vs-badge {
+      background: var(--indigo-dim);
+      border: 1px solid var(--indigo-glow);
+      color: var(--indigo-light);
+      padding: 8px 14px;
+      border-radius: 50px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    .vpma-stack-col { display: flex; flex-direction: column; gap: 10px; }
+
+    .vpma-item {
+      background: var(--indigo-dim);
+      border: 1px solid var(--indigo-glow);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .vpma-item-name { font-size: 13px; color: var(--text); font-weight: 500; }
+
+    .vpma-item-name .mod-badge {
+      display: inline-block;
+      background: rgba(108,99,255,0.2);
+      color: var(--indigo-light);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+    }
+
+    .vpma-item-cost { font-size: 14px; font-weight: 700; color: var(--indigo-light); font-family: 'Outfit', sans-serif; }
+
+    .vpma-total {
+      background: linear-gradient(135deg, rgba(108,99,255,0.12), rgba(167,139,250,0.06));
+      border: 1px solid rgba(108,99,255,0.35);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .vpma-total-label { font-size: 13px; font-weight: 700; color: var(--text2); }
+    .vpma-total-cost { font-size: 20px; font-weight: 800; color: var(--indigo-light); font-family: 'Outfit', sans-serif; }
+
+    .savings-banner {
+      max-width: 1100px;
+      margin: 32px auto 0;
+      background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(34,197,94,0.04));
+      border: 1px solid rgba(34,197,94,0.25);
+      border-radius: 12px;
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .savings-text { font-size: 15px; color: var(--text2); }
+    .savings-text strong { color: var(--text); }
+
+    .savings-number {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--green);
+    }
+
+    .savings-number small { font-size: 14px; font-weight: 500; color: var(--text2); }
+
+    /* ===== FEATURE TABLE ===== */
+    .table-section { background: var(--bg); }
+
+    .table-controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 40px;
+    }
+
+    .filter-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text2);
+      padding: 8px 20px;
+      border-radius: 50px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .filter-btn:hover {
+      border-color: var(--indigo);
+      color: var(--text);
+    }
+
+    .filter-btn.active {
+      background: var(--indigo-dim);
+      border-color: var(--indigo);
+      color: var(--indigo-light);
+    }
+
+    .table-wrapper {
+      max-width: 1200px;
+      margin: 0 auto;
+      overflow-x: auto;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead {
+      background: var(--surface);
+      position: sticky;
+      top: 64px;
+      z-index: 10;
+    }
+
+    thead th {
+      padding: 16px 14px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      color: var(--text2);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    thead th:first-child {
+      text-align: left;
+      padding-left: 20px;
+      min-width: 240px;
+    }
+
+    thead th.vpma-col {
+      color: var(--indigo-light);
+      background: rgba(108,99,255,0.1);
+    }
+
+    .cat-header td {
+      background: var(--bg3);
+      padding: 10px 14px 10px 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text3);
+      border-top: 1px solid var(--border);
+    }
+
+    tbody tr:not(.cat-header) {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    tbody tr:not(.cat-header):hover { background: rgba(255,255,255,0.02); }
+
+    tbody td {
+      padding: 13px 14px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    tbody td:first-child {
+      text-align: left;
+      padding-left: 20px;
+      color: var(--text);
+      font-weight: 500;
+      font-size: 13px;
+    }
+
+    tbody td.vpma-col {
+      background: rgba(108,99,255,0.05);
+    }
+
+    .advantage-row {
+      background: rgba(245,158,11,0.04) !important;
+    }
+
+    .advantage-row td:first-child::after {
+      content: ' ★';
+      color: var(--gold);
+      font-size: 11px;
+    }
+
+    .cell-full { font-size: 16px; }
+    .cell-partial { font-size: 14px; opacity: 0.85; }
+    .cell-integration { font-size: 14px; opacity: 0.75; }
+    .cell-none { font-size: 16px; opacity: 0.5; }
+    .cell-beta { font-size: 12px; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      margin-top: 28px;
+      max-width: 1200px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text2);
+    }
+
+    .legend-symbol { font-size: 16px; }
+
+    /* ===== AI SECTION ===== */
+    .ai-section {
+      background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ai-section::before {
+      content: '';
+      position: absolute;
+      top: -100px; left: 50%;
+      transform: translateX(-50%);
+      width: 1000px; height: 600px;
+      background: radial-gradient(ellipse, rgba(108,99,255,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .ai-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      max-width: 1100px;
+      margin: 0 auto 64px;
+    }
+
+    .ai-feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ai-feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--indigo), #a78bfa);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .ai-feature-card:hover {
+      border-color: var(--indigo-glow);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(108,99,255,0.15);
+    }
+
+    .ai-feature-card:hover::before { opacity: 1; }
+
+    .ai-card-icon {
+      font-size: 28px;
+      margin-bottom: 16px;
+    }
+
+    .ai-card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .ai-card-desc {
+      font-size: 13px;
+      color: var(--text2);
+      line-height: 1.6;
+    }
+
+    .ai-card-badge {
+      display: inline-block;
+      background: var(--indigo-dim);
+      color: var(--indigo-light);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Competitor AI comparison */
+    .ai-compare-table {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .ai-compare-table table { font-size: 13px; }
+
+    .ai-compare-table thead th {
+      background: var(--bg3);
+      padding: 14px 16px;
+      top: auto;
+      position: static;
+    }
+
+    .ai-compare-table tbody td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ai-compare-table tbody td:first-child { text-align: left; padding-left: 20px; }
+
+    /* ===== SHEPHERD CALLOUT ===== */
+    .shepherd-section {
+      background: var(--bg3);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .shepherd-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .shepherd-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+    }
+
+    .shepherd-card.vpma-card {
+      border-color: var(--indigo-glow);
+      background: linear-gradient(135deg, rgba(108,99,255,0.08), var(--surface));
+    }
+
+    .shepherd-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .shepherd-card-logo {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .shepherd-card-logo.shepherd { background: rgba(100,200,150,0.15); }
+    .shepherd-card-logo.vpma { background: var(--indigo-dim); }
+
+    .shepherd-card-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .comparison-row {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .comparison-item {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+
+    .comparison-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .comparison-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 4px;
+    }
+
+    .comparison-value {
+      font-size: 13px;
+      color: var(--text2);
+      line-height: 1.5;
+    }
+
+    .comparison-value.positive { color: var(--indigo-light); }
+    .comparison-value.negative { color: var(--red); opacity: 0.8; }
+
+    /* ===== SAVINGS CALCULATOR ===== */
+    .calc-section { background: var(--bg2); }
+
+    .calc-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px;
+    }
+
+    .calc-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .calc-sub {
+      font-size: 14px;
+      color: var(--text2);
+      margin-bottom: 32px;
+    }
+
+    .calc-items { display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
+
+    .calc-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: var(--bg3);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .calc-item:hover { border-color: var(--indigo-glow); }
+    .calc-item.selected { border-color: var(--indigo); background: var(--indigo-dim); }
+
+    .calc-item-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .calc-checkbox {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border-bright);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .calc-item.selected .calc-checkbox {
+      background: var(--indigo);
+      border-color: var(--indigo);
+    }
+
+    .calc-item-name { font-size: 14px; font-weight: 500; }
+    .calc-item-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+    .calc-item-cost { font-size: 15px; font-weight: 700; color: var(--red); font-family: 'Outfit', sans-serif; }
+
+    .calc-result {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 24px;
+    }
+
+    .calc-result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+
+    .calc-result-row:not(:last-child) { border-bottom: 1px solid var(--border); }
+
+    .calc-result-label { font-size: 13px; color: var(--text2); }
+
+    .calc-result-value {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .calc-result-value.red { color: var(--red); }
+    .calc-result-value.indigo { color: var(--indigo-light); }
+    .calc-result-value.green { color: var(--green); font-size: 20px; }
+
+    /* ===== CTA SECTION ===== */
+    .cta-section {
+      text-align: center;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      bottom: -200px; left: 50%;
+      transform: translateX(-50%);
+      width: 800px; height: 600px;
+      background: radial-gradient(circle, rgba(108,99,255,0.1) 0%, transparent 70%);
+    }
+
+    .cta-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    .cta-inner h2 {
+      font-size: clamp(36px, 4vw, 52px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+
+    .cta-inner p {
+      font-size: 18px;
+      color: var(--text2);
+      margin-bottom: 40px;
+      line-height: 1.7;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* ===== FOOTER ===== */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 48px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text3);
+      background: var(--bg);
+    }
+
+    /* ===== HIDDEN ROWS ===== */
+    tr.hidden { display: none; }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 900px) {
+      nav { padding: 0 24px; }
+      nav .nav-links { display: none; }
+      section { padding: 64px 24px; }
+      .hero { padding: 100px 24px 64px; }
+      .hero h1 { letter-spacing: -1px; }
+      .stack-grid { grid-template-columns: 1fr; }
+      .vs-divider { flex-direction: row; }
+      .vs-line { width: 40px; height: 1px; }
+      .shepherd-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">VPMA</div>
+  <ul class="nav-links">
+    <li><a href="#stack">The Stack Problem</a></li>
+    <li><a href="#compare">Full Comparison</a></li>
+    <li><a href="#ai">Agentic AI</a></li>
+    <li><a href="#savings">Savings Calculator</a></li>
+    <li><a href="#demo" class="nav-cta">Request Demo</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge"><span>🏥</span> Veterinary Practice Management Agent</div>
+  <h1>One platform.<br><span class="accent">Replace them all.</span></h1>
+  <p class="hero-sub">Stop paying for 6 systems with 6 logins and 6 contracts. VPMA is the intelligent platform that replaces your entire veterinary software stack.</p>
+  <div class="hero-ctas">
+    <a href="#compare" class="btn-primary">See Full Comparison →</a>
+    <a href="#savings" class="btn-ghost">Calculate Your Savings</a>
+  </div>
+
+  <!-- Mini stack preview -->
+  <div class="stack-visual">
+    <div class="stack-item">
+      <div class="stack-label"><span class="stack-icon">🖥️</span> Practice Management Software</div>
+      <div class="stack-cost">$400/mo</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-label"><span class="stack-icon">💬</span> Client Texting & Reminders (PetDesk)</div>
+      <div class="stack-cost">$400/mo</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-label"><span class="stack-icon">📊</span> Analytics & Reporting (VetSuccess)</div>
+      <div class="stack-cost">$300/mo</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-label"><span class="stack-icon">📦</span> Inventory Management</div>
+      <div class="stack-cost">$200/mo</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-label"><span class="stack-icon">🌐</span> Marketing & Reputation (Podium)</div>
+      <div class="stack-cost">$449/mo</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-label"><span class="stack-icon">📹</span> Telemedicine (GuardianVets)</div>
+      <div class="stack-cost">$250/mo</div>
+    </div>
+    <div class="stack-total">
+      <div class="stack-total-label">6 tools · 6 annual contracts · ~8 logins/day</div>
+      <div class="stack-total-amount">$1,999/mo</div>
+    </div>
+    <div class="arrow-down">↓</div>
+    <div class="vpma-stack">
+      <div class="vpma-stack-label">
+        VPMA Professional + 4 MODs
+        <small>1 contract · 1 login · unlimited users</small>
+      </div>
+      <div class="vpma-stack-amount">$595/mo</div>
+    </div>
+    <div class="savings-pill">✓ Save $1,404/month · $16,848/year</div>
+  </div>
+</section>
+
+<!-- STACK PROBLEM SECTION -->
+<section class="stack-section" id="stack">
+  <div class="section-header">
+    <div class="section-label">The Stack Problem</div>
+    <h2 class="section-title">Your practice is paying for 7 systems. None of them talk to each other.</h2>
+    <p class="section-sub">The average 3-vet practice spends over $2,100/month on fragmented software — with annual lock-in contracts, constant sync failures, and 6 hours of staff time lost every week copying data between systems.</p>
+  </div>
+
+  <div class="stack-grid">
+    <!-- Competitor stack -->
+    <div>
+      <div class="stack-col-title">😤 Your current stack</div>
+      <div class="competitor-stack">
+        <div class="comp-item">
+          <div class="comp-item-name">🖥️ Practice Management (Cornerstone / Avimark)</div>
+          <div class="comp-item-cost">$400/mo</div>
+        </div>
+        <div class="comp-item">
+          <div class="comp-item-name">💬 Client Comms (PetDesk / VitusVet)</div>
+          <div class="comp-item-cost">$400/mo</div>
+        </div>
+        <div class="comp-item">
+          <div class="comp-item-name">📹 Telemedicine (GuardianVets)</div>
+          <div class="comp-item-cost">$250/mo</div>
+        </div>
+        <div class="comp-item">
+          <div class="comp-item-name">📊 Analytics (VetSuccess / iVET360)</div>
+          <div class="comp-item-cost">$350/mo</div>
+        </div>
+        <div class="comp-item">
+          <div class="comp-item-name">📦 Inventory (CUBEX / manual)</div>
+          <div class="comp-item-cost">$300/mo</div>
+        </div>
+        <div class="comp-item">
+          <div class="comp-item-name">🌐 Marketing & Reviews (Podium / Birdeye)</div>
+          <div class="comp-item-cost">$449/mo</div>
+        </div>
+        <div class="comp-item">
+          <div class="comp-item-name">💊 Staff & HR (Gusto)</div>
+          <div class="comp-item-cost">$150/mo</div>
+        </div>
+        <div class="comp-total">
+          <div class="comp-total-label">7 tools · 7 contracts · 7+ annual lock-ins</div>
+          <div class="comp-total-cost">$2,299/mo</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VS -->
+    <div class="vs-divider">
+      <div class="vs-line"></div>
+      <div class="vs-badge">VS</div>
+      <div class="vs-line"></div>
+    </div>
+
+    <!-- VPMA stack -->
+    <div>
+      <div class="stack-col-title">✨ VPMA replaces it all</div>
+      <div class="vpma-stack-col">
+        <div class="vpma-item">
+          <div class="vpma-item-name">🏥 VPMA Core Platform <span class="mod-badge">BASE</span></div>
+          <div class="vpma-item-cost">$249/mo</div>
+        </div>
+        <div class="vpma-item">
+          <div class="vpma-item-name">💬 Client Comms Suite <span class="mod-badge">MOD-COM</span></div>
+          <div class="vpma-item-cost">$49/mo</div>
+        </div>
+        <div class="vpma-item">
+          <div class="vpma-item-name">📹 Telemedicine Module <span class="mod-badge">MOD-TEL</span></div>
+          <div class="vpma-item-cost">$89/mo</div>
+        </div>
+        <div class="vpma-item">
+          <div class="vpma-item-name">📊 Analytics & BI <span class="mod-badge">MOD-ANL</span></div>
+          <div class="vpma-item-cost">$59/mo</div>
+        </div>
+        <div class="vpma-item">
+          <div class="vpma-item-name">📦 Inventory & Pharmacy <span class="mod-badge">MOD-INV</span></div>
+          <div class="vpma-item-cost">$69/mo</div>
+        </div>
+        <div class="vpma-item">
+          <div class="vpma-item-name">🌐 Marketing & Reviews <span class="mod-badge">MOD-MAR</span></div>
+          <div class="vpma-item-cost">$49/mo</div>
+        </div>
+        <div class="vpma-item">
+          <div class="vpma-item-name">👥 Staff & HR <span class="mod-badge">MOD-STF</span></div>
+          <div class="vpma-item-cost">$59/mo</div>
+        </div>
+        <div class="vpma-total">
+          <div class="vpma-total-label">1 platform · 1 contract · month-to-month</div>
+          <div class="vpma-total-cost">$623/mo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="savings-banner">
+    <div class="savings-text">
+      <strong>Annual savings for a 3-vet practice:</strong> replacing all 7 tools with VPMA + MODs
+    </div>
+    <div class="savings-number">$20,112 <small>/ year</small></div>
+  </div>
+</section>
+
+<!-- COMPARISON TABLE -->
+<section class="table-section" id="compare">
+  <div class="section-header">
+    <div class="section-label">Full Feature Comparison</div>
+    <h2 class="section-title">60 features. Scored across 9 platforms.</h2>
+    <p class="section-sub">Every rating is based on direct research: official feature pages, G2 and Capterra reviews, YouTube demos, and practitioner communities. ★ = VPMA advantage.</p>
+  </div>
+
+  <div class="table-controls">
+    <button class="filter-btn active" onclick="filterTable('all')" id="btn-all">All Features</button>
+    <button class="filter-btn" onclick="filterTable('S')" id="btn-S">🗓️ Scheduling</button>
+    <button class="filter-btn" onclick="filterTable('C')" id="btn-C">🐾 Clinical</button>
+    <button class="filter-btn" onclick="filterTable('L')" id="btn-L">🔬 Labs</button>
+    <button class="filter-btn" onclick="filterTable('F')" id="btn-F">💰 Financial</button>
+    <button class="filter-btn" onclick="filterTable('I')" id="btn-I">💊 Inventory</button>
+    <button class="filter-btn" onclick="filterTable('R')" id="btn-R">📊 Analytics</button>
+    <button class="filter-btn" onclick="filterTable('P')" id="btn-P">🔌 Platform</button>
+    <button class="filter-btn" onclick="filterTable('A')" id="btn-A">🤖 Agentic AI</button>
+  </div>
+
+  <div class="table-wrapper">
+    <table id="feature-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th class="vpma-col">VPMA</th>
+          <th>Cornerstone</th>
+          <th>Avimark</th>
+          <th>ezyVet</th>
+          <th>Shepherd</th>
+          <th>Provet Cloud</th>
+          <th>Covetrus Pulse</th>
+          <th>Digitail</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- SCHEDULING -->
+        <tr class="cat-header" data-cat="S"><td colspan="9">🗓️ Scheduling & Practice Management</td></tr>
+        <tr data-cat="S"><td>Appointment scheduling</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="S"><td>Multi-location support</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="S"><td>Room & resource management</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="S" class="advantage-row"><td>Waitlist management (AI-powered)</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-integration">🔌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="S"><td>Automated reminders (SMS/email)</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="S"><td>Two-way client texting</td><td class="vpma-col cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-integration">🔌</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="S"><td>Online client self-scheduling</td><td class="vpma-col cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-integration">🔌</td><td class="cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="S"><td>Boarding / kennel management</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+
+        <!-- CLINICAL -->
+        <tr class="cat-header" data-cat="C"><td colspan="9">🐾 Clinical Records & EMR</td></tr>
+        <tr data-cat="C"><td>SOAP note creation</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="C" class="advantage-row"><td>AI-assisted SOAP drafting</td><td class="vpma-col cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-none">❌</td><td class="cell-beta">🆕 beta</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="C" class="advantage-row"><td>Agentic pre-visit intake</td><td class="vpma-col cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-integration">🔌</td><td class="cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="C"><td>Photo / imaging attachment</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="C"><td>Vaccine & care protocol tracking</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="C"><td>Prescription management</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="C" class="advantage-row"><td>Breed-specific clinical alerts</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="C" class="advantage-row"><td>Automated patient risk scoring</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td></tr>
+        <tr data-cat="C"><td>Post-visit follow-up automation</td><td class="vpma-col cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="C"><td>Telemedicine / video consults</td><td class="vpma-col cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-integration">🔌</td><td class="cell-integration">🔌</td><td class="cell-none">❌</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+
+        <!-- LABS -->
+        <tr class="cat-header" data-cat="L"><td colspan="9">🔬 Lab & Diagnostic Integration</td></tr>
+        <tr data-cat="L"><td>IDEXX in-house analyzer</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="L"><td>IDEXX Reference Lab</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="L"><td>Antech integration</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="L"><td>Heska integration</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="L"><td>Vetscan / Abaxis integration</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="L"><td>DICOM / imaging integration</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="L" class="advantage-row"><td>Critical value flags & alerts</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="L"><td>Auto-filing lab results</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+
+        <!-- FINANCIAL -->
+        <tr class="cat-header" data-cat="F"><td colspan="9">💰 Financial & Billing</td></tr>
+        <tr data-cat="F"><td>Invoice generation</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="F" class="advantage-row"><td>Auto-invoice from signed SOAP</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="F"><td>Card-present payments (terminal)</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="F"><td>Apple Pay / Google Pay</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="F"><td>Payment plans / financing</td><td class="vpma-col cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-integration">🔌</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-integration">🔌</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="F"><td>Split-tender payments</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-none">❌</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="F"><td>End-of-day reconciliation</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="F"><td>QuickBooks / Xero integration</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="F"><td>Pet insurance claims support</td><td class="vpma-col cell-integration">🔌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-integration">🔌</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="F"><td>Outstanding balance / collections</td><td class="vpma-col cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-integration">🔌</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+
+        <!-- INVENTORY -->
+        <tr class="cat-header" data-cat="I"><td colspan="9">💊 Inventory & Pharmacy</td></tr>
+        <tr data-cat="I"><td>Drug inventory tracking</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="I"><td>Controlled substance logging (DEA)</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="I"><td>Smart reorder / purchase orders</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="I"><td>Prescription label printing</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="I"><td>Dispensing workflow</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="I"><td>Lot & expiry tracking</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+
+        <!-- REPORTING -->
+        <tr class="cat-header" data-cat="R"><td colspan="9">📊 Reporting & Analytics</td></tr>
+        <tr data-cat="R"><td>Revenue & financial reports</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="R"><td>Appointment utilization reports</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="R"><td>Patient retention analytics</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="R"><td>Custom report builder</td><td class="vpma-col cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="R"><td>Multi-clinic dashboards</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="R" class="advantage-row"><td>AI-driven practice insights</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-beta">🆕</td><td class="cell-full">✅</td></tr>
+
+        <!-- PLATFORM -->
+        <tr class="cat-header" data-cat="P"><td colspan="9">🔌 Platform & Integrations</td></tr>
+        <tr data-cat="P"><td>Open API / developer access</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="P"><td>Payroll integration</td><td class="vpma-col cell-integration">🔌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-integration">🔌</td><td class="cell-integration">🔌</td><td class="cell-integration">🔌</td></tr>
+        <tr data-cat="P"><td>Accounting integration</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="P"><td>Supplier / GPO integration</td><td class="vpma-col cell-integration">🔌</td><td class="cell-integration">🔌</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="P" class="advantage-row"><td>Legacy data migration tools</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="P"><td>Mobile app (iOS / Android)</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="P"><td>Cloud-based (no local server)</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="P"><td>Enterprise SSO</td><td class="vpma-col cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-none">❌</td><td class="cell-full">✅</td><td class="cell-none">❌</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+
+        <!-- AI / AGENTIC -->
+        <tr class="cat-header" data-cat="A"><td colspan="9">🤖 Agentic AI — VPMA's Exclusive Advantage</td></tr>
+        <tr data-cat="A" class="advantage-row"><td>AI SOAP note drafting</td><td class="vpma-col cell-full">✅</td><td class="cell-integration">🔌</td><td class="cell-none">❌</td><td class="cell-beta">🆕 beta</td><td class="cell-full">✅</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="A" class="advantage-row"><td>Agentic pre-visit intake (zero staff)</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-full">✅</td></tr>
+        <tr data-cat="A" class="advantage-row"><td>Automated patient risk scoring</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td></tr>
+        <tr data-cat="A" class="advantage-row"><td>Agentic follow-up (zero staff)</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td></tr>
+        <tr data-cat="A" class="advantage-row"><td>AI waitlist backfill</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td></tr>
+        <tr data-cat="A" class="advantage-row"><td>Agentic reminder pipeline</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="A" class="advantage-row"><td>Predictive capacity forecasting</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td></tr>
+        <tr data-cat="A" class="advantage-row"><td>Agentic billing from SOAP</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td><td class="cell-partial">⚠️</td></tr>
+        <tr data-cat="A" class="advantage-row"><td>Verbose agent audit log</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td></tr>
+        <tr data-cat="A" class="advantage-row"><td>Modular AI architecture</td><td class="vpma-col cell-full">✅</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td><td class="cell-none">❌</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-symbol">✅</span> Full — native, well-reviewed</div>
+    <div class="legend-item"><span class="legend-symbol">⚠️</span> Partial — limited or add-on</div>
+    <div class="legend-item"><span class="legend-symbol">🔌</span> Via integration — third-party required</div>
+    <div class="legend-item"><span class="legend-symbol">❌</span> Not available</div>
+    <div class="legend-item"><span class="legend-symbol">🆕</span> Beta / recently launched</div>
+    <div class="legend-item"><span class="legend-symbol">★</span> VPMA unique advantage</div>
+  </div>
+</section>
+
+<!-- AI SECTION -->
+<section class="ai-section" id="ai">
+  <div class="section-header">
+    <div class="section-label">Agentic Intelligence</div>
+    <h2 class="section-title">Every legacy system <em>records.</em><br>VPMA <span class="accent">acts.</span></h2>
+    <p class="section-sub">Every competitor in this market helps your team document what happened. VPMA is the first veterinary platform that autonomously acts on what needs to happen next — before your staff has to think about it.</p>
+  </div>
+
+  <div class="ai-grid">
+    <div class="ai-feature-card">
+      <div class="ai-card-badge">UNIQUE TO VPMA</div>
+      <div class="ai-card-icon">🎙️</div>
+      <div class="ai-card-title">AI SOAP Drafting</div>
+      <div class="ai-card-desc">Ambient AI listens to your exam, drafts the entire SOAP note in real time. Doctor reviews and signs — no typing required.</div>
+    </div>
+    <div class="ai-feature-card">
+      <div class="ai-card-badge">UNIQUE TO VPMA</div>
+      <div class="ai-card-icon">📋</div>
+      <div class="ai-card-title">Agentic Pre-Visit Intake</div>
+      <div class="ai-card-desc">Before the appointment, an AI agent contacts the owner, collects chief complaint, history, and consent — zero staff time required.</div>
+    </div>
+    <div class="ai-feature-card">
+      <div class="ai-card-badge">UNIQUE TO VPMA</div>
+      <div class="ai-card-icon">⚠️</div>
+      <div class="ai-card-title">Patient Risk Scoring</div>
+      <div class="ai-card-desc">Every patient gets an automated risk score based on species, age, history, and recent labs. High-risk patients are flagged automatically.</div>
+    </div>
+    <div class="ai-feature-card">
+      <div class="ai-card-badge">UNIQUE TO VPMA</div>
+      <div class="ai-card-icon">📲</div>
+      <div class="ai-card-title">Agentic Follow-Up</div>
+      <div class="ai-card-desc">After discharge, an AI agent sends appropriate follow-up messages, collects outcome feedback, and escalates concerns — no staff scheduling required.</div>
+    </div>
+    <div class="ai-feature-card">
+      <div class="ai-card-badge">UNIQUE TO VPMA</div>
+      <div class="ai-card-icon">📅</div>
+      <div class="ai-card-title">AI Waitlist Backfill</div>
+      <div class="ai-card-desc">When a cancellation occurs, VPMA instantly contacts the optimal patient from your waitlist and fills the slot — automatically, in seconds.</div>
+    </div>
+    <div class="ai-feature-card">
+      <div class="ai-card-badge">UNIQUE TO VPMA</div>
+      <div class="ai-card-icon">🔍</div>
+      <div class="ai-card-title">Agent Audit Log</div>
+      <div class="ai-card-desc">Every AI action is logged with its reasoning, inputs, and outputs. Full transparency into what VPMA decided and why — always reviewable.</div>
+    </div>
+    <div class="ai-feature-card">
+      <div class="ai-card-badge">UNIQUE TO VPMA</div>
+      <div class="ai-card-icon">📈</div>
+      <div class="ai-card-title">Predictive Forecasting</div>
+      <div class="ai-card-desc">AI analyzes your practice patterns to forecast capacity, revenue, and appointment demand — weeks ahead, not just reports of what already happened.</div>
+    </div>
+    <div class="ai-feature-card">
+      <div class="ai-card-badge">UNIQUE TO VPMA</div>
+      <div class="ai-card-icon">🧩</div>
+      <div class="ai-card-title">Modular AI Architecture</div>
+      <div class="ai-card-desc">Each MOD brings its own AI agents that plug into the shared platform. Add telemedicine AI, inventory AI, and marketing AI without integration work.</div>
+    </div>
+    <div class="ai-feature-card">
+      <div class="ai-card-badge">UNIQUE TO VPMA</div>
+      <div class="ai-card-icon">💳</div>
+      <div class="ai-card-title">Agentic Billing from SOAP</div>
+      <div class="ai-card-desc">When a SOAP is signed, AI cross-references every diagnosis and treatment to build the invoice — automatically flagging missed charges before you send.</div>
+    </div>
+    <div class="ai-feature-card">
+      <div class="ai-card-badge">UNIQUE TO VPMA</div>
+      <div class="ai-card-icon">🐕</div>
+      <div class="ai-card-title">Breed-Specific Alerts</div>
+      <div class="ai-card-desc">AI surfaces breed-specific clinical risks, contraindications, and screening recommendations during the exam — derived from current clinical evidence.</div>
+    </div>
+  </div>
+
+  <!-- Competitor AI comparison -->
+  <div style="max-width:900px;margin:0 auto;">
+    <h3 style="font-family:'Outfit',sans-serif;font-size:22px;font-weight:700;text-align:center;margin-bottom:24px;">How the AI stacks up: VPMA vs. the closest competitor</h3>
+    <div class="ai-compare-table">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left;padding-left:20px;">AI Capability</th>
+            <th class="vpma-col">VPMA</th>
+            <th>Shepherd</th>
+            <th>Digitail</th>
+            <th>ezyVet</th>
+            <th>Cornerstone</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>AI SOAP drafting</td><td class="vpma-col">✅ Native</td><td>✅ TranscribeAI</td><td>✅ Tails Medical</td><td>🆕 Beta</td><td>🔌 3rd party</td></tr>
+          <tr><td>Agentic pre-visit intake</td><td class="vpma-col">✅ Autonomous</td><td>❌</td><td>✅ Tails Concierge</td><td>❌</td><td>❌</td></tr>
+          <tr><td>Automated patient risk scoring</td><td class="vpma-col">✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+          <tr><td>Agentic follow-up (autonomous)</td><td class="vpma-col">✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+          <tr><td>AI waitlist backfill</td><td class="vpma-col">✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+          <tr><td>Predictive forecasting</td><td class="vpma-col">✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+          <tr><td>Agent audit log</td><td class="vpma-col">✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+          <tr><td>Modular AI architecture</td><td class="vpma-col">✅</td><td>❌</td><td>⚠️ Partial</td><td>❌</td><td>❌</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- SHEPHERD CALLOUT -->
+<section class="shepherd-section" id="shepherd">
+  <div class="section-header">
+    <div class="section-label">Closest AI Competitor</div>
+    <h2 class="section-title">VPMA vs. Shepherd</h2>
+    <p class="section-sub">Shepherd is the most advanced AI competitor in the vet PIMS market — built by veterinarians, with native TranscribeAI SOAP drafting. Here's how the two approaches differ fundamentally.</p>
+  </div>
+
+  <div class="shepherd-grid">
+    <div class="shepherd-card">
+      <div class="shepherd-card-header">
+        <div class="shepherd-card-logo shepherd">🐑</div>
+        <div>
+          <div class="shepherd-card-name">Shepherd</div>
+          <div style="font-size:12px;color:var(--text3);">AI-assisted, doctor-controlled</div>
+        </div>
+      </div>
+      <div class="comparison-row">
+        <div class="comparison-item">
+          <div class="comparison-label">AI Philosophy</div>
+          <div class="comparison-value negative">Reactive — AI acts only when the doctor initiates. Every output requires human approval before anything is recorded.</div>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">SOAP AI</div>
+          <div class="comparison-value">TranscribeAI listens and suggests SOAP text. Vet reviews and approves before finalizing.</div>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">Follow-up</div>
+          <div class="comparison-value negative">Template-based message sends. Staff must configure and trigger.</div>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">Patient Risk</div>
+          <div class="comparison-value negative">DiagnoseAI provides differential suggestions on-demand. No automated risk scoring.</div>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">Waitlist</div>
+          <div class="comparison-value negative">Via Oliver integration (passive). No AI-powered backfill.</div>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">Architecture</div>
+          <div class="comparison-value negative">Three siloed AI tools (TranscribeAI, SummarizeAI, DiagnoseAI). No composable agent framework.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="shepherd-card vpma-card">
+      <div class="shepherd-card-header">
+        <div class="shepherd-card-logo vpma">🏥</div>
+        <div>
+          <div class="shepherd-card-name">VPMA</div>
+          <div style="font-size:12px;color:var(--indigo-light);">Proactive agentic platform</div>
+        </div>
+      </div>
+      <div class="comparison-row">
+        <div class="comparison-item">
+          <div class="comparison-label">AI Philosophy</div>
+          <div class="comparison-value positive">Proactive — AI agents act autonomously on routine tasks, freeing your entire team — not just the doctor in the exam room.</div>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">SOAP AI</div>
+          <div class="comparison-value positive">Ambient SOAP drafting AND downstream agentic actions triggered automatically from the signed note.</div>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">Follow-up</div>
+          <div class="comparison-value positive">AI agent detects post-visit need, drafts appropriate message, sends autonomously, and escalates concerns to staff.</div>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">Patient Risk</div>
+          <div class="comparison-value positive">Automated risk score for every patient on every visit. High-risk patients flagged before the appointment starts.</div>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">Waitlist</div>
+          <div class="comparison-value positive">AI immediately identifies and contacts the optimal waitlisted patient when a slot opens. Fills gaps in seconds.</div>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">Architecture</div>
+          <div class="comparison-value positive">Modular agentic framework — composable, orchestrated pipeline. Every MOD adds new AI agents to the shared platform.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin-top:40px;">
+    <p style="font-size:16px;color:var(--text2);max-width:600px;margin:0 auto;font-style:italic;line-height:1.7;">
+      "Shepherd has built AI <em>features</em> that live inside the SOAP.<br>
+      VPMA is building an AI <em>operating system</em> that acts on behalf of the practice."
+    </p>
+  </div>
+</section>
+
+<!-- SAVINGS CALCULATOR -->
+<section class="calc-section" id="savings">
+  <div class="section-header">
+    <div class="section-label">Savings Calculator</div>
+    <h2 class="section-title">Calculate your savings</h2>
+    <p class="section-sub">Select the tools you currently use. We'll show you exactly what you're spending and what VPMA would cost.</p>
+  </div>
+
+  <div class="calc-container">
+    <div class="calc-title">Your current software stack</div>
+    <div class="calc-sub">Click to select tools you're paying for today</div>
+
+    <div class="calc-items" id="calc-items">
+      <div class="calc-item selected" onclick="toggleItem(this, 400)" data-vpma="249" data-mod="">
+        <div class="calc-item-left">
+          <div class="calc-checkbox">✓</div>
+          <div>
+            <div class="calc-item-name">🖥️ Practice Management Software</div>
+            <div class="calc-item-sub">Cornerstone, Avimark, ezyVet, or similar</div>
+          </div>
+        </div>
+        <div class="calc-item-cost">$400/mo</div>
+      </div>
+      <div class="calc-item selected" onclick="toggleItem(this, 400)" data-vpma="49" data-mod="MOD-COM">
+        <div class="calc-item-left">
+          <div class="calc-checkbox">✓</div>
+          <div>
+            <div class="calc-item-name">💬 Client Texting & Reminders</div>
+            <div class="calc-item-sub">PetDesk, VitusVet, Petvisor, Vet2Pet</div>
+          </div>
+        </div>
+        <div class="calc-item-cost">$400/mo</div>
+      </div>
+      <div class="calc-item" onclick="toggleItem(this, 250)" data-vpma="89" data-mod="MOD-TEL">
+        <div class="calc-item-left">
+          <div class="calc-checkbox"></div>
+          <div>
+            <div class="calc-item-name">📹 Telemedicine / After-hours</div>
+            <div class="calc-item-sub">GuardianVets, Airvet</div>
+          </div>
+        </div>
+        <div class="calc-item-cost">$250/mo</div>
+      </div>
+      <div class="calc-item" onclick="toggleItem(this, 350)" data-vpma="59" data-mod="MOD-ANL">
+        <div class="calc-item-left">
+          <div class="calc-checkbox"></div>
+          <div>
+            <div class="calc-item-name">📊 Analytics & Business Intelligence</div>
+            <div class="calc-item-sub">VetSuccess, iVET360, practice dashboards</div>
+          </div>
+        </div>
+        <div class="calc-item-cost">$350/mo</div>
+      </div>
+      <div class="calc-item" onclick="toggleItem(this, 300)" data-vpma="69" data-mod="MOD-INV">
+        <div class="calc-item-left">
+          <div class="calc-checkbox"></div>
+          <div>
+            <div class="calc-item-name">📦 Drug Inventory Management</div>
+            <div class="calc-item-sub">CUBEX, Covetrus Inventory</div>
+          </div>
+        </div>
+        <div class="calc-item-cost">$300/mo</div>
+      </div>
+      <div class="calc-item" onclick="toggleItem(this, 449)" data-vpma="49" data-mod="MOD-MAR">
+        <div class="calc-item-left">
+          <div class="calc-checkbox"></div>
+          <div>
+            <div class="calc-item-name">🌐 Marketing & Reputation</div>
+            <div class="calc-item-sub">Podium, Birdeye, VetMatrix</div>
+          </div>
+        </div>
+        <div class="calc-item-cost">$449/mo</div>
+      </div>
+      <div class="calc-item" onclick="toggleItem(this, 150)" data-vpma="59" data-mod="MOD-STF">
+        <div class="calc-item-left">
+          <div class="calc-checkbox"></div>
+          <div>
+            <div class="calc-item-name">👥 Staff Scheduling & HR</div>
+            <div class="calc-item-sub">Gusto, ADP, Paychex</div>
+          </div>
+        </div>
+        <div class="calc-item-cost">$150/mo</div>
+      </div>
+    </div>
+
+    <div class="calc-result">
+      <div class="calc-result-row">
+        <div class="calc-result-label">Current monthly spend</div>
+        <div class="calc-result-value red" id="calc-current">$800/mo</div>
+      </div>
+      <div class="calc-result-row">
+        <div class="calc-result-label">VPMA equivalent (base + MODs)</div>
+        <div class="calc-result-value indigo" id="calc-vpma">$298/mo</div>
+      </div>
+      <div class="calc-result-row">
+        <div class="calc-result-label">💰 Your annual savings</div>
+        <div class="calc-result-value green" id="calc-savings">$6,024/yr</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" id="demo">
+  <div class="cta-inner">
+    <h2 class="section-title">Ready to replace your stack?</h2>
+    <p>Join the practices that have consolidated 6 software subscriptions into one intelligent platform — and saved over $16,000 a year in the process.</p>
+    <div class="cta-buttons">
+      <a href="#" class="btn-primary" id="demo-cta">Schedule a Demo →</a>
+      <a href="#compare" class="btn-ghost">View Full Comparison</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div>© 2026 VPMA — Veterinary Practice Management Agent. All feature data based on direct research as of June 2026.</div>
+  <div style="margin-top:8px;font-size:11px;color:var(--text3);">Ratings reflect publicly available information. All trademarks belong to their respective owners. Pricing estimates from public sources; verify directly with vendors.</div>
+</footer>
+
+<script>
+  // Filter table
+  function filterTable(cat) {
+    const rows = document.querySelectorAll('#feature-table tbody tr');
+    rows.forEach(row => {
+      const rowCat = row.getAttribute('data-cat');
+      if (cat === 'all' || rowCat === cat) {
+        row.classList.remove('hidden');
+      } else {
+        row.classList.add('hidden');
+      }
+    });
+
+    // Update buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('btn-' + cat).classList.add('active');
+  }
+
+  // Calculator
+  function toggleItem(el, cost) {
+    el.classList.toggle('selected');
+    const checkbox = el.querySelector('.calc-checkbox');
+    if (el.classList.contains('selected')) {
+      checkbox.textContent = '✓';
+    } else {
+      checkbox.textContent = '';
+    }
+    updateCalc();
+  }
+
+  function updateCalc() {
+    const items = document.querySelectorAll('.calc-item');
+    let currentTotal = 0;
+    let vpmaTotal = 249; // base always included
+
+    items.forEach(item => {
+      if (item.classList.contains('selected')) {
+        const cost = parseInt(item.getAttribute('onclick').match(/\d+/)[0]);
+        const vpma = parseInt(item.getAttribute('data-vpma'));
+        currentTotal += cost;
+
+        // MODs add to VPMA cost
+        const mod = item.getAttribute('data-mod');
+        if (mod) {
+          vpmaTotal += vpma;
+        }
+      }
+    });
+
+    const savings = (currentTotal - vpmaTotal) * 12;
+
+    document.getElementById('calc-current').textContent = '$' + currentTotal.toLocaleString() + '/mo';
+    document.getElementById('calc-vpma').textContent = '$' + vpmaTotal.toLocaleString() + '/mo';
+    document.getElementById('calc-savings').textContent = savings > 0
+      ? '$' + savings.toLocaleString() + '/yr'
+      : 'Already saving!';
+  }
+
+  updateCalc();
+
+  // Smooth nav scroll
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+</script>
+</body>
+</html>
