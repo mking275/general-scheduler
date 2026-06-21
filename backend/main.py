@@ -686,7 +686,17 @@ def complete_appointment(timeblock_id: str, body: CompleteRequest):
     else:
         draft_id = existing_draft.id
 
-    return {"status": "complete", "followup_draft_id": draft_id}
+    # Generate visit invoice draft (Gap 1)
+    visit_inv = None
+    try:
+        from .agents.account_agent import generate_visit_invoice
+        procedure_hint = procedure or "default"
+        visit_inv = generate_visit_invoice(db, timeblock_id, tb, patient, owner, procedure_hint, log_agent_step)
+    except Exception as e:
+        log_agent_step("BILLING AGENT", f"[warn] Visit invoice draft failed — {e}")
+        visit_inv = None
+
+    return {"status": "complete", "followup_draft_id": draft_id, "visit_invoice_id": visit_inv["id"] if visit_inv else None}
 
 
 # ============================================================
@@ -2111,6 +2121,32 @@ async def subscribe_module(
     price_cents = MODULE_PRICING.get(module_id, 0)
     lic = db.add_module_license(account["id"], module_id, price_cents, body.billing_interval)
     _log1(f"ACCOUNT AGENT: {module_id} license added · ${price_cents / 100:.0f}/mo")
+
+    # Generate subscription invoice for new module (Gap 2)
+    try:
+        from .agents.account_agent import next_invoice_number, MODULE_DESCRIPTIONS
+        from datetime import timedelta
+        now_dt = datetime.utcnow()
+        month_start = now_dt.date().replace(day=1).isoformat()
+        next_month = (now_dt.date().replace(day=1) + timedelta(days=32)).replace(day=1)
+        month_end = (next_month - timedelta(days=1)).isoformat()
+        mod_name, _ = MODULE_DESCRIPTIONS.get(module_id, (module_id, ""))
+        inv_num = next_invoice_number(db, account["id"])
+        db.create_account_invoice({
+            "account_id": account["id"],
+            "invoice_number": inv_num,
+            "period_start": month_start,
+            "period_end": month_end,
+            "line_items": [{"description": f"{module_id} {mod_name} — first month", "amount_cents": price_cents}],
+            "subtotal_cents": price_cents,
+            "total_cents": price_cents,
+            "status": "pending",
+            "created_at": now_dt.isoformat(),
+        })
+        log_agent_step("ACCOUNT AGENT", f"Invoice {inv_num} generated for {module_id} activation")
+    except Exception as e:
+        log_agent_step("ACCOUNT AGENT", f"[warn] Module invoice generation failed — {e}")
+
     return {
         "module_id": module_id,
         "status": "active",
@@ -2135,6 +2171,45 @@ def get_account_invoices():
     """T034: List invoices newest first."""
     account = _get_demo_account_or_404()
     return db.get_account_invoices(account["id"])
+
+
+class GenerateInvoiceRequest(BaseModel):
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+
+
+@app.post("/api/account/invoices", status_code=201)
+def generate_account_invoice(body: GenerateInvoiceRequest):
+    """Gap 4: Manually generate a billing invoice for the current period."""
+    from .agents.account_agent import generate_invoice_line_items, next_invoice_number
+    from datetime import timedelta
+    account = db.get_default_account()
+    if not account:
+        raise HTTPException(status_code=404, detail="No account found")
+    now_dt = datetime.utcnow()
+    period_start = body.period_start or now_dt.date().replace(day=1).isoformat()
+    if body.period_end:
+        period_end = body.period_end
+    else:
+        next_month = (now_dt.date().replace(day=1) + timedelta(days=32)).replace(day=1)
+        period_end = (next_month - timedelta(days=1)).isoformat()
+    licenses = db.get_module_licenses(account["id"])
+    line_items = generate_invoice_line_items(account, licenses)
+    subtotal = sum(li["amount_cents"] for li in line_items)
+    inv_num = next_invoice_number(db, account["id"])
+    inv = db.create_account_invoice({
+        "account_id": account["id"],
+        "invoice_number": inv_num,
+        "period_start": period_start,
+        "period_end": period_end,
+        "line_items": line_items,
+        "subtotal_cents": subtotal,
+        "total_cents": subtotal,
+        "status": "pending",
+        "created_at": now_dt.isoformat(),
+    })
+    log_agent_step("ACCOUNT AGENT", f"Invoice {inv_num} manually generated — ${subtotal/100:.2f}")
+    return inv
 
 
 @app.get("/api/account/invoices/{invoice_id}")
@@ -2237,6 +2312,34 @@ def upgrade_account_plan(body: PlanUpgradeRequest):
         _log1("ACCOUNT AGENT: MOD-ENT license added · $149/mo (Enterprise included)")
         message = "Plan upgraded to Enterprise. MOD-ENT has been added at no extra charge."
 
+    # Generate upgrade invoice for upgrades only (Gap 3)
+    try:
+        from .agents.account_agent import PLAN_PRICES as _PLAN_PRICES, next_invoice_number
+        from datetime import timedelta
+        now_dt = datetime.utcnow()
+        old_price = _PLAN_PRICES.get(old_tier, 0)
+        new_price = _PLAN_PRICES.get(new_tier, 0)
+        delta = new_price - old_price
+        if delta > 0:
+            month_start = now_dt.date().replace(day=1).isoformat()
+            next_month = (now_dt.date().replace(day=1) + timedelta(days=32)).replace(day=1)
+            month_end = (next_month - timedelta(days=1)).isoformat()
+            inv_num = next_invoice_number(db, account["id"])
+            db.create_account_invoice({
+                "account_id": account["id"],
+                "invoice_number": inv_num,
+                "period_start": month_start,
+                "period_end": month_end,
+                "line_items": [{"description": f"Plan upgrade: {old_tier.capitalize()} → {new_tier.capitalize()}", "amount_cents": delta}],
+                "subtotal_cents": delta,
+                "total_cents": delta,
+                "status": "pending",
+                "created_at": now_dt.isoformat(),
+            })
+            log_agent_step("ACCOUNT AGENT", f"Invoice {inv_num} generated for plan upgrade to {new_tier}")
+    except Exception as e:
+        log_agent_step("ACCOUNT AGENT", f"[warn] Upgrade invoice generation failed — {e}")
+
     return {
         "account_id": account["id"],
         "old_tier": old_tier,
@@ -2283,3 +2386,97 @@ def mod_ref_status(_=Depends(require_module("MOD-REF"))):
 @app.get("/api/mods/ent/status")
 def mod_ent_status(_=Depends(require_module("MOD-ENT"))):
     return {"module": "MOD-ENT", "access": "granted"}
+
+
+# ── Gap 1: Visit Invoice routes ──────────────────────────────────────────────
+
+@app.get("/api/appointments/{timeblock_id}/invoice")
+def get_appointment_invoice(timeblock_id: str):
+    """Get visit invoice draft for a completed appointment."""
+    invs = db.get_visit_invoices_for_timeblock(timeblock_id)
+    if not invs:
+        raise HTTPException(status_code=404, detail="No invoice for this appointment")
+    return invs[0]
+
+
+@app.get("/api/visit-invoices")
+def list_visit_invoices(clinic_id: str = Query(None), status: str = Query(None)):
+    """List visit invoices, optionally filtered by clinic_id or status."""
+    return db.get_visit_invoices(clinic_id=clinic_id, status=status)
+
+
+@app.put("/api/visit-invoices/{invoice_id}")
+async def update_visit_invoice(invoice_id: str, request: Request):
+    """Update a visit invoice (line items, notes, status, etc.)."""
+    body = await request.json()
+    inv = db.update_visit_invoice(invoice_id, body)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return inv
+
+
+@app.post("/api/visit-invoices/{invoice_id}/send")
+def send_visit_invoice(invoice_id: str):
+    """Mark a visit invoice as sent."""
+    inv = db.update_visit_invoice(invoice_id, {"status": "sent", "sent_at": datetime.utcnow().isoformat()})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    log_agent_step("BILLING AGENT", f"Visit invoice {invoice_id[:8]} marked as sent")
+    return inv
+
+
+@app.post("/api/visit-invoices/{invoice_id}/mark-paid")
+def mark_visit_invoice_paid(invoice_id: str):
+    """Mark a visit invoice as paid."""
+    inv = db.update_visit_invoice(invoice_id, {"status": "paid", "paid_at": datetime.utcnow().isoformat()})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    log_agent_step("BILLING AGENT", f"Visit invoice {invoice_id[:8]} marked as paid")
+    return inv
+
+
+# ── Gap 5: Account Users routes ──────────────────────────────────────────────
+
+@app.get("/api/account/users")
+def get_account_users():
+    """Gap 5: Return all users on the account."""
+    account = db.get_default_account()
+    if not account:
+        raise HTTPException(status_code=404, detail="No account")
+    return db.get_account_users(account["id"])
+
+
+class AccountUserCreate(BaseModel):
+    name: str
+    email: str
+    role: str = "member"
+
+
+@app.post("/api/account/users", status_code=201)
+def add_account_user(body: AccountUserCreate):
+    """Gap 5: Add a user to the account."""
+    account = db.get_default_account()
+    if not account:
+        raise HTTPException(status_code=404, detail="No account")
+    from uuid import uuid4
+    user = {
+        "id": str(uuid4()),
+        "account_id": account["id"],
+        "name": body.name,
+        "email": body.email,
+        "role": body.role,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    db.create_account_user(user)
+    log_agent_step("ACCOUNT AGENT", f"User {body.email} added as {body.role}")
+    return user
+
+
+@app.delete("/api/account/users/{user_id}", status_code=204)
+def remove_account_user(user_id: str):
+    """Gap 5: Remove a user from the account."""
+    from .repository import _get_conn
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM account_users WHERE id=?", (user_id,))
+    log_agent_step("ACCOUNT AGENT", f"User {user_id[:8]} removed")
+    return

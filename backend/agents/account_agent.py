@@ -233,3 +233,95 @@ def next_invoice_number(db, account_id: str) -> str:
             (account_id, f"INV-{year}-%")
         ).fetchone()[0]
     return f"INV-{year}-{str(count + 1).zfill(3)}"
+
+
+# ── Gap 1: Visit Invoice fee schedule constants ────────────────────────────
+
+PROCEDURE_FEES = {
+    "wellness": 7500, "sick_visit": 9500, "vaccination": 3000,
+    "dental": 30000, "surgery": 35000, "recheck": 5500,
+    "default": 7500,
+}
+LAB_FEES = {
+    "idexx": 10000, "antech": 10000, "heska": 8500,
+    "vetscan": 8500, "default": 8500,
+}
+RX_DISPENSING_FEE = 2000
+
+
+def next_visit_invoice_number(db, clinic_id: str) -> str:
+    """Returns VI-YYYY-NNN format for visit invoices."""
+    year = datetime.utcnow().year
+    from ..repository import _get_conn
+    with _get_conn() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM visit_invoices WHERE clinic_id=? AND invoice_number LIKE ?",
+            (clinic_id, f"VI-{year}-%")
+        ).fetchone()[0]
+    return f"VI-{year}-{str(count + 1).zfill(3)}"
+
+
+def generate_visit_invoice(db, timeblock_id: str, tb, patient, owner, procedure_hint: str, log_fn) -> dict:
+    """Build and insert a visit-level invoice draft for a completed appointment."""
+    from ..repository import _get_conn
+    from uuid import uuid4
+
+    clinic_id = getattr(tb, "clinic_id", None)
+    patient_id = getattr(patient, "id", None) if patient else None
+    patient_name = getattr(patient, "name", "patient") if patient else "patient"
+    owner_id = getattr(owner, "id", None) if owner else None
+
+    line_items = []
+
+    # 1. Consultation fee
+    consult_fee = PROCEDURE_FEES.get(procedure_hint, PROCEDURE_FEES["default"])
+    line_items.append({
+        "description": f"Consultation — {procedure_hint.replace('_', ' ').capitalize()}",
+        "amount_cents": consult_fee,
+    })
+
+    # 2. Lab fees
+    with _get_conn() as conn:
+        lab_rows = conn.execute(
+            "SELECT provider FROM labs WHERE timeblock_id=?", (timeblock_id,)
+        ).fetchall()
+    for lab_row in lab_rows:
+        provider = (lab_row["provider"] or "default").lower()
+        fee = LAB_FEES.get(provider, LAB_FEES["default"])
+        line_items.append({
+            "description": f"Lab — {provider.capitalize()}",
+            "amount_cents": fee,
+        })
+
+    # 3. Rx dispensing fees
+    with _get_conn() as conn:
+        rx_count = conn.execute(
+            "SELECT COUNT(*) FROM prescriptions WHERE timeblock_id=?", (timeblock_id,)
+        ).fetchone()[0]
+    for i in range(rx_count):
+        line_items.append({
+            "description": "Rx Dispensing Fee",
+            "amount_cents": RX_DISPENSING_FEE,
+        })
+
+    subtotal = sum(li["amount_cents"] for li in line_items)
+    inv_num = next_visit_invoice_number(db, clinic_id or "default")
+
+    inv = {
+        "id": str(uuid4()),
+        "timeblock_id": timeblock_id,
+        "patient_id": patient_id,
+        "owner_id": owner_id,
+        "clinic_id": clinic_id,
+        "invoice_number": inv_num,
+        "line_items": line_items,
+        "subtotal_cents": subtotal,
+        "tax_cents": 0,
+        "total_cents": subtotal,
+        "status": "draft",
+        "notes": "",
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    saved = db.save_visit_invoice(inv)
+    log_fn("BILLING AGENT", f"Visit invoice draft {inv_num} generated — ${subtotal/100:.2f} · {patient_name}")
+    return saved

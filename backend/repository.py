@@ -390,6 +390,26 @@ def _init_db():
                 created_at TEXT NOT NULL,
                 UNIQUE(account_id, email)
             );
+            CREATE TABLE IF NOT EXISTS visit_invoices (
+                id              TEXT PRIMARY KEY,
+                timeblock_id    TEXT NOT NULL,
+                patient_id      TEXT,
+                owner_id        TEXT,
+                clinic_id       TEXT,
+                invoice_number  TEXT NOT NULL,
+                line_items      TEXT NOT NULL DEFAULT '[]',
+                subtotal_cents  INTEGER NOT NULL DEFAULT 0,
+                tax_cents       INTEGER NOT NULL DEFAULT 0,
+                total_cents     INTEGER NOT NULL DEFAULT 0,
+                status          TEXT NOT NULL DEFAULT 'draft',
+                notes           TEXT DEFAULT '',
+                created_at      TEXT NOT NULL,
+                sent_at         TEXT,
+                paid_at         TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_visit_invoices_timeblock ON visit_invoices(timeblock_id);
+            CREATE INDEX IF NOT EXISTS idx_visit_invoices_patient   ON visit_invoices(patient_id);
+            CREATE INDEX IF NOT EXISTS idx_visit_invoices_clinic    ON visit_invoices(clinic_id);
         """)
         # spec-007 T002 — Add account_id to clinics
         try:
@@ -1808,6 +1828,111 @@ class InMemoryRepository(BaseRepository):
             )
         user["id"] = user_id
         return user
+
+    # ------------------------------------------------------------------ #
+    #  Gap 1 — Visit Invoice CRUD
+    # ------------------------------------------------------------------ #
+
+    def save_visit_invoice(self, inv: dict) -> dict:
+        """Insert or replace a visit invoice."""
+        inv_id = inv.get("id") or str(uuid4())
+        line_items_json = json.dumps(inv.get("line_items", []))
+        with _get_conn() as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO visit_invoices
+                   (id, timeblock_id, patient_id, owner_id, clinic_id,
+                    invoice_number, line_items, subtotal_cents, tax_cents,
+                    total_cents, status, notes, created_at, sent_at, paid_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    inv_id, inv["timeblock_id"],
+                    inv.get("patient_id"), inv.get("owner_id"), inv.get("clinic_id"),
+                    inv["invoice_number"], line_items_json,
+                    inv.get("subtotal_cents", 0), inv.get("tax_cents", 0),
+                    inv.get("total_cents", 0), inv.get("status", "draft"),
+                    inv.get("notes", ""), inv.get("created_at", datetime.utcnow().isoformat()),
+                    inv.get("sent_at"), inv.get("paid_at"),
+                )
+            )
+        inv["id"] = inv_id
+        return self.get_visit_invoice(inv_id) or inv
+
+    def get_visit_invoice(self, invoice_id: str) -> Optional[dict]:
+        with _get_conn() as conn:
+            row = conn.execute("SELECT * FROM visit_invoices WHERE id=?", (invoice_id,)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        try:
+            d["line_items"] = json.loads(d.get("line_items", "[]"))
+        except Exception:
+            d["line_items"] = []
+        return d
+
+    def get_visit_invoices_for_timeblock(self, timeblock_id: str) -> list:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM visit_invoices WHERE timeblock_id=? ORDER BY created_at DESC",
+                (timeblock_id,)
+            ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["line_items"] = json.loads(d.get("line_items", "[]"))
+            except Exception:
+                d["line_items"] = []
+            result.append(d)
+        return result
+
+    def get_visit_invoices(self, clinic_id: str = None, status: str = None, limit: int = 50) -> list:
+        with _get_conn() as conn:
+            if clinic_id and status:
+                rows = conn.execute(
+                    "SELECT * FROM visit_invoices WHERE clinic_id=? AND status=? ORDER BY created_at DESC LIMIT ?",
+                    (clinic_id, status, limit)
+                ).fetchall()
+            elif clinic_id:
+                rows = conn.execute(
+                    "SELECT * FROM visit_invoices WHERE clinic_id=? ORDER BY created_at DESC LIMIT ?",
+                    (clinic_id, limit)
+                ).fetchall()
+            elif status:
+                rows = conn.execute(
+                    "SELECT * FROM visit_invoices WHERE status=? ORDER BY created_at DESC LIMIT ?",
+                    (status, limit)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM visit_invoices ORDER BY created_at DESC LIMIT ?",
+                    (limit,)
+                ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["line_items"] = json.loads(d.get("line_items", "[]"))
+            except Exception:
+                d["line_items"] = []
+            result.append(d)
+        return result
+
+    def update_visit_invoice(self, invoice_id: str, updates: dict) -> Optional[dict]:
+        allowed = {"status", "sent_at", "paid_at", "notes", "line_items",
+                   "subtotal_cents", "tax_cents", "total_cents"}
+        cols = {k: v for k, v in updates.items() if k in allowed}
+        if not cols:
+            return self.get_visit_invoice(invoice_id)
+        # Serialize line_items if present
+        if "line_items" in cols:
+            cols["line_items"] = json.dumps(cols["line_items"])
+        set_clause = ", ".join(f"{k}=?" for k in cols)
+        with _get_conn() as conn:
+            conn.execute(
+                f"UPDATE visit_invoices SET {set_clause} WHERE id=?",
+                list(cols.values()) + [invoice_id]
+            )
+        return self.get_visit_invoice(invoice_id)
 
 
 # ── Module-level helpers for Clinic + Assignment rows ──────────────────────

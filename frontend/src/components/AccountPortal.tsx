@@ -776,10 +776,175 @@ function PlanTab({ plan, onUpgrade }: { plan: PlanData; onUpgrade: (tier: string
   );
 }
 
+// ── Users Tab (Gap 5) ────────────────────────────────────────────────────────────────────────────────
+
+interface UserRow {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  created_at: string;
+}
+
+function UsersTab({ onRefresh }: { onRefresh: () => void }) {
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", role: "member" });
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/account/users`);
+      const data = await res.json();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch { setUsers([]); } finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchUsers(); }, []);
+
+  const addUser = async () => {
+    if (!form.name || !form.email) { setErr("Name and email are required."); return; }
+    setSaving(true); setErr(null);
+    try {
+      const res = await fetch(`${API}/api/account/users`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? "Error");
+      showToast(`✅ ${form.email} added`);
+      setAdding(false); setForm({ name: "", email: "", role: "member" });
+      fetchUsers(); onRefresh();
+    } catch (e: any) { setErr(e.message); } finally { setSaving(false); }
+  };
+
+  const removeUser = async (userId: string, email: string) => {
+    const admins = users.filter(u => u.role === "admin");
+    const target = users.find(u => u.id === userId);
+    if (admins.length === 1 && target?.role === "admin") {
+      showToast("❌ Cannot remove the last admin"); return;
+    }
+    try {
+      await fetch(`${API}/api/account/users/${userId}`, { method: "DELETE" });
+      showToast(`🚫 ${email} removed`);
+      fetchUsers(); onRefresh();
+    } catch { showToast("❌ Failed to remove user"); }
+  };
+
+  return (
+    <div>
+      {toast && (
+        <div style={{
+          position: "fixed", top: "24px", right: "24px", zIndex: 300,
+          background: "rgba(24,24,27,0.97)", border: "1px solid rgba(99,102,241,0.4)",
+          borderRadius: "10px", padding: "10px 18px", fontSize: "0.82rem",
+          color: "#e4e4e7", boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+        }}>{toast}</div>
+      )}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <SectionTitle title="Team Members" sub={`${users.length} user${users.length !== 1 ? "s" : ""} on this account`} />
+        <button
+          onClick={() => setAdding(v => !v)}
+          style={{
+            padding: "7px 14px", borderRadius: "8px", fontSize: "0.75rem", fontWeight: 600,
+            background: "rgba(99,102,241,0.2)", border: "1px solid rgba(99,102,241,0.4)",
+            color: "#a5b4fc", cursor: "pointer", fontFamily: "inherit",
+          }}
+        >+ Invite User</button>
+      </div>
+
+      {adding && (
+        <Card style={{ marginBottom: "16px", borderColor: "rgba(99,102,241,0.3)" }}>
+          <h4 style={{ margin: "0 0 14px", color: "#e4e4e7", fontSize: "0.88rem" }}>Invite Team Member</h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {([{ field: "name", label: "Full Name" }, { field: "email", label: "Email Address" }] as const).map(({ field, label }) => (
+              <div key={field}>
+                <label style={{ display: "block", fontSize: "0.7rem", color: "#71717a", marginBottom: "4px" }}>{label}</label>
+                <input
+                  value={(form as any)[field]}
+                  onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
+                  style={{
+                    width: "100%", background: "rgba(39,39,42,0.6)", border: "1px solid rgba(63,63,70,0.5)",
+                    borderRadius: "8px", padding: "8px 12px", color: "#e4e4e7", fontSize: "0.82rem",
+                    outline: "none", fontFamily: "inherit", boxSizing: "border-box" as const,
+                  }}
+                />
+              </div>
+            ))}
+            <div>
+              <label style={{ display: "block", fontSize: "0.7rem", color: "#71717a", marginBottom: "4px" }}>Role</label>
+              <select
+                value={form.role}
+                onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                style={{
+                  width: "100%", background: "rgba(39,39,42,0.9)", border: "1px solid rgba(63,63,70,0.5)",
+                  borderRadius: "8px", padding: "8px 12px", color: "#e4e4e7", fontSize: "0.82rem",
+                  outline: "none", fontFamily: "inherit",
+                }}
+              >
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          {err && <p style={{ color: "#f87171", fontSize: "0.75rem", margin: "6px 0 0" }}>{err}</p>}
+          <div style={{ display: "flex", gap: "8px", marginTop: "14px" }}>
+            <button onClick={() => { setAdding(false); setErr(null); }} style={{
+              padding: "6px 14px", borderRadius: "7px", background: "transparent",
+              border: "1px solid rgba(63,63,70,0.4)", color: "#71717a", cursor: "pointer", fontFamily: "inherit", fontSize: "0.8rem",
+            }}>Cancel</button>
+            <button onClick={addUser} disabled={saving} style={{
+              padding: "6px 14px", borderRadius: "7px", fontWeight: 600,
+              background: "rgba(99,102,241,0.25)", border: "1px solid rgba(99,102,241,0.4)",
+              color: "#a5b4fc", cursor: saving ? "not-allowed" : "pointer",
+              fontFamily: "inherit", fontSize: "0.8rem",
+            }}>{saving ? "Adding…" : "Send Invite"}</button>
+          </div>
+        </Card>
+      )}
+
+      {loading ? (
+        <Card><p style={{ color: "#52525b", textAlign: "center", margin: 0 }}>Loading…</p></Card>
+      ) : users.length === 0 ? (
+        <Card><p style={{ color: "#52525b", textAlign: "center", margin: 0 }}>No users found.</p></Card>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {users.map(u => (
+            <Card key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: "0.88rem", color: "#e4e4e7" }}>{u.name}</p>
+                <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#71717a" }}>{u.email}</p>
+                <p style={{ margin: "4px 0 0", fontSize: "0.67rem", color: "#52525b" }}>Joined {fmtDate(u.created_at)}</p>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Pill label={u.role} color={u.role === "admin" ? "#6366f1" : "#71717a"} />
+                <button
+                  onClick={() => removeUser(u.id, u.email)}
+                  style={{
+                    padding: "4px 10px", borderRadius: "6px", fontSize: "0.7rem",
+                    background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
+                    color: "#fca5a5", cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >Remove</button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main AccountPortal ─────────────────────────────────────────────────────────
 
 export default function AccountPortal({ onBack }: { onBack: () => void }) {
-  const [tab, setTab] = useState<"overview" | "modules" | "invoices" | "clinics" | "plan">("overview");
+  const [tab, setTab] = useState<"overview" | "modules" | "invoices" | "clinics" | "plan" | "users">("overview");
   const [account, setAccount] = useState<AccountData | null>(null);
   const [modules, setModules] = useState<ModuleData[]>([]);
   const [invoices, setInvoices] = useState<InvoiceData[]>([]);
@@ -818,6 +983,7 @@ export default function AccountPortal({ onBack }: { onBack: () => void }) {
     { id: "invoices", label: "🧾 Invoices" },
     { id: "clinics", label: "🏥 Clinics" },
     { id: "plan", label: "💳 Plan" },
+    { id: "users", label: "👥 Users" },
   ];
 
   return (
@@ -890,6 +1056,9 @@ export default function AccountPortal({ onBack }: { onBack: () => void }) {
             )}
             {tab === "plan" && plan && (
               <PlanTab plan={plan} onUpgrade={(tier) => { fetchAll(); }} />
+            )}
+            {tab === "users" && (
+              <UsersTab onRefresh={fetchAll} />
             )}
           </>
         )}
