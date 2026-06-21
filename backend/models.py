@@ -418,3 +418,218 @@ class ModuleSubscribeRequest(BaseModel):
 
 class PlanUpgradeRequest(BaseModel):
     plan_tier: str   # starter | professional | enterprise
+
+
+# ---------------------------------------------------------------------------
+# S07 — Online Booking Portal Models
+# ---------------------------------------------------------------------------
+
+class BookableAppointmentType(BaseModel):
+    id: str                                    # e.g. "wellness", "sick", "vaccines"
+    name: str                                  # Display name: "Annual Wellness Exam"
+    slug: str = ""                             # URL-safe slug
+    duration_minutes: int = 30                 # Default duration for this type
+    intake_question_set: str = "wellness"      # Key into INTAKE_QUESTION_SETS dict
+    description: str = ""                      # Optional client-facing description
+    enabled: bool = True                       # Whether online booking is active for this type
+    breed_duration_overrides: dict = {}        # e.g. {"Persian": 60, "Maine Coon": 60}
+
+
+class ClinicBookingConfig(BaseModel):
+    """Full booking config for a clinic. Used for GET /api/.../booking-config response."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    online_booking_enabled: bool = False
+    same_day_booking_enabled: bool = False
+    waitlist_enabled: bool = True
+    auto_confirm: bool = True
+    require_deposit: bool = False              # Phase 3 / MOD-FIN
+    deposit_amount_cents: int = 0
+    advance_booking_days: int = 60
+    same_day_cutoff_hour: int = 14             # 0-23; local to clinic timezone
+    min_booking_notice_hours: int = 2
+    buffer_minutes: int = 10
+    show_vet_names: bool = True
+    show_vet_photos: bool = False
+    bookable_appointment_types: List[BookableAppointmentType] = Field(default_factory=list)
+    booking_confirmation_msg: str = ""
+    cancellation_policy: str = "Cancellations within 24 hours may incur a fee."
+    intake_sms_template: str = ""
+    hidden_resource_ids: List[str] = Field(default_factory=list)
+    emergency_phone: str = ""
+    emergency_message: str = ""
+    brand_color_primary: str = "#6C63FF"
+    brand_color_accent: str = "#F0A500"
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+class ClinicBookingConfigUpdate(BaseModel):
+    """Request body for PUT /api/clinics/{clinic_id}/booking-config."""
+    online_booking_enabled: Optional[bool] = None
+    same_day_booking_enabled: Optional[bool] = None
+    waitlist_enabled: Optional[bool] = None
+    auto_confirm: Optional[bool] = None
+    advance_booking_days: Optional[int] = None  # 7-90 range enforced in route handler
+    same_day_cutoff_hour: Optional[int] = None  # 0-23
+    min_booking_notice_hours: Optional[int] = None
+    buffer_minutes: Optional[int] = None        # 0-60
+    show_vet_names: Optional[bool] = None
+    bookable_appointment_types: Optional[List[BookableAppointmentType]] = None
+    booking_confirmation_msg: Optional[str] = None
+    cancellation_policy: Optional[str] = None
+    hidden_resource_ids: Optional[List[str]] = None
+    emergency_phone: Optional[str] = None
+    emergency_message: Optional[str] = None
+    brand_color_primary: Optional[str] = None   # Must be valid hex: #RRGGBB
+    brand_color_accent: Optional[str] = None
+
+
+class OwnerLookupRequest(BaseModel):
+    clinic_id: str
+    phone: Optional[str] = None                # 10-digit US number (formatting stripped)
+    email: Optional[str] = None                # at least one of phone/email required
+
+
+class PetSummary(BaseModel):
+    """Minimal pet info returned at lookup time. No medical history."""
+    id: str
+    name: str
+    species: str
+    breed: str
+    age_years: Optional[float] = None          # Calculated from dob; null if dob unknown
+    last_visit_label: Optional[str] = None     # e.g. "14 months ago"; null if never visited
+    care_due: bool = False                     # Phase 2: populated from care_protocols
+    care_due_reason: Optional[str] = None
+
+
+class OwnerLookupResponse(BaseModel):
+    found: bool
+    owner_id: Optional[str] = None
+    display_name: Optional[str] = None         # First name only; never full name at lookup
+    pets: List[PetSummary] = Field(default_factory=list)
+
+
+class NewPetRequest(BaseModel):
+    name: str                                  # 1-100 chars
+    species: str                               # dog|cat|bird|rabbit|reptile|other
+    breed: str = ""                            # Optional; empty string allowed
+    dob_approx: Optional[str] = None           # ISO date YYYY-MM-DD; past dates only
+    sex: Optional[str] = None                  # male|female|unknown
+    neutered: Optional[bool] = None
+
+
+class OwnerRegisterRequest(BaseModel):
+    clinic_id: str
+    first_name: str                            # 1-100 chars
+    last_name: str                             # 1-100 chars
+    phone: str                                 # 10-digit US number; required
+    email: str                                 # Valid email; required
+    sms_consent: bool = False
+    pet: NewPetRequest
+
+
+class SlotAvailabilityItem(BaseModel):
+    """A single available appointment slot returned by GET /public/clinics/.../availability."""
+    slot_id: str                               # Deterministic UUID5 from (resource_id, start_datetime)
+    resource_id: str                           # Vet resource UUID
+    vet_name: str                              # e.g. "Dr. Emily Chen"; masked if show_vet_names=False
+    vet_display_name: str                      # Shorter form: "Dr. Chen"
+    start_datetime: str                        # ISO datetime in clinic's local timezone
+    end_datetime: str
+    duration_minutes: int
+    rank: int                                  # 1=first; Phase 1 is chronological only
+    rank_label: str                            # "Soonest Available"; Phase 2: "Best Match"
+    rank_explanation: str                      # Human-readable rationale; Phase 2: AI-generated
+    no_show_risk_label: Optional[str] = None   # Phase 2: "Low" | "Medium" | "High"
+
+
+class BookingHoldRequest(BaseModel):
+    clinic_id: str
+    resource_id: str
+    start_datetime: str                        # ISO datetime
+    end_datetime: str                          # ISO datetime
+    appointment_type_id: str
+    patient_id: str
+
+
+class BookingHoldResponse(BaseModel):
+    hold_id: str
+    slot_id: str
+    expires_at: str                            # ISO datetime; 10 minutes from now
+    resource_id: str
+    vet_name: str
+    start_datetime: str
+    end_datetime: str
+
+
+class BookingConfirmRequest(BaseModel):
+    hold_id: str
+    patient_id: str
+    appointment_type_id: str
+    urgency: str = "routine"                   # wellness|routine|urgent|emergency
+    notes: Optional[str] = None               # Max 300 chars
+    sms_consent: bool = False
+    cancellation_policy_accepted: bool         # Must be True
+
+
+class BookingConfirmResponse(BaseModel):
+    booking_id: str
+    booking_token: str
+    status: str                                # "booked"
+    status_url: str
+    intake_url: str
+    appointment: dict                          # {date, time, duration_minutes, vet_name, clinic_name, address}
+
+
+class LifecycleStep(BaseModel):
+    state: str
+    label: str
+    completed: bool
+    completed_at: Optional[str] = None
+
+
+class BookingStatusResponse(BaseModel):
+    """Response for GET /public/status/{booking_token}."""
+    booking_id: str
+    booking_token: str
+    status: str                                # booking_tokens.status
+    clinic_name: str
+    clinic_phone: str
+    clinic_address: str
+    pet_name: str
+    owner_display_name: str
+    appointment_type: str
+    vet_name: str
+    start_datetime: str
+    duration_minutes: int
+    lifecycle: List[LifecycleStep]
+    intake_token: Optional[str] = None
+    intake_status: Optional[str] = None
+    intake_url: Optional[str] = None
+    cancellable: bool
+    reschedulable: bool = False                # Phase 2
+    calendar_url: str
+
+
+class IntakeAnswer(BaseModel):
+    question_id: str
+    answer: Optional[str] = None              # None only if skipped=True
+    skipped: bool = False
+
+
+class IntakeSubmitRequest(BaseModel):
+    answers: List[IntakeAnswer]
+    submitted_at: str                          # ISO datetime from client
+
+
+class WaitlistJoinRequest(BaseModel):
+    clinic_id: str
+    patient_id: str
+    owner_id: str
+    appointment_type_id: str
+    urgency: str = "routine"                   # wellness|routine|urgent
+    time_preferences: List[str] = Field(default_factory=list)
+    min_notice_hours: int = 3                  # 1 | 3 | 24
+    phone: str
+    sms_consent: bool = False

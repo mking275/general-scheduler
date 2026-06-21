@@ -417,6 +417,205 @@ def _init_db():
         except Exception:
             pass
 
+        # ── S07 Online Booking Portal — New Tables ──────────────────────────────
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS clinic_booking_config (
+                id                      TEXT PRIMARY KEY,
+                clinic_id               TEXT NOT NULL UNIQUE,
+                online_booking_enabled  INTEGER NOT NULL DEFAULT 1,
+                advance_booking_days    INTEGER NOT NULL DEFAULT 60,
+                same_day_cutoff_hour    INTEGER NOT NULL DEFAULT 14,
+                min_notice_hours        INTEGER NOT NULL DEFAULT 2,
+                cancellation_policy     TEXT NOT NULL DEFAULT 'Cancellations within 24 hours may incur a fee.',
+                emergency_phone         TEXT DEFAULT '',
+                hidden_vet_ids          TEXT NOT NULL DEFAULT '[]',
+                created_at              TEXT NOT NULL,
+                updated_at              TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS bookable_appointment_types (
+                id              TEXT PRIMARY KEY,
+                clinic_id       TEXT NOT NULL,
+                name            TEXT NOT NULL,
+                slug            TEXT NOT NULL,
+                duration_min    INTEGER NOT NULL DEFAULT 30,
+                bookable_online INTEGER NOT NULL DEFAULT 1,
+                urgency_default TEXT NOT NULL DEFAULT 'routine',
+                sort_order      INTEGER NOT NULL DEFAULT 0,
+                created_at      TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_bat_clinic ON bookable_appointment_types(clinic_id);
+
+            CREATE TABLE IF NOT EXISTS owner_sessions (
+                token           TEXT PRIMARY KEY,
+                owner_id        TEXT,
+                clinic_id       TEXT NOT NULL,
+                selected_pet_id TEXT,
+                appt_type_slug  TEXT,
+                urgency         TEXT,
+                slot_resource_id TEXT,
+                slot_start      TEXT,
+                created_at      TEXT NOT NULL,
+                expires_at      TEXT NOT NULL,
+                last_active_at  TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_owner_sessions_owner ON owner_sessions(owner_id);
+            CREATE INDEX IF NOT EXISTS idx_owner_sessions_exp ON owner_sessions(expires_at);
+
+            CREATE TABLE IF NOT EXISTS slot_holds (
+                id              TEXT PRIMARY KEY,
+                resource_id     TEXT NOT NULL,
+                start_datetime  TEXT NOT NULL,
+                end_datetime    TEXT NOT NULL,
+                clinic_id       TEXT NOT NULL,
+                session_token   TEXT NOT NULL,
+                expires_at      TEXT NOT NULL,
+                created_at      TEXT NOT NULL,
+                UNIQUE(resource_id, start_datetime)
+            );
+            CREATE INDEX IF NOT EXISTS idx_slot_holds_exp ON slot_holds(expires_at);
+
+            CREATE TABLE IF NOT EXISTS booking_tokens (
+                token           TEXT PRIMARY KEY,
+                timeblock_id    TEXT NOT NULL,
+                owner_id        TEXT NOT NULL,
+                clinic_id       TEXT NOT NULL,
+                created_at      TEXT NOT NULL,
+                expires_at      TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_booking_tokens_tb ON booking_tokens(timeblock_id);
+
+            CREATE TABLE IF NOT EXISTS intake_tokens (
+                token           TEXT PRIMARY KEY,
+                timeblock_id    TEXT NOT NULL,
+                owner_id        TEXT NOT NULL,
+                appointment_type TEXT NOT NULL,
+                used            INTEGER NOT NULL DEFAULT 0,
+                created_at      TEXT NOT NULL,
+                expires_at      TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_intake_tokens_tb ON intake_tokens(timeblock_id);
+
+            CREATE TABLE IF NOT EXISTS intake_responses (
+                id              TEXT PRIMARY KEY,
+                intake_token    TEXT NOT NULL,
+                timeblock_id    TEXT NOT NULL,
+                owner_id        TEXT NOT NULL,
+                answers         TEXT NOT NULL DEFAULT '[]',
+                flags           TEXT NOT NULL DEFAULT '[]',
+                submitted_at    TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_intake_responses_token ON intake_responses(intake_token);
+            CREATE INDEX IF NOT EXISTS idx_intake_responses_tb ON intake_responses(timeblock_id);
+
+            CREATE TABLE IF NOT EXISTS waitlist_entries (
+                id                  TEXT PRIMARY KEY,
+                clinic_id           TEXT NOT NULL,
+                owner_id            TEXT,
+                patient_id          TEXT,
+                appointment_type    TEXT NOT NULL,
+                urgency             TEXT NOT NULL DEFAULT 'routine',
+                preferred_resource_id TEXT,
+                time_preferences    TEXT NOT NULL DEFAULT '[]',
+                sms_consent         INTEGER NOT NULL DEFAULT 0,
+                phone_for_sms       TEXT,
+                notes               TEXT DEFAULT '',
+                status              TEXT NOT NULL DEFAULT 'waiting',
+                created_at          TEXT NOT NULL,
+                notified_at         TEXT,
+                filled_at           TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_waitlist_clinic ON waitlist_entries(clinic_id, status);
+
+            CREATE TABLE IF NOT EXISTS rate_limit_log (
+                id          TEXT PRIMARY KEY,
+                ip          TEXT NOT NULL,
+                endpoint    TEXT NOT NULL,
+                ts          TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_rl_ip_endpoint ON rate_limit_log(ip, endpoint, ts);
+        """)
+
+        # S07: clinics.slug
+        try:
+            conn.execute("ALTER TABLE clinics ADD COLUMN slug TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_clinics_slug ON clinics(slug)")
+        except Exception:
+            pass
+
+        # S07: timeblocks — online booking fields
+        for col, defn in [
+            ("source", "TEXT DEFAULT 'staff'"),
+            ("urgency", "TEXT DEFAULT 'routine'"),
+            ("client_notes", "TEXT DEFAULT ''"),
+            ("appointment_type_id", "TEXT"),
+            ("intake_token_id", "TEXT"),
+            ("risk_score", "REAL DEFAULT 0.0"),
+            ("booking_token_id", "TEXT"),
+            ("soft_hold_until", "TEXT"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE timeblocks ADD COLUMN {col} {defn}")
+            except Exception:
+                pass
+
+        # S07: owners — portal identity fields
+        for col, defn in [
+            ("first_name", "TEXT DEFAULT ''"),
+            ("last_name", "TEXT DEFAULT ''"),
+            ("sms_consent", "INTEGER DEFAULT 0"),
+            ("portal_opt_in", "INTEGER DEFAULT 0"),
+            ("preferred_resource_id", "TEXT"),
+            ("no_show_count", "INTEGER DEFAULT 0"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE owners ADD COLUMN {col} {defn}")
+            except Exception:
+                pass
+
+        # S07: Seed slug + booking config for demo clinic
+        try:
+            from datetime import datetime as _dt
+            conn.execute("""
+                UPDATE clinics SET slug = 'demo-clinic'
+                WHERE slug IS NULL
+                AND id = (SELECT id FROM clinics ORDER BY created_at LIMIT 1)
+            """)
+            first_clinic = conn.execute(
+                "SELECT id FROM clinics WHERE slug='demo-clinic' LIMIT 1"
+            ).fetchone()
+            if first_clinic:
+                cid = first_clinic[0]
+                now_s = _dt.utcnow().isoformat()
+                import uuid as _uuid
+                conn.execute("""
+                    INSERT OR IGNORE INTO clinic_booking_config
+                    (id, clinic_id, online_booking_enabled, advance_booking_days,
+                     same_day_cutoff_hour, min_notice_hours, cancellation_policy,
+                     emergency_phone, hidden_vet_ids, created_at, updated_at)
+                    VALUES (?,?,1,60,14,2,'Cancellations within 24 hours may incur a fee.',
+                            '','[]',?,?)
+                """, (str(_uuid.uuid4()), cid, now_s, now_s))
+                types = [
+                    ("Annual Wellness Exam", "wellness", 45, 1, "routine", 1),
+                    ("Sick Visit", "sick-visit", 30, 1, "routine", 2),
+                    ("Vaccines Only", "vaccines", 15, 1, "routine", 3),
+                    ("Dental Consultation", "dental", 30, 1, "routine", 4),
+                    ("Follow-Up", "follow-up", 15, 1, "routine", 5),
+                ]
+                for name, slug, dur, online, urg, order in types:
+                    conn.execute("""
+                        INSERT OR IGNORE INTO bookable_appointment_types
+                        (id, clinic_id, name, slug, duration_min, bookable_online,
+                         urgency_default, sort_order, created_at)
+                        VALUES (?,?,?,?,?,?,?,?,?)
+                    """, (str(_uuid.uuid4()), cid, name, slug, dur, online, urg, order, now_s))
+        except Exception:
+            pass  # Non-fatal seeding
+
 
 def _resource_from_row(row) -> Resource:
     from datetime import datetime
@@ -1933,6 +2132,448 @@ class InMemoryRepository(BaseRepository):
                 list(cols.values()) + [invoice_id]
             )
         return self.get_visit_invoice(invoice_id)
+
+
+    # ------------------------------------------------------------------ #
+    #  S07 — Clinic Booking Config                                        #
+    # ------------------------------------------------------------------ #
+
+    def get_booking_config(self, clinic_id: str) -> Optional[dict]:
+        """Return clinic_booking_config row or None."""
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM clinic_booking_config WHERE clinic_id=?", (clinic_id,)
+            ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["hidden_vet_ids"] = json.loads(d.get("hidden_vet_ids") or "[]")
+        d["online_booking_enabled"] = bool(d.get("online_booking_enabled", 0))
+        return d
+
+    def upsert_booking_config(self, clinic_id: str, updates: dict) -> dict:
+        """INSERT OR REPLACE clinic_booking_config."""
+        now = datetime.utcnow().isoformat()
+        existing = self.get_booking_config(clinic_id) or {}
+        config_id = existing.get("id") or str(uuid4())
+        merged = {
+            "id": config_id,
+            "clinic_id": clinic_id,
+            "online_booking_enabled": int(updates.get("online_booking_enabled",
+                                           existing.get("online_booking_enabled", 0))),
+            "advance_booking_days": updates.get("advance_booking_days",
+                                                existing.get("advance_booking_days", 60)),
+            "same_day_cutoff_hour": updates.get("same_day_cutoff_hour",
+                                                existing.get("same_day_cutoff_hour", 14)),
+            "min_notice_hours": updates.get("min_notice_hours",
+                                            existing.get("min_notice_hours", 2)),
+            "cancellation_policy": updates.get("cancellation_policy",
+                                               existing.get("cancellation_policy",
+                                                            "Cancellations within 24 hours may incur a fee.")),
+            "emergency_phone": updates.get("emergency_phone", existing.get("emergency_phone", "")),
+            "hidden_vet_ids": json.dumps(updates.get("hidden_vet_ids",
+                                                     existing.get("hidden_vet_ids", []))),
+            "created_at": existing.get("created_at", now),
+            "updated_at": now,
+        }
+        with _get_conn() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO clinic_booking_config
+                (id, clinic_id, online_booking_enabled, advance_booking_days,
+                 same_day_cutoff_hour, min_notice_hours, cancellation_policy,
+                 emergency_phone, hidden_vet_ids, created_at, updated_at)
+                VALUES (:id, :clinic_id, :online_booking_enabled, :advance_booking_days,
+                        :same_day_cutoff_hour, :min_notice_hours, :cancellation_policy,
+                        :emergency_phone, :hidden_vet_ids, :created_at, :updated_at)
+            """, merged)
+        return self.get_booking_config(clinic_id)  # type: ignore[return-value]
+
+    def get_bookable_appointment_types(self, clinic_id: str) -> list:
+        """Return bookable_appointment_types rows for a clinic."""
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM bookable_appointment_types WHERE clinic_id=? ORDER BY sort_order",
+                (clinic_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ #
+    #  S07 — Owner Lookup / Register                                      #
+    # ------------------------------------------------------------------ #
+
+    def lookup_owner_by_phone_or_email(self, phone: Optional[str], email: Optional[str]) -> Optional[dict]:
+        """Find owner by normalized phone or email."""
+        with _get_conn() as conn:
+            if phone:
+                row = conn.execute(
+                    "SELECT * FROM owners WHERE phone=? LIMIT 1", (phone,)
+                ).fetchone()
+                if row:
+                    return dict(row)
+            if email:
+                row = conn.execute(
+                    "SELECT * FROM owners WHERE email=? LIMIT 1", (email,)
+                ).fetchone()
+                if row:
+                    return dict(row)
+        return None
+
+    def get_pets_for_owner(self, owner_id: str, exclude_deceased: bool = True) -> list:
+        """Return patient rows for an owner."""
+        with _get_conn() as conn:
+            if exclude_deceased:
+                rows = conn.execute(
+                    "SELECT * FROM patients WHERE owner_id=? AND (status IS NULL OR status != 'deceased')",
+                    (owner_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM patients WHERE owner_id=?", (owner_id,)
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+    def create_owner_from_registration(self, data: dict) -> dict:
+        """Insert a new owner row (portal registration). data must have all fields."""
+        owner_id = data.get("id") or str(uuid4())
+        now = datetime.utcnow().isoformat()
+        with _get_conn() as conn:
+            conn.execute("""
+                INSERT OR IGNORE INTO owners
+                (id, name, phone, email, patient_ids, sms_consent, portal_opt_in,
+                 home_clinic_id, first_name, last_name, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                owner_id,
+                data["name"],
+                data.get("phone", ""),
+                data.get("email", ""),
+                json.dumps(data.get("patient_ids", [])),
+                int(data.get("sms_consent", False)),
+                int(data.get("portal_opt_in", False)),
+                data.get("home_clinic_id"),
+                data.get("first_name", ""),
+                data.get("last_name", ""),
+                data.get("created_at", now),
+            ))
+            row = conn.execute("SELECT * FROM owners WHERE id=?", (owner_id,)).fetchone()
+        return dict(row) if row else data
+
+    def add_patient_id_to_owner(self, owner_id: str, patient_id: str) -> None:
+        """Append patient_id to owners.patient_ids JSON array."""
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT patient_ids FROM owners WHERE id=?", (owner_id,)
+            ).fetchone()
+            if row:
+                try:
+                    ids = json.loads(row[0] or "[]")
+                except Exception:
+                    ids = []
+                if patient_id not in ids:
+                    ids.append(patient_id)
+                conn.execute(
+                    "UPDATE owners SET patient_ids=? WHERE id=?",
+                    (json.dumps(ids), owner_id)
+                )
+
+    # ------------------------------------------------------------------ #
+    #  S07 — Owner Sessions                                               #
+    # ------------------------------------------------------------------ #
+
+    def create_session(self, token: str, owner_id: Optional[str], clinic_id: str,
+                       expires_at: str) -> dict:
+        """Insert a new owner_sessions row."""
+        now = datetime.utcnow().isoformat()
+        with _get_conn() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO owner_sessions
+                (token, owner_id, clinic_id, created_at, expires_at, last_active_at)
+                VALUES (?,?,?,?,?,?)
+            """, (token, owner_id, clinic_id, now, expires_at, now))
+        return {"token": token, "owner_id": owner_id, "clinic_id": clinic_id,
+                "expires_at": expires_at}
+
+    def get_session(self, token: str) -> Optional[dict]:
+        """Return owner_sessions row or None."""
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM owner_sessions WHERE token=?", (token,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def touch_session(self, token: str, expires_at: str) -> None:
+        """Update last_active_at and extends expiry."""
+        now = datetime.utcnow().isoformat()
+        with _get_conn() as conn:
+            conn.execute("""
+                UPDATE owner_sessions
+                SET last_active_at=?, expires_at=?
+                WHERE token=?
+            """, (now, expires_at, token))
+
+    def delete_session(self, token: str) -> None:
+        with _get_conn() as conn:
+            conn.execute("DELETE FROM owner_sessions WHERE token=?", (token,))
+
+    # ------------------------------------------------------------------ #
+    #  S07 — Slot Holds                                                   #
+    # ------------------------------------------------------------------ #
+
+    def create_slot_hold(self, hold: dict) -> dict:
+        """Insert a slot_holds row; raises IntegrityError on duplicate."""
+        with _get_conn() as conn:
+            conn.execute("""
+                INSERT INTO slot_holds
+                (id, resource_id, start_datetime, end_datetime, clinic_id,
+                 session_token, expires_at, created_at)
+                VALUES (:id, :resource_id, :start_datetime, :end_datetime, :clinic_id,
+                        :session_token, :expires_at, :created_at)
+            """, hold)
+        return hold
+
+    def get_slot_hold(self, hold_id: str) -> Optional[dict]:
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM slot_holds WHERE id=?", (hold_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def delete_holds_for_session(self, session_token: str) -> None:
+        """Cancel any existing hold for this session (one-hold-at-a-time rule)."""
+        with _get_conn() as conn:
+            conn.execute(
+                "DELETE FROM slot_holds WHERE session_token=?", (session_token,)
+            )
+
+    def expire_stale_holds(self) -> int:
+        """Remove expired holds globally; returns count deleted."""
+        now = datetime.utcnow().isoformat()
+        with _get_conn() as conn:
+            conn.execute("DELETE FROM slot_holds WHERE expires_at < ?", (now,))
+            count = conn.execute("SELECT changes()").fetchone()[0]
+        return count
+
+    def check_slot_available(self, resource_id: str, start_dt: str, end_dt: str,
+                              exclude_session_token: Optional[str] = None) -> bool:
+        """Return True if no active timeblock or slot_hold conflicts."""
+        with _get_conn() as conn:
+            # Check timeblocks
+            conflict = conn.execute("""
+                SELECT id FROM timeblocks
+                WHERE resource_ids LIKE ?
+                  AND start_time < ? AND end_time > ?
+                  AND (status IS NULL OR status NOT IN ('cancelled','no_show'))
+                LIMIT 1
+            """, (f'%{resource_id}%', end_dt, start_dt)).fetchone()
+            if conflict:
+                return False
+            # Check active holds
+            now = datetime.utcnow().isoformat()
+            hold_q = """
+                SELECT id FROM slot_holds
+                WHERE resource_id=? AND start_datetime=? AND expires_at > ?
+            """
+            params: list = [resource_id, start_dt, now]
+            if exclude_session_token:
+                hold_q += " AND session_token != ?"
+                params.append(exclude_session_token)
+            hold_conflict = conn.execute(hold_q + " LIMIT 1", params).fetchone()
+            return hold_conflict is None
+
+    # ------------------------------------------------------------------ #
+    #  S07 — Booking Tokens                                               #
+    # ------------------------------------------------------------------ #
+
+    def create_booking_token(self, token: str, timeblock_id: str, owner_id: str,
+                             clinic_id: str, expires_at: str) -> dict:
+        now = datetime.utcnow().isoformat()
+        with _get_conn() as conn:
+            conn.execute("""
+                INSERT OR IGNORE INTO booking_tokens
+                (token, timeblock_id, owner_id, clinic_id, created_at, expires_at)
+                VALUES (?,?,?,?,?,?)
+            """, (token, timeblock_id, owner_id, clinic_id, now, expires_at))
+        return {"token": token, "timeblock_id": timeblock_id, "owner_id": owner_id,
+                "clinic_id": clinic_id, "created_at": now, "expires_at": expires_at}
+
+    def get_booking_token(self, token: str) -> Optional[dict]:
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM booking_tokens WHERE token=?", (token,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    # ------------------------------------------------------------------ #
+    #  S07 — Intake Tokens + Responses                                    #
+    # ------------------------------------------------------------------ #
+
+    def create_intake_token(self, token: str, timeblock_id: str, owner_id: str,
+                            appointment_type: str, expires_at: str) -> dict:
+        now = datetime.utcnow().isoformat()
+        with _get_conn() as conn:
+            conn.execute("""
+                INSERT OR IGNORE INTO intake_tokens
+                (token, timeblock_id, owner_id, appointment_type, used,
+                 created_at, expires_at)
+                VALUES (?,?,?,?,0,?,?)
+            """, (token, timeblock_id, owner_id, appointment_type, now, expires_at))
+        return {"token": token, "timeblock_id": timeblock_id, "owner_id": owner_id,
+                "appointment_type": appointment_type, "used": 0,
+                "created_at": now, "expires_at": expires_at}
+
+    def get_intake_token(self, token: str) -> Optional[dict]:
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM intake_tokens WHERE token=?", (token,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def mark_intake_token_used(self, token: str) -> None:
+        with _get_conn() as conn:
+            conn.execute(
+                "UPDATE intake_tokens SET used=1 WHERE token=?", (token,)
+            )
+
+    def save_intake_response(self, intake_token: str, timeblock_id: str, owner_id: str,
+                             answers: list, flags: list, submitted_at: str) -> dict:
+        resp_id = str(uuid4())
+        with _get_conn() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO intake_responses
+                (id, intake_token, timeblock_id, owner_id, answers, flags, submitted_at)
+                VALUES (?,?,?,?,?,?,?)
+            """, (
+                resp_id, intake_token, timeblock_id, owner_id,
+                json.dumps(answers), json.dumps(flags), submitted_at,
+            ))
+        return {"id": resp_id, "intake_token": intake_token, "timeblock_id": timeblock_id,
+                "answers": answers, "flags": flags, "submitted_at": submitted_at}
+
+    def get_intake_response(self, intake_token: str) -> Optional[dict]:
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM intake_responses WHERE intake_token=? LIMIT 1",
+                (intake_token,)
+            ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["answers"] = json.loads(d.get("answers") or "[]")
+        d["flags"] = json.loads(d.get("flags") or "[]")
+        return d
+
+    # ------------------------------------------------------------------ #
+    #  S07 — Waitlist                                                     #
+    # ------------------------------------------------------------------ #
+
+    def join_waitlist(self, entry: dict) -> dict:
+        entry_id = entry.get("id") or str(uuid4())
+        now = datetime.utcnow().isoformat()
+        with _get_conn() as conn:
+            conn.execute("""
+                INSERT INTO waitlist_entries
+                (id, clinic_id, owner_id, patient_id, appointment_type, urgency,
+                 preferred_resource_id, time_preferences, sms_consent, phone_for_sms,
+                 notes, status, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                entry_id, entry["clinic_id"], entry.get("owner_id"),
+                entry.get("patient_id"), entry["appointment_type"],
+                entry.get("urgency", "routine"),
+                entry.get("preferred_resource_id"),
+                json.dumps(entry.get("time_preferences", [])),
+                int(entry.get("sms_consent", False)),
+                entry.get("phone_for_sms"),
+                entry.get("notes", ""),
+                "waiting",
+                entry.get("created_at", now),
+            ))
+        entry["id"] = entry_id
+        return entry
+
+    def get_waitlist_position(self, clinic_id: str, appointment_type: str, entry_id: str) -> int:
+        """Return 1-indexed position of this entry in the waitlist queue."""
+        with _get_conn() as conn:
+            count = conn.execute("""
+                SELECT COUNT(*) FROM waitlist_entries
+                WHERE clinic_id=? AND appointment_type=? AND status='waiting'
+                  AND id != ?
+                  AND created_at <= (SELECT created_at FROM waitlist_entries WHERE id=?)
+            """, (clinic_id, appointment_type, entry_id, entry_id)).fetchone()[0]
+        return count + 1
+
+    def duplicate_waitlist_check(self, clinic_id: str, patient_id: str,
+                                  appointment_type: str) -> Optional[dict]:
+        with _get_conn() as conn:
+            row = conn.execute("""
+                SELECT id FROM waitlist_entries
+                WHERE clinic_id=? AND patient_id=? AND appointment_type=? AND status='waiting'
+                LIMIT 1
+            """, (clinic_id, patient_id, appointment_type)).fetchone()
+        return dict(row) if row else None
+
+    # ------------------------------------------------------------------ #
+    #  S07 — Rate Limiting (SQLite-backed in-process)                     #
+    # ------------------------------------------------------------------ #
+
+    def check_rate_limit(self, ip: str, endpoint: str,
+                          max_requests: int, window_seconds: int) -> bool:
+        """Return True if request is allowed (under limit). Prunes old entries."""
+        now = datetime.utcnow()
+        cutoff = (now - timedelta(seconds=window_seconds)).isoformat()
+        with _get_conn() as conn:
+            # Prune old entries for this IP+endpoint
+            conn.execute(
+                "DELETE FROM rate_limit_log WHERE ip=? AND endpoint=? AND ts < ?",
+                (ip, endpoint, cutoff)
+            )
+            count = conn.execute(
+                "SELECT COUNT(*) FROM rate_limit_log WHERE ip=? AND endpoint=? AND ts >= ?",
+                (ip, endpoint, cutoff)
+            ).fetchone()[0]
+            if count >= max_requests:
+                return False
+            # Log this request
+            conn.execute(
+                "INSERT INTO rate_limit_log (id, ip, endpoint, ts) VALUES (?,?,?,?)",
+                (str(uuid4()), ip, endpoint, now.isoformat())
+            )
+        return True
+
+    # ------------------------------------------------------------------ #
+    #  S07 — Availability Helpers                                         #
+    # ------------------------------------------------------------------ #
+
+    def get_resources_for_clinic(self, clinic_id: str) -> list:
+        """Return vet resources belonging to a clinic."""
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM resources WHERE clinic_id=? AND type='Vet'",
+                (clinic_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_timeblocks_for_date_range(self, resource_id: str, start: str, end: str) -> list:
+        """Return timeblocks that overlap with [start, end] for a resource."""
+        with _get_conn() as conn:
+            rows = conn.execute("""
+                SELECT * FROM timeblocks
+                WHERE resource_ids LIKE ?
+                  AND start_time < ? AND end_time > ?
+                  AND (status IS NULL OR status NOT IN ('cancelled','no_show'))
+                ORDER BY start_time
+            """, (f'%{resource_id}%', end, start)).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_timeblock_booking_info(self, timeblock_id: str, intake_token: str,
+                                       booking_token: str) -> None:
+        """Link intake and booking tokens to a timeblock."""
+        with _get_conn() as conn:
+            conn.execute("""
+                UPDATE timeblocks
+                SET intake_token_id=?, booking_token_id=?
+                WHERE id=?
+            """, (intake_token, booking_token, timeblock_id))
 
 
 # ── Module-level helpers for Clinic + Assignment rows ──────────────────────

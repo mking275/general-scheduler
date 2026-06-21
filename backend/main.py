@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query, Request, BackgroundTasks, UploadFile, File, Body, Depends
+from fastapi import FastAPI, HTTPException, Query, Request, Response, BackgroundTasks, UploadFile, File, Body, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 from .repository import db
@@ -10,6 +10,11 @@ from .models import (
     ImagingWebhookPayload,
     Account, ModuleLicense, AccountInvoice, AccountUser,
     AccountUpdateRequest, ModuleSubscribeRequest, PlanUpgradeRequest,
+    # S07 — Online Booking Portal
+    OwnerLookupRequest, OwnerRegisterRequest,
+    BookingHoldRequest, BookingConfirmRequest,
+    IntakeSubmitRequest, WaitlistJoinRequest,
+    ClinicBookingConfigUpdate,
 )
 from .agents.intake import IntakeAgent
 from .agents.matcher import SemanticMatcher
@@ -2480,3 +2485,967 @@ def remove_account_user(user_id: str):
         conn.execute("DELETE FROM account_users WHERE id=?", (user_id,))
     log_agent_step("ACCOUNT AGENT", f"User {user_id[:8]} removed")
     return
+
+
+# =============================================================================
+# S07 — VPMA Online Booking Portal
+# Public routes: /public/*   (no staff auth required)
+# Staff routes:  /api/clinics/{id}/booking-config  (soft-gated with X-Staff-Token)
+# =============================================================================
+
+from .agents.availability_agent import AvailabilityAgent
+from .agents.booking_agent import BookingAgent, LIFECYCLE_STATES
+from .agents.intake_delivery_agent import IntakeDeliveryAgent, INTAKE_QUESTION_SETS, run_flag_logic
+import re as _re
+from datetime import timedelta as _timedelta
+
+_avail_agent = AvailabilityAgent(db, log_fn=log_step)
+_booking_agent = BookingAgent(db, log_fn=log_step)
+_intake_agent = IntakeDeliveryAgent(db, log_fn=log_step)
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+SESSION_COOKIE = "vpma_session"
+SESSION_TTL_SECONDS = 1800  # 30 minutes
+PORTAL_BASE_URL = "https://book.vpma.app"
+
+
+def _normalize_phone(raw: str) -> str:
+    """Strip all non-digit characters and return a 10-digit US number."""
+    digits = _re.sub(r"\D", "", raw or "")
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
+
+
+def _new_session_expires() -> str:
+    return (datetime.utcnow() + _timedelta(seconds=SESSION_TTL_SECONDS)).isoformat()
+
+
+def _get_valid_session(request: Request) -> Optional[dict]:
+    """Read session cookie, validate expiry, return session row or None."""
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        return None
+    session = db.get_session(token)
+    if not session:
+        return None
+    if session.get("expires_at", "") < datetime.utcnow().isoformat():
+        return None
+    # Extend session
+    new_exp = _new_session_expires()
+    db.touch_session(token, new_exp)
+    return session
+
+
+def _pet_age_years(dob_str: Optional[str]) -> Optional[float]:
+    if not dob_str:
+        return None
+    try:
+        dob = datetime.fromisoformat(dob_str)
+        delta = datetime.utcnow() - dob
+        return round(delta.days / 365.25, 1)
+    except (ValueError, TypeError):
+        return None
+
+
+def _last_visit_label(last_visit_date: Optional[str]) -> Optional[str]:
+    if not last_visit_date:
+        return None
+    try:
+        lv = datetime.fromisoformat(last_visit_date)
+        delta = datetime.utcnow() - lv
+        months = int(delta.days / 30)
+        if months < 1:
+            return "This month"
+        if months == 1:
+            return "1 month ago"
+        return f"{months} months ago"
+    except (ValueError, TypeError):
+        return None
+
+
+def _build_pet_summary(pet: dict) -> dict:
+    return {
+        "id": pet["id"],
+        "name": pet.get("name", ""),
+        "species": pet.get("species", ""),
+        "breed": pet.get("breed", ""),
+        "age_years": _pet_age_years(pet.get("dob")),
+        "last_visit_label": _last_visit_label(pet.get("last_visit_date")),
+        "care_due": False,
+        "care_due_reason": None,
+    }
+
+
+# ── Route 1: GET /public/clinics/{clinic_id} ─────────────────────────────────
+
+@app.get("/public/clinics/{clinic_id}")
+def public_get_clinic(clinic_id: str, request: Request):
+    """S07 R1: Public clinic info + booking config for the booking portal."""
+    clinic = db.get_clinic(clinic_id)
+    if not clinic:
+        raise HTTPException(status_code=404, detail="Clinic not found")
+    config = db.get_booking_config(clinic_id) or {}
+    appt_types = db.get_bookable_appointment_types(clinic_id)
+    return {
+        "id": clinic["id"],
+        "name": clinic.get("name", ""),
+        "address": clinic.get("address", ""),
+        "phone": clinic.get("phone", ""),
+        "email": clinic.get("email", ""),
+        "timezone": clinic.get("timezone", "America/Los_Angeles"),
+        "slug": clinic.get("slug"),
+        "online_booking_enabled": bool(config.get("online_booking_enabled", False)),
+        "advance_booking_days": config.get("advance_booking_days", 60),
+        "min_booking_notice_hours": config.get("min_booking_notice_hours", 2),
+        "cancellation_policy": config.get("cancellation_policy", ""),
+        "emergency_phone": config.get("emergency_phone", ""),
+        "show_vet_names": config.get("show_vet_names", True),
+        "bookable_appointment_types": appt_types,
+    }
+
+
+# ── Route 2: GET /public/clinics/{clinic_id}/availability ────────────────────
+
+@app.get("/public/clinics/{clinic_id}/availability")
+def public_get_availability(
+    clinic_id: str,
+    appointment_type_id: str = Query(..., description="Appointment type slug"),
+    start_date: str = Query(..., description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD (default: start + 7 days)"),
+    resource_id: Optional[str] = Query(None),
+    request: Request = None,
+):
+    """S07 R2: List available slots for a clinic + appointment type."""
+    ip = _get_client_ip(request)
+    if not db.check_rate_limit(ip, "public_availability", max_requests=60, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    clinic = db.get_clinic(clinic_id)
+    if not clinic:
+        raise HTTPException(status_code=404, detail="Clinic not found")
+
+    config = db.get_booking_config(clinic_id) or {}
+    if not config.get("online_booking_enabled", False):
+        raise HTTPException(status_code=404, detail="Online booking not enabled for this clinic")
+
+    # Resolve appointment type and duration
+    appt_types = db.get_bookable_appointment_types(clinic_id)
+    appt_type = next((t for t in appt_types
+                      if t["slug"] == appointment_type_id or t["id"] == appointment_type_id), None)
+    if not appt_type:
+        raise HTTPException(status_code=400, detail="Invalid appointment_type_id")
+
+    duration = appt_type.get("duration_min", 30)
+    advance_days = config.get("advance_booking_days", 60)
+    min_notice_hours = config.get("min_booking_notice_hours", 2)
+
+    try:
+        start_dt = datetime.fromisoformat(start_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid start_date format")
+
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_date format")
+    else:
+        end_dt = start_dt + _timedelta(days=7)
+
+    # Clamp to advance_booking window
+    max_end = datetime.utcnow() + _timedelta(days=advance_days)
+    if end_dt > max_end:
+        end_dt = max_end
+
+    # Enforce min_notice
+    earliest = datetime.utcnow() + _timedelta(hours=min_notice_hours)
+    if start_dt < earliest:
+        start_dt = earliest
+
+    hidden_vets = config.get("hidden_vet_ids", [])
+    slots = _avail_agent.get_slots(
+        clinic_id=clinic_id,
+        appointment_type_id=appointment_type_id,
+        duration_minutes=duration,
+        start_date=start_dt,
+        end_date=end_dt,
+        resource_id=resource_id,
+        buffer_minutes=config.get("buffer_minutes", 10),
+        hidden_vet_ids=hidden_vets,
+    )
+
+    return {"slots": slots, "total": len(slots)}
+
+
+# ── Route 3: POST /public/owners/lookup ──────────────────────────────────────
+
+@app.post("/public/owners/lookup")
+def public_owner_lookup(body: OwnerLookupRequest, request: Request, response: Response = None):
+    """S07 R3: Look up an existing owner by phone or email."""
+    from fastapi.responses import JSONResponse
+    ip = _get_client_ip(request)
+    if not db.check_rate_limit(ip, "public_owner_lookup", max_requests=10, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    if not body.phone and not body.email:
+        raise HTTPException(status_code=400, detail="phone or email required")
+
+    clinic = db.get_clinic(body.clinic_id)
+    if not clinic:
+        raise HTTPException(status_code=404, detail="Clinic not found")
+
+    phone_norm = _normalize_phone(body.phone) if body.phone else None
+    owner = db.lookup_owner_by_phone_or_email(phone_norm, body.email)
+
+    if not owner:
+        resp_body = {"found": False, "owner_id": None, "display_name": None, "pets": []}
+        return JSONResponse(content=resp_body)
+
+    # Build session
+    token = str(_uuid.uuid4())
+    expires_at = _new_session_expires()
+    db.create_session(token, owner["id"], body.clinic_id, expires_at)
+
+    pets = db.get_pets_for_owner(owner["id"])
+    pet_summaries = [_build_pet_summary(p) for p in pets]
+
+    first_name = owner.get("first_name") or (owner.get("name", "").split()[0] if owner.get("name") else "")
+
+    log_step(f"VERA (Booking): owner_lookup found owner={owner['id'][:8]} clinic={body.clinic_id[:8]}")
+
+    resp_body = {
+        "found": True,
+        "owner_id": owner["id"],
+        "display_name": first_name,
+        "pets": pet_summaries,
+    }
+    json_resp = JSONResponse(content=resp_body)
+    json_resp.set_cookie(
+        key=SESSION_COOKIE, value=token, httponly=True,
+        max_age=SESSION_TTL_SECONDS, samesite="lax"
+    )
+    return json_resp
+
+
+# ── Route 4: POST /public/owners/register ────────────────────────────────────
+
+@app.post("/public/owners/register", status_code=201)
+def public_owner_register(body: OwnerRegisterRequest, request: Request):
+    """S07 R4: Register a new owner + first pet."""
+    from fastapi.responses import JSONResponse
+    ip = _get_client_ip(request)
+    if not db.check_rate_limit(ip, "public_owner_register", max_requests=5, window_seconds=3600):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    # Validate
+    if not body.first_name.strip() or not body.last_name.strip():
+        raise HTTPException(status_code=400, detail="first_name and last_name required")
+    if not body.phone:
+        raise HTTPException(status_code=400, detail="phone required")
+    if not body.email or "@" not in body.email:
+        raise HTTPException(status_code=400, detail="Valid email required")
+
+    phone_norm = _normalize_phone(body.phone)
+    # Duplicate check
+    existing = db.lookup_owner_by_phone_or_email(phone_norm, body.email)
+    if existing:
+        raise HTTPException(status_code=409, detail="Owner already registered with this phone or email")
+
+    owner_id = str(_uuid.uuid4())
+    patient_id = str(_uuid.uuid4())
+    now = datetime.utcnow().isoformat()
+
+    # Create owner
+    full_name = f"{body.first_name.strip()} {body.last_name.strip()}"
+    owner_data = {
+        "id": owner_id,
+        "name": full_name,
+        "first_name": body.first_name.strip(),
+        "last_name": body.last_name.strip(),
+        "phone": phone_norm,
+        "email": body.email.strip().lower(),
+        "patient_ids": [patient_id],
+        "sms_consent": body.sms_consent,
+        "portal_opt_in": True,
+        "home_clinic_id": body.clinic_id,
+        "created_at": now,
+    }
+    db.create_owner_from_registration(owner_data)
+
+    # Create patient
+    from .models import Patient as PatientModel
+    patient = PatientModel(
+        id=patient_id,
+        name=body.pet.name.strip(),
+        species=body.pet.species,
+        breed=body.pet.breed or "",
+        dob=body.pet.dob_approx or "",
+        weight_kg=0.0,
+        owner_id=owner_id,
+        home_clinic_id=body.clinic_id,
+        visit_count=0,
+        flags=[],
+        flag_notes="",
+    )
+    db.save_patient(patient)
+
+    # Session
+    token = str(_uuid.uuid4())
+    expires_at = _new_session_expires()
+    db.create_session(token, owner_id, body.clinic_id, expires_at)
+
+    log_step(f"VERA (Booking): owner_registered owner={owner_id[:8]} patient={patient_id[:8]} clinic={body.clinic_id[:8]}")
+
+    resp_body = {
+        "owner_id": owner_id,
+        "patient_id": patient_id,
+        "display_name": body.first_name.strip(),
+    }
+    json_resp = JSONResponse(content=resp_body, status_code=201)
+    json_resp.set_cookie(
+        key=SESSION_COOKIE, value=token, httponly=True,
+        max_age=SESSION_TTL_SECONDS, samesite="lax"
+    )
+    return json_resp
+
+
+# ── Route 5 (implicit): session already created in lookup/register above ─────
+
+# ── Route 6: GET /public/owners/{owner_id}/pets ──────────────────────────────
+
+@app.get("/public/owners/{owner_id}/pets")
+def public_get_owner_pets(owner_id: str, request: Request):
+    """S07 R6: Return pets for session-authenticated owner."""
+    session = _get_valid_session(request)
+    if not session or session.get("owner_id") != owner_id:
+        raise HTTPException(status_code=401, detail="Session invalid or expired")
+
+    owner = db.get_owner(owner_id)
+    if not owner:
+        raise HTTPException(status_code=404, detail="Owner not found")
+
+    pets = db.get_pets_for_owner(owner_id)
+    first_name = owner.get("first_name") or (owner.get("name", "").split()[0] if owner.get("name") else "")
+    return {
+        "owner_id": owner_id,
+        "display_name": first_name,
+        "pets": [_build_pet_summary(p) for p in pets],
+    }
+
+
+# ── Route 7: POST /public/bookings/hold ──────────────────────────────────────
+
+@app.post("/public/bookings/hold")
+def public_booking_hold(body: BookingHoldRequest, request: Request):
+    """S07 R7: Create a soft-hold on a slot."""
+    import sqlite3
+    ip = _get_client_ip(request)
+    if not db.check_rate_limit(ip, "public_booking_hold", max_requests=20, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    session = _get_valid_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Session invalid or expired")
+    session_token = request.cookies.get(SESSION_COOKIE)
+
+    # Validate resource belongs to clinic
+    resources = db.get_resources_for_clinic(body.clinic_id)
+    resource = next((r for r in resources if r["id"] == body.resource_id), None)
+    if not resource:
+        raise HTTPException(status_code=400, detail="resource_id not found in this clinic")
+
+    # Validate appointment type
+    appt_types = db.get_bookable_appointment_types(body.clinic_id)
+    appt_type = next((t for t in appt_types
+                      if t["slug"] == body.appointment_type_id or t["id"] == body.appointment_type_id), None)
+    if not appt_type:
+        raise HTTPException(status_code=400, detail="Invalid appointment_type_id")
+
+    # Check availability
+    available = db.check_slot_available(
+        body.resource_id, body.start_datetime, body.end_datetime,
+        exclude_session_token=session_token
+    )
+    if not available:
+        raise HTTPException(status_code=409, detail="Slot already held or booked")
+
+    # Release any previous hold for this session
+    db.delete_holds_for_session(session_token)
+    # Clean up globally expired holds
+    db.expire_stale_holds()
+
+    # Compute UUID5 slot_id
+    import uuid as _uuid_mod
+    try:
+        start_dt_obj = datetime.fromisoformat(body.start_datetime)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid start_datetime")
+    slot_id = str(_uuid_mod.uuid5(_uuid_mod.NAMESPACE_URL, f"{body.resource_id}:{start_dt_obj.isoformat()}"))
+
+    hold_id = str(_uuid.uuid4())
+    hold_expires = (datetime.utcnow() + _timedelta(minutes=10)).isoformat()
+
+    try:
+        db.create_slot_hold({
+            "id": hold_id,
+            "resource_id": body.resource_id,
+            "start_datetime": body.start_datetime,
+            "end_datetime": body.end_datetime,
+            "clinic_id": body.clinic_id,
+            "session_token": session_token,
+            "expires_at": hold_expires,
+            "created_at": datetime.utcnow().isoformat(),
+        })
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="Slot already held or booked")
+
+    vet_name = resource.get("name", "Vet")
+    log_step(f"VERA (Booking): slot_held hold={hold_id[:8]} resource={body.resource_id[:8]} start={body.start_datetime}")
+
+    return {
+        "hold_id": hold_id,
+        "slot_id": slot_id,
+        "expires_at": hold_expires,
+        "resource_id": body.resource_id,
+        "vet_name": vet_name,
+        "start_datetime": body.start_datetime,
+        "end_datetime": body.end_datetime,
+    }
+
+
+# ── Route 8: POST /public/bookings ───────────────────────────────────────────
+
+@app.post("/public/bookings", status_code=201)
+def public_confirm_booking(
+    body: BookingConfirmRequest,
+    background_tasks: BackgroundTasks,
+    request: Request,
+):
+    """S07 R8: Confirm a booking. Atomic hold→timeblock→tokens."""
+    ip = _get_client_ip(request)
+    if not db.check_rate_limit(ip, "public_confirm_booking", max_requests=5, window_seconds=3600):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    session = _get_valid_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Session invalid or expired")
+    session_token = request.cookies.get(SESSION_COOKIE)
+
+    if not body.cancellation_policy_accepted:
+        raise HTTPException(status_code=400, detail="Must accept cancellation policy")
+    if body.urgency not in {"wellness", "routine", "urgent", "emergency"}:
+        raise HTTPException(status_code=400, detail="Invalid urgency value")
+
+    try:
+        result = _booking_agent.confirm_booking(
+            session_token=session_token,
+            hold_id=body.hold_id,
+            patient_id=body.patient_id,
+            appointment_type_id=body.appointment_type_id,
+            urgency=body.urgency,
+            notes=body.notes,
+            sms_consent=body.sms_consent,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if "not found" in detail.lower() or "expired" in detail.lower():
+            code = 404
+        elif "double-booking" in detail.lower() or "no longer" in detail.lower():
+            code = 409
+        else:
+            code = 400
+        raise HTTPException(status_code=code, detail=detail)
+
+    booking_token_id = result["booking_token_id"]
+    intake_token_id = result["intake_token_id"]
+    timeblock_id = result["timeblock_id"]
+    start_dt_str = result["start_datetime"]
+    clinic_id = result["clinic_id"]
+
+    try:
+        appt_dt = datetime.fromisoformat(start_dt_str)
+    except (ValueError, TypeError):
+        appt_dt = datetime.utcnow()
+
+    # Resolve vet name from resource
+    resources = db.get_resources_for_clinic(clinic_id)
+    resource = next((r for r in resources if r["id"] == result["resource_id"]), None)
+    vet_name = resource.get("name", "Your Vet") if resource else "Your Vet"
+
+    clinic = db.get_clinic(clinic_id)
+    clinic_name = clinic.get("name", "") if clinic else ""
+    clinic_address = clinic.get("address", "") if clinic else ""
+
+    # Background tasks
+    background_tasks.add_task(
+        _intake_agent.schedule_delivery, intake_token_id, appt_dt
+    )
+    background_tasks.add_task(
+        _booking_agent.arm_reminders, timeblock_id, booking_token_id,
+        result["owner_id"], appt_dt
+    )
+
+    log_step(
+        f"VERA (Booking): booking_confirmed timeblock={timeblock_id[:8]} "
+        f"token={booking_token_id[:8]} clinic={clinic_id[:8]}"
+    )
+
+    return {
+        "booking_id": timeblock_id,
+        "booking_token": booking_token_id,
+        "status": "booked",
+        "status_url": f"{PORTAL_BASE_URL}/status/{booking_token_id}",
+        "intake_url": f"{PORTAL_BASE_URL}/intake/{intake_token_id}",
+        "appointment": {
+            "date": appt_dt.strftime("%Y-%m-%d"),
+            "time": appt_dt.strftime("%H:%M"),
+            "duration_minutes": 30,
+            "vet_name": vet_name,
+            "clinic_name": clinic_name,
+            "address": clinic_address,
+        },
+    }
+
+
+# ── Route 9: GET /public/status/{booking_token} ──────────────────────────────
+
+@app.get("/public/status/{booking_token}")
+def public_booking_status(booking_token: str, request: Request):
+    """S07 R9: Public appointment status tracker."""
+    ip = _get_client_ip(request)
+    if not db.check_rate_limit(ip, "public_booking_status", max_requests=60, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    bt = db.get_booking_token(booking_token)
+    if not bt:
+        raise HTTPException(status_code=404, detail="Booking token not found")
+
+    now_iso = datetime.utcnow().isoformat()
+    if bt.get("expires_at", "") < now_iso:
+        raise HTTPException(status_code=410, detail="This booking link has expired")
+
+    # Fetch linked timeblock
+    from .repository import _get_conn
+    with _get_conn() as conn:
+        tb_row = conn.execute(
+            "SELECT * FROM timeblocks WHERE id=?", (bt["timeblock_id"],)
+        ).fetchone()
+        if not tb_row:
+            raise HTTPException(status_code=404, detail="Appointment not found")
+        tb = dict(tb_row)
+
+        if tb.get("status") == "cancelled":
+            raise HTTPException(status_code=410, detail="This booking has been cancelled")
+
+        # Resolve patient, owner, resource, clinic, intake token
+        patient_row = conn.execute(
+            "SELECT name FROM patients WHERE id=?", (tb.get("patient_id"),)
+        ).fetchone()
+        owner_row = conn.execute(
+            "SELECT first_name, name FROM owners WHERE id=?", (bt["owner_id"],)
+        ).fetchone()
+
+        import json as _json
+        resource_ids = _json.loads(tb.get("resource_ids", "[]"))
+        vet_name = "Vet"
+        if resource_ids:
+            res_row = conn.execute(
+                "SELECT name FROM resources WHERE id=?", (resource_ids[0],)
+            ).fetchone()
+            if res_row:
+                vet_name = res_row[0]
+
+        clinic_row = conn.execute(
+            "SELECT name, address, phone FROM clinics WHERE id=?", (bt["clinic_id"],)
+        ).fetchone()
+
+        intake_row = conn.execute(
+            "SELECT token, used FROM intake_tokens WHERE timeblock_id=? LIMIT 1",
+            (tb["id"],)
+        ).fetchone()
+
+    pet_name = patient_row[0] if patient_row else "Your Pet"
+    owner_fn = ""
+    if owner_row:
+        owner_fn = owner_row[0] or (owner_row[1].split()[0] if owner_row[1] else "")
+    clinic_name = clinic_row[0] if clinic_row else ""
+    clinic_address = clinic_row[1] if clinic_row else ""
+    clinic_phone = clinic_row[2] if clinic_row else ""
+
+    intake_token_val = intake_row[0] if intake_row else None
+    intake_used = bool(intake_row[1]) if intake_row else False
+    intake_status = "complete" if intake_used else ("sent" if intake_token_val else None)
+
+    try:
+        start_dt = datetime.fromisoformat(tb["start_time"])
+        end_dt = datetime.fromisoformat(tb["end_time"])
+        duration_min = int((end_dt - start_dt).total_seconds() / 60)
+    except (ValueError, TypeError):
+        duration_min = 30
+
+    # Determine lifecycle state
+    if tb.get("status") == "complete":
+        lc_state = "complete"
+    elif tb.get("followup_status") == "sent":
+        lc_state = "follow_up_sent"
+    elif tb.get("intake_status") == "received":
+        lc_state = "intake_complete"
+    elif intake_status == "sent":
+        lc_state = "intake_sent"
+    else:
+        lc_state = "booked"
+
+    lifecycle = BookingAgent.build_lifecycle(lc_state)
+    cancellable = (tb.get("status") not in ("cancelled", "complete")
+                   and tb.get("start_time", "") > now_iso)
+
+    return {
+        "booking_id": bt["timeblock_id"],
+        "booking_token": booking_token,
+        "status": tb.get("status", "scheduled"),
+        "clinic_name": clinic_name,
+        "clinic_phone": clinic_phone,
+        "clinic_address": clinic_address,
+        "pet_name": pet_name,
+        "owner_display_name": owner_fn,
+        "appointment_type": tb.get("appointment_type_id", ""),
+        "vet_name": vet_name,
+        "start_datetime": tb.get("start_time", ""),
+        "duration_minutes": duration_min,
+        "lifecycle": lifecycle,
+        "intake_token": intake_token_val,
+        "intake_status": intake_status,
+        "intake_url": f"{PORTAL_BASE_URL}/intake/{intake_token_val}" if intake_token_val else None,
+        "cancellable": cancellable,
+        "reschedulable": False,
+        "calendar_url": f"/public/status/{booking_token}/calendar.ics",
+    }
+
+
+# ── Route 10: GET /public/intake/{intake_token} ──────────────────────────────
+
+@app.get("/public/intake/{intake_token}")
+def public_get_intake(intake_token: str, request: Request):
+    """S07 R10: Fetch intake form questions and any saved responses."""
+    ip = _get_client_ip(request)
+    if not db.check_rate_limit(ip, "public_intake_get", max_requests=60, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    token_row = db.get_intake_token(intake_token)
+    if not token_row:
+        raise HTTPException(status_code=404, detail="Intake token not found")
+
+    now_iso = datetime.utcnow().isoformat()
+    if token_row.get("expires_at", "") < now_iso:
+        raise HTTPException(status_code=410, detail="This intake form has expired")
+    if token_row.get("used"):
+        raise HTTPException(status_code=409, detail="Intake form already submitted")
+
+    appointment_type = token_row.get("appointment_type", "wellness")
+    timeblock_id = token_row["timeblock_id"]
+
+    from .repository import _get_conn
+    with _get_conn() as conn:
+        tb_row = conn.execute(
+            "SELECT start_time, patient_id FROM timeblocks WHERE id=?", (timeblock_id,)
+        ).fetchone()
+        patient_row = conn.execute(
+            "SELECT name FROM patients WHERE id=?",
+            (tb_row[1] if tb_row else "",)
+        ).fetchone() if tb_row else None
+
+        import json as _json
+        res_rows = conn.execute(
+            "SELECT resource_ids FROM timeblocks WHERE id=? LIMIT 1", (timeblock_id,)
+        ).fetchone()
+        vet_name = "Your Vet"
+        if res_rows:
+            try:
+                rids = _json.loads(res_rows[0] or "[]")
+                if rids:
+                    rr = conn.execute("SELECT name FROM resources WHERE id=?", (rids[0],)).fetchone()
+                    if rr:
+                        vet_name = rr[0]
+            except Exception:
+                pass
+
+        clinic_row = None
+        if tb_row:
+            clinic_row = conn.execute(
+                "SELECT name FROM clinics c JOIN timeblocks t ON t.clinic_id=c.id WHERE t.id=? LIMIT 1",
+                (timeblock_id,)
+            ).fetchone()
+
+    pet_name = patient_row[0] if patient_row else "Your Pet"
+    appointment_date = ""
+    if tb_row and tb_row[0]:
+        try:
+            appointment_date = datetime.fromisoformat(tb_row[0]).strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+    clinic_name = clinic_row[0] if clinic_row else ""
+
+    questions = _intake_agent.get_questions(appointment_type, pet_name, vet_name)
+
+    # Load any previously saved responses
+    existing_resp = db.get_intake_response(intake_token)
+    if existing_resp:
+        answers_map = {a["question_id"]: a["answer"] for a in existing_resp.get("answers", [])}
+        for q in questions:
+            q["answer"] = answers_map.get(q["id"])
+
+    completed_count = sum(1 for q in questions if q.get("answer") is not None)
+
+    return {
+        "intake_id": intake_token,
+        "appointment_type": appointment_type,
+        "pet_name": pet_name,
+        "vet_name": vet_name,
+        "appointment_date": appointment_date,
+        "clinic_name": clinic_name,
+        "status": "in_progress" if existing_resp else "sent",
+        "questions": questions,
+        "total_questions": len(questions),
+        "completed_questions": completed_count,
+        "estimated_minutes": max(1, len(questions) // 3),
+    }
+
+
+# ── Route 11: POST /public/intake/{intake_token}/submit ──────────────────────
+
+@app.post("/public/intake/{intake_token}/submit")
+def public_submit_intake(intake_token: str, body: IntakeSubmitRequest, request: Request):
+    """S07 R11: Submit intake form answers."""
+    ip = _get_client_ip(request)
+    if not db.check_rate_limit(ip, f"intake_submit:{intake_token}", max_requests=3, window_seconds=3600):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    token_row = db.get_intake_token(intake_token)
+    if not token_row:
+        raise HTTPException(status_code=404, detail="Intake token not found")
+
+    now_iso = datetime.utcnow().isoformat()
+    if token_row.get("expires_at", "") < now_iso:
+        raise HTTPException(status_code=410, detail="This intake form has expired")
+    if token_row.get("used"):
+        raise HTTPException(status_code=409, detail="Intake already submitted")
+
+    appointment_type = token_row.get("appointment_type", "wellness")
+    answers_raw = [a.model_dump() for a in body.answers]
+
+    # Validate answers
+    valid, missing_ids, err_msg = _intake_agent.validate_answers(appointment_type, answers_raw)
+    if not valid:
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": err_msg, "missing_questions": missing_ids}
+        )
+
+    # Run flag logic
+    answers_dict = {
+        a["question_id"]: a.get("answer", "") or ""
+        for a in answers_raw
+        if not a.get("skipped")
+    }
+    raised_flags = run_flag_logic(appointment_type, answers_dict)
+
+    # Persist response
+    db.save_intake_response(
+        intake_token=intake_token,
+        timeblock_id=token_row["timeblock_id"],
+        owner_id=token_row["owner_id"],
+        answers=answers_raw,
+        flags=raised_flags,
+        submitted_at=body.submitted_at or now_iso,
+    )
+
+    # Mark token used + update timeblock intake_status
+    db.mark_intake_token_used(intake_token)
+    from .repository import _get_conn
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE timeblocks SET intake_status='received' WHERE id=?",
+            (token_row["timeblock_id"],)
+        )
+
+    # Resolve vet name for confirmation message
+    with _get_conn() as conn:
+        res_row = conn.execute(
+            "SELECT r.name FROM resources r "
+            "JOIN timeblocks t ON r.id = json_extract(t.resource_ids, '$[0]') "
+            "WHERE t.id=? LIMIT 1",
+            (token_row["timeblock_id"],)
+        ).fetchone()
+    vet_display = res_row[0] if res_row else "your vet"
+
+    # Booking status URL (via booking token)
+    booking_token_val = None
+    with _get_conn() as conn:
+        bt_row = conn.execute(
+            "SELECT token FROM booking_tokens WHERE timeblock_id=? LIMIT 1",
+            (token_row["timeblock_id"],)
+        ).fetchone()
+    if bt_row:
+        booking_token_val = bt_row[0]
+
+    if raised_flags:
+        log_step(f"VERA (Intake): intake_submitted flags_raised={raised_flags} token={intake_token[:8]}")
+    log_step(f"VERA (Intake): intake_submitted token={intake_token[:8]} flags={len(raised_flags)}")
+
+    return {
+        "status": "complete",
+        "flags_raised": len(raised_flags),
+        "flag_names": raised_flags,
+        "message": f"Thank you! {vet_display} will review this before your visit.",
+        "booking_status_url": f"{PORTAL_BASE_URL}/status/{booking_token_val}" if booking_token_val else None,
+    }
+
+
+# ── Route 12: POST /public/waitlist ──────────────────────────────────────────
+
+@app.post("/public/waitlist", status_code=201)
+def public_join_waitlist(body: WaitlistJoinRequest, request: Request):
+    """S07 R12: Join the waitlist for a clinic + appointment type."""
+    ip = _get_client_ip(request)
+    if not db.check_rate_limit(ip, "public_waitlist", max_requests=3, window_seconds=600):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    # Validate clinic
+    clinic = db.get_clinic(body.clinic_id)
+    if not clinic:
+        raise HTTPException(status_code=404, detail="Clinic not found")
+
+    config = db.get_booking_config(body.clinic_id) or {}
+
+    # Validate urgency
+    if body.urgency not in {"wellness", "routine", "urgent"}:
+        raise HTTPException(status_code=400, detail="Invalid urgency value")
+
+    # Validate min_notice_hours
+    if body.min_notice_hours not in (1, 3, 24):
+        raise HTTPException(status_code=400, detail="min_notice_hours must be 1, 3, or 24")
+
+    # Validate time_preferences
+    valid_prefs = {"weekday_morning", "weekday_afternoon", "saturday_morning", "any"}
+    bad_prefs = [p for p in body.time_preferences if p not in valid_prefs]
+    if bad_prefs:
+        raise HTTPException(status_code=400, detail=f"Invalid time_preferences: {bad_prefs}")
+
+    phone_norm = _normalize_phone(body.phone)
+
+    # Duplicate check
+    dup = db.duplicate_waitlist_check(body.clinic_id, body.patient_id, body.appointment_type_id)
+    if dup:
+        raise HTTPException(status_code=409, detail="Already on waitlist for this appointment type")
+
+    entry_id = str(_uuid.uuid4())
+    db.join_waitlist({
+        "id": entry_id,
+        "clinic_id": body.clinic_id,
+        "owner_id": body.owner_id,
+        "patient_id": body.patient_id,
+        "appointment_type": body.appointment_type_id,
+        "urgency": body.urgency,
+        "time_preferences": body.time_preferences,
+        "sms_consent": body.sms_consent,
+        "phone_for_sms": phone_norm,
+        "min_notice_hours": body.min_notice_hours,
+    })
+
+    position = db.get_waitlist_position(body.clinic_id, body.appointment_type_id, entry_id)
+    formatted_phone = f"({phone_norm[:3]}) {phone_norm[3:6]}-{phone_norm[6:]}" if len(phone_norm) == 10 else phone_norm
+
+    log_step(f"VERA (Booking): waitlist_joined clinic={body.clinic_id[:8]} patient={body.patient_id[:8]} pos={position}")
+
+    return {
+        "waitlist_id": entry_id,
+        "position": position,
+        "message": f"You're on the waitlist. We'll notify you at {formatted_phone} when a slot opens.",
+        "manage_url": None,
+    }
+
+
+# ── Route 13: GET /api/clinics/{clinic_id}/booking-config ────────────────────
+
+@app.get("/api/clinics/{clinic_id}/booking-config")
+def get_booking_config(clinic_id: str, request: Request):
+    """S07 R13 (staff): Fetch current booking configuration for a clinic."""
+    # Soft-gate: log header presence but do not block in Phase 1
+    staff_token = request.headers.get("X-Staff-Token")
+    log_step(f"VERA (Booking): get_booking_config clinic={clinic_id[:8]} staff_token={'present' if staff_token else 'missing'}")
+
+    config = db.get_booking_config(clinic_id)
+    appt_types = db.get_bookable_appointment_types(clinic_id)
+
+    if not config:
+        # Return default (all defaults, online_booking_enabled=False)
+        return {
+            "clinic_id": clinic_id,
+            "online_booking_enabled": False,
+            "advance_booking_days": 60,
+            "same_day_cutoff_hour": 14,
+            "min_booking_notice_hours": 2,
+            "cancellation_policy": "Cancellations within 24 hours may incur a fee.",
+            "emergency_phone": "",
+            "hidden_vet_ids": [],
+            "bookable_appointment_types": appt_types,
+        }
+
+    config["bookable_appointment_types"] = appt_types
+    return config
+
+
+# ── Route 14: PUT /api/clinics/{clinic_id}/booking-config ────────────────────
+
+@app.put("/api/clinics/{clinic_id}/booking-config")
+def update_booking_config(clinic_id: str, body: ClinicBookingConfigUpdate, request: Request):
+    """S07 R14 (staff): Create or update clinic booking configuration (upsert)."""
+    staff_token = request.headers.get("X-Staff-Token")
+    log_step(f"VERA (Booking): update_booking_config clinic={clinic_id[:8]} staff_token={'present' if staff_token else 'missing'}")
+
+    clinic = db.get_clinic(clinic_id)
+    if not clinic:
+        raise HTTPException(status_code=404, detail="Clinic not found")
+
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+
+    # Validate ranges
+    if "advance_booking_days" in updates:
+        val = updates["advance_booking_days"]
+        if not (7 <= val <= 90):
+            raise HTTPException(status_code=400, detail="advance_booking_days must be 7–90")
+    if "buffer_minutes" in updates:
+        val = updates["buffer_minutes"]
+        if not (0 <= val <= 60):
+            raise HTTPException(status_code=400, detail="buffer_minutes must be 0–60")
+    if "same_day_cutoff_hour" in updates:
+        val = updates["same_day_cutoff_hour"]
+        if not (0 <= val <= 23):
+            raise HTTPException(status_code=400, detail="same_day_cutoff_hour must be 0–23")
+
+    # Auto-generate slug if enabling online booking and clinic has no slug
+    if updates.get("online_booking_enabled") and not clinic.get("slug"):
+        import re as _re2
+        raw_slug = clinic["name"].lower()
+        slug = _re2.sub(r"[^a-z0-9]+", "-", raw_slug).strip("-")
+        from .repository import _get_conn
+        with _get_conn() as conn:
+            conn.execute("UPDATE clinics SET slug=? WHERE id=?", (slug, clinic_id))
+        log_step(f"VERA (Booking): auto-slug generated slug={slug} clinic={clinic_id[:8]}")
+
+    # Serialize bookable_appointment_types if present
+    if "bookable_appointment_types" in updates and updates["bookable_appointment_types"]:
+        # Not stored in clinic_booking_config; handled separately in Phase 2
+        updates.pop("bookable_appointment_types", None)
+
+    config = db.upsert_booking_config(clinic_id, updates)
+    appt_types = db.get_bookable_appointment_types(clinic_id)
+    config["bookable_appointment_types"] = appt_types
+    return config
