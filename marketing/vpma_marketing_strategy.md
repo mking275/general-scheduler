@@ -6,10 +6,10 @@
 
 ## STRATEGY SNAPSHOT
 
-- **Tagline:** *Your practice, running itself.*
+- **Tagline:** *Meet Vera. Your practice's AI Chief of Staff.*
 - **ICP:** Independent companion animal practice, 2–4 vets, 1 location, currently on Cornerstone, Avimark, or Shepherd
 - **3-vet practice financial math:** Current stack ~$2,100/mo → VetAgent ~$695/mo → **$1,405/mo savings, $16,860/year**
-- **Positioning:** The only PIMS where AI agents operate the practice — not just record it
+- **Positioning:** The only PIMS with a native AI Chief of Staff who proactively runs the administrative pipeline, so the vet can stay focused on medicine.
 - **GTM sequence:** Founder-led direct → Content/inbound → Conference/community
 
 ---
@@ -28,7 +28,7 @@ What's broken in veterinary practice software is not any single product's failur
 
 ### The AI Gap and Why the Moment Is Now
 
-The veterinary AI story as of mid-2026 is a first-generation story. Ambient SOAP transcription is becoming table stakes — five platforms have it live, two more are in beta. But the story ends there. No platform in the market has autonomous agentic pipelines: AI that detects patient need, drafts outreach, fills the schedule, manages follow-up, and surfaces clinical risk without staff intervention. This layer — which we call the **Agentic Practice Operating Layer** — scores ❌ across 7 of 8 platforms in comprehensive competitive analysis. Digitail's "Tails Concierge" is the only entrant and it is still maturing. The agentic ceiling across the entire market is low, and the window before well-funded incumbents build their way to it is estimated at 18–24 months. VetAgent is entering that window now. The practices that adopt during this window will become the case studies that define the category. The platform that defines the category will own the next decade of veterinary practice management.
+The veterinary AI story as of mid-2026 is a first-generation story. Ambient SOAP transcription is becoming table stakes — five platforms have it live, two more are in beta. But the story ends there. No platform in the market has autonomous agentic pipelines: AI that detects patient need, drafts outreach, fills the schedule, manages follow-up, and surfaces clinical risk without staff intervention. This layer — which we call the **Agentic Practice Operating Layer** — scores ❌ across 7 of 8 platforms in comprehensive competitive analysis. Digitail's "Tails Concierge" is the only entrant and it is still maturing. The agentic ceiling across the entire market is low, and the window before well-funded incumbents build their way to it is estimated at 18–24 months. VetAgent is entering that window now with a different thesis from every competitor: instead of adding AI as a feature, we've built a native AI Chief of Staff — **Vera** — who proactively manages the administrative pipeline, surfaces patient intelligence, and acts on routine tasks without waiting to be asked. The practices that adopt VetAgent during this window get a Chief of Staff who learns their specific practice patterns, their patients, their vet preferences — and that institutional knowledge compounds. The platform that first defines the AI Chief of Staff category will own the next decade of veterinary practice management.
 
 ---
 
@@ -104,35 +104,37 @@ The primary ICP is a veterinarian who went to school to practice medicine and en
 For independent veterinary practice owners (2–4 vets, 1 location)
 
 Who are running a practice where the software records everything 
-but runs nothing — paying $2,000+/month across 7 disconnected 
-tools, charting until midnight, and watching staff burn out
+but proactively handles nothing — paying $2,000+/month across 7 
+disconnected tools, charting until midnight, and watching staff 
+burnout from bridging systems that don't talk to each other
 
-VetAgent is the AI-native practice operating platform
+VetAgent is the AI-native practice management platform
 
-That replaces your entire software stack — PIMS, communications, 
-analytics, and reputation management — in one system, while 
-deploying autonomous AI agents that run follow-up, fill your 
-schedule, and surface clinical risk without staff intervention
+That consolidates your entire software stack and deploys Vera — 
+your AI Chief of Staff — who proactively manages intake, fills 
+your schedule, drafts follow-up, and surfaces clinical risk before 
+you ask, while your vet retains full approval authority over every 
+clinical and financial decision
 
-Unlike Cornerstone (which runs on a server from 2005), 
-Shepherd (which records what you did, but never acts), 
-or PetDesk (which you hate and can't leave)
+Unlike Cornerstone (a server-based record-keeper with no AI),
+Shepherd (AI that waits for the vet to act), or PetDesk 
+(a companion tool you're still managing separately)
 
-VetAgent is the first platform where the software actually 
-operates the practice — not just records it
+VetAgent is the first platform where the AI acts on what the 
+practice needs — not just records what already happened
 ```
 
 ---
 
 ### Tagline
 
-**"Your practice, running itself."**
+**"Meet Vera. Your practice's AI Chief of Staff."**
 
 ---
 
 ### Elevator Pitch (60-second spoken version)
 
-*"Most vet software records what happened after the fact. Your vet charts for an hour after closing, your front desk manually texts reminders, and you're paying $2,000 a month for 7 tools that don't talk to each other. VetAgent is different. We built the first PIMS where AI agents actively run the practice — the intake agent messages owners before their appointment and briefs the vet, the scheduling agent fills cancellations from your waitlist in real time, and the follow-up agent drafts discharge summaries and catches patients who haven't come back. And because we replace PetDesk, Podium, your analytics tool, and your after-hours service, the typical 3-vet practice saves about $1,400 a month on day one. We're built for independent practices migrating off Cornerstone or Avimark, and we're taking the first 20 customers at a founder-partnership rate. Would you want to see a 20-minute demo?"*
+*"Most vet software records what happened after the fact. Your vet charts for an hour after closing, your front desk manually texts reminders, and you're paying $2,000 a month for 7 tools that don't talk to each other. VetAgent is different. We built a native AI Chief of Staff named Vera — she messages owners before their appointment and briefs the vet, she fills cancellations from your waitlist in real time, and she drafts discharge summaries and flags patients who haven't come back. And because Vera replaces PetDesk, Podium, your analytics tool, and your after-hours service, the typical 3-vet practice saves about $1,400 a month on day one. We're built for independent practices migrating off Cornerstone or Avimark, and we're taking our first 20 customers at a founding partner rate. Would you want to see a 20-minute demo?"*
 
 ---
 
@@ -144,7 +146,7 @@ operates the practice — not just records it
 *Tradeoff:* Fastest conversion, but commoditizes VetAgent as a cost play and invites price competition. Works for Avimark refugees who are in pain. Doesn't work for Shepherd users who aren't in financial pain.
 
 **Option B — "The AI Operating System"**
-> "Every other PIMS records your practice. VetAgent runs it."
+> "Every other PIMS records what your team did. VetAgent gives you a Chief of Staff who acts before they have to."
 
 *Tradeoff:* Strongest category differentiation and hardest to copy, but requires education. Works best in demo and conference contexts where you can show the agents acting in real time. Loses if the prospect never sees the demo.
 
@@ -197,20 +199,42 @@ VetAgent Professional + modules that replace this stack:
 
 ---
 
+### Layer 1b — The Hiring Comparison (Alternative Anchor)
+
+*Use this framing with owner-vets who are overwhelmed and actively thinking about hiring help. This is often a more emotionally resonant anchor than the stack costs math.*
+
+A human Chief of Staff / Practice Administrator at the level Vera operates costs:
+
+| Cost Component | Annual Cost |
+|---|---|
+| Practice Manager / COO salary | $80,000–$150,000 |
+| Payroll taxes + benefits (25–30%) | $20,000–$45,000 |
+| **Total all-in** | **$100,000–$200,000/year** |
+
+And they don't work nights, weekends, or fill in when sick. They don't have perfect memory of every patient and every interaction. They don't simultaneously manage intake, waitlist backfill, discharge drafting, and patient risk scoring in real time.
+
+Vera costs $695/month on Professional + key MODs = **$8,340/year**.
+
+That's a 12–24x cost difference for a Chief of Staff who works 24/7, never forgets a patient, never calls in sick, and gets more capable as she learns the practice.
+
+*"The question isn't whether you can afford Vera. It's whether you can afford not to have her."*
+
+---
+
 ### Layer 2 — The Clinical/Operational Argument
 
-**The agents act. They don't just record.**
+**Vera acts. She doesn't just record.**
 
 Every platform on the market — Cornerstone, Shepherd, Digitail — has AI that responds when a vet takes action. The vet speaks → the SOAP fills in. The vet signs → the invoice generates. The AI is a better pencil.
 
-VetAgent agents are different. They initiate. They detect. They act.
+Vera is different. She initiates. She detects. She acts.
 
-- **Before the appointment:** The Intake Agent messages the owner 24 hours out, collects symptoms and photos, and delivers a pre-exam brief to the vet before they walk into the room. Zero front desk involvement.
-- **After the appointment:** The Follow-Up Agent reads the signed SOAP, writes the discharge summary in plain English, and queues it for one-click approval. What used to take 10 minutes per appointment takes 30 seconds.
-- **When a slot cancels:** The Waitlist Agent detects the gap in real time, matches against the waitlist by species, appointment type, and doctor preference, and sends a confirmation via SMS. The slot fills without anyone noticing it was ever empty.
-- **When a patient goes quiet:** The Risk Scoring Agent reads clinical data — lab trends, vaccine gaps, lapsed conditions — and flags patients before they churn. The vet approves an outreach message. The practice proactively reaches out instead of losing the patient.
+- **Before the appointment:** Vera messages the owner 24 hours out, collects symptoms and photos, and delivers a pre-exam brief to the vet before they walk in. Zero front desk involvement.
+- **After the appointment:** Vera reads the signed SOAP, writes the discharge summary in plain English, and queues it for one-click approval. What used to take 10 minutes per appointment takes 30 seconds.
+- **When a slot cancels:** Vera detects the gap in real time, matches against the waitlist by species, appointment type, and doctor preference, and sends a confirmation via SMS. The slot fills without anyone noticing it was ever empty.
+- **When a patient goes quiet:** Vera reads clinical data — lab trends, vaccine gaps, lapsed conditions — and flags patients before they churn. The vet approves an outreach message. The practice reaches out proactively instead of losing the patient.
 
-This is not a feature list. It is a description of a practice that runs itself outside of clinic hours.
+This is not a feature list. It is a description of a practice with a Chief of Staff who never clocks out.
 
 ---
 
@@ -225,7 +249,48 @@ VetAgent is entering the market at the exact moment when:
 2. The agentic operating layer is completely unoccupied (18–24 month window before incumbents close the gap)
 3. 25,000+ practices are forced to move off legacy platforms (the largest demand event in PIMS history)
 
-Practices that adopt VetAgent now become the training data for an AI that learns their specific patterns — which patients respond to which outreach, which slots fill fastest, which protocols their specific patient population needs. The switching cost compounds over time. This is the strategic argument for early adoption: the AI gets more valuable the longer it runs your practice, and a competitor can't replicate three years of your data overnight.
+Practices that adopt VetAgent now get a Vera who learns their specific patterns — which patients respond to which outreach, which slots fill fastest, which protocols their patient population needs. The switching cost compounds over time because Vera's institutional knowledge does too. A competitor can't replicate three years of your practice data overnight.
+
+---
+
+### A Day with Vera (The Narrative Framework for Demo and Content)
+
+*This is the organizing template for demos, the 2-minute video, and content. Instead of listing features, narrate what Vera actually does in a typical practice day.*
+
+```
+6:45 AM — Vera reviews tomorrow's schedule. She flags three appointments:
+  • A German Shepherd with a history of cardiac medication booked for dental — anesthesia risk protocol surfaced
+  • A first-visit, same-day booking (high no-show risk) — flagged for a confirmation call
+  • A wellness visit for a patient 18 months overdue — she's already drafted a "we're glad you're coming in" 
+    message for the vet to approve
+
+8:00 AM — Practice opens. Vera delivers pre-exam briefs to Dr. Chen for her first four appointments.
+  Each brief contains: chief complaint (in the owner's words), symptom timeline, any photos submitted,
+  focus areas, and prior visit context. Dr. Chen walks into every room already knowing what's going on.
+
+10:17 AM — A patient cancels. Vera detects it immediately. She works the waitlist:
+  matches by species, appointment type, and doctor preference. She texts the top match.
+  By 10:21 AM, the slot is filled. Nobody noticed the gap.
+
+12:30 PM — Three morning appointments are signed off. Vera drafts three discharge summaries
+  in plain English, one per patient. Dr. Chen reviews and approves in under 2 minutes.
+  The emails go out. The patients receive them before they've reached their car.
+
+3:00 PM — Vera surfaces a patient flag: Luna hasn't had a wellness visit in 16 months
+  and her annual bloodwork is overdue. Vera queues an outreach draft for the vet to approve.
+  One click. Luna gets a text.
+
+5:00 PM — Practice closes. Vera's end-of-day summary:
+  • 14 appointments completed
+  • 1 cancellation filled from waitlist ($210 recovered)
+  • 3 discharge summaries drafted and approved in 4 minutes total
+  • 2 patient flags actioned
+  • 34 T-24h reminders sent for tomorrow's schedule (zero front desk time)
+
+9:00 PM — Dr. Chen left at 5:02 PM. Vera is still working.
+```
+
+That's not a feature list. That's what a Chief of Staff does. Vera does it for $695 a month.
 
 ---
 
@@ -253,11 +318,11 @@ But Shepherd's AI is designed around a philosophy they make explicit: "doctor-co
 
 Digitail's Tails Concierge is the closest thing to an agentic competitor in the market — and it's still maturing. Their trajectory is right. Their execution is getting there. They have a 2-year head start on the agentic thesis. VetAgent has to win by out-executing on depth and speed.
 
-### VetAgent: The Practice Operating System
+### VetAgent: The Practice with a Chief of Staff
 
-VetAgent is not trying to be the best SOAP note software (Shepherd is close), or the best cloud PIMS (ezyVet is strong), or the platform with the most integrations (Provet wins on API breadth). VetAgent's bet is different: the future of veterinary practice management is not better recording — it's autonomous operation. Every legacy system records. Every VetAgent agent acts.
+VetAgent is not trying to be the best SOAP note software (Shepherd is close), or the best cloud PIMS (ezyVet is strong), or the platform with the most integrations (Provet wins on API breadth). VetAgent's bet is different: the future of veterinary practice management is not better recording — it's proactive intelligence. Every legacy system records. Vera acts.
 
-The positioning is not "we're better at what they do." It's "we do something they don't do." The category we're creating — the Agentic Practice Operating Layer — is currently empty. The question is not whether it will be filled; it's who fills it first.
+The positioning is not "we're better at what they do." It's "we give you something they don't give you." The category we're creating — the AI Chief of Staff for the independent veterinary practice — is currently empty. The question is not whether it will be filled; it's who fills it first.
 
 ---
 
@@ -314,11 +379,12 @@ Hi [Name],
 I saw your review of [Cornerstone/Avimark/PetDesk] on Capterra — you 
 mentioned [specific pain they described]. That hit close to home.
 
-I'm building VetAgent — the first PIMS where AI agents actually 
-run the follow-up, fill the waitlist, and do the intake, not just 
-record what your team does. We're taking our first 20 practices 
-at a founding partner rate that's significantly below the $2,000/mo 
-you're probably spending across your current stack.
+I'm building VetAgent — the first PIMS with a native AI Chief of 
+Staff named Vera who proactively handles follow-up, fills the 
+waitlist, and runs the pre-visit intake, so your team stops managing 
+software and starts focusing on patients. We're taking our first 20 
+practices at a founding partner rate that's significantly below the 
+$2,000/mo you're probably spending across your current stack.
 
 Would you be open to a 20-minute demo? No deck, just the product.
 
