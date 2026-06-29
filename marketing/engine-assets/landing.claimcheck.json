@@ -1,0 +1,163 @@
+{
+  "asset": "landing",
+  "ready": true,
+  "summary": {
+    "ok": 9,
+    "flag": 10,
+    "fail": 0
+  },
+  "findings": [
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-1",
+      "status": "VERIFIED",
+      "message": "VC-1 resolves to a VERIFIED claim.",
+      "excerpt": "The biggest displacement wave in PIMS history is here: Cornerstone has no cloud roadmap and Avimark is being sunset — 25,000+ practices are being forced to move."
+    },
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-2",
+      "status": "VERIFIED",
+      "message": "VC-2 resolves to a VERIFIED claim.",
+      "excerpt": "The average 3-vet practice pays ~$2,100/month across 7 disconnected tools that don't talk to each other — and the vet still charts until midnight."
+    },
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-5",
+      "status": "VERIFIED",
+      "message": "VC-5 resolves to a VERIFIED claim.",
+      "excerpt": "The average 3-vet practice pays ~$2,100/month across 7 disconnected tools that don't talk to each other — and the vet still charts until midnight."
+    },
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-6",
+      "status": "VERIFIED",
+      "message": "VC-6 resolves to a VERIFIED claim.",
+      "excerpt": "Staff lose 6+ hours a week just copying data between systems."
+    },
+    {
+      "kind": "tag",
+      "severity": "flag",
+      "vc_id": "VC-8",
+      "status": "PRODUCT-CLAIM",
+      "message": "VC-8 is a PRODUCT-CLAIM — needs product-truth validation (confirm the product actually delivers this before publishing).",
+      "excerpt": "Every other PIMS records what your team did. Vera acts before they have to — she runs intake, fills cancellations from your waitlist, drafts discharges, and flags at-risk patients."
+    },
+    {
+      "kind": "tag",
+      "severity": "flag",
+      "vc_id": "VC-3",
+      "status": "PRODUCT-CLAIM",
+      "message": "VC-3 is a PRODUCT-CLAIM — needs product-truth validation (confirm the product actually delivers this before publishing).",
+      "excerpt": "Replace 7 tools with one. The typical 3-vet practice saves ~$1,405/month — $16,860 a year — on day one."
+    },
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-9",
+      "status": "VERIFIED",
+      "message": "VC-9 resolves to a VERIFIED claim.",
+      "excerpt": "The agentic operating layer scores ❌ across 7 of 8 PIMS platforms. The category is empty — Vera fills it."
+    },
+    {
+      "kind": "tag",
+      "severity": "flag",
+      "vc_id": "VC-10",
+      "status": "PRODUCT-CLAIM",
+      "message": "VC-10 is a PRODUCT-CLAIM — needs product-truth validation (confirm the product actually delivers this before publishing).",
+      "excerpt": "The only PIMS that gets smarter as you use it — Vera learns your patients, your vets, your patterns, and that institutional knowledge compounds."
+    },
+    {
+      "kind": "tag",
+      "severity": "flag",
+      "vc_id": "VC-3",
+      "status": "PRODUCT-CLAIM",
+      "message": "VC-3 is a PRODUCT-CLAIM — needs product-truth validation (confirm the product actually delivers this before publishing).",
+      "excerpt": ""
+    },
+    {
+      "kind": "tag",
+      "severity": "flag",
+      "vc_id": "VC-3",
+      "status": "PRODUCT-CLAIM",
+      "message": "VC-3 is a PRODUCT-CLAIM — needs product-truth validation (confirm the product actually delivers this before publishing).",
+      "excerpt": "one login, one bill, ~$16,860/year back."
+    },
+    {
+      "kind": "tag",
+      "severity": "flag",
+      "vc_id": "VC-8",
+      "status": "PRODUCT-CLAIM",
+      "message": "VC-8 is a PRODUCT-CLAIM — needs product-truth validation (confirm the product actually delivers this before publishing).",
+      "excerpt": ""
+    },
+    {
+      "kind": "tag",
+      "severity": "flag",
+      "vc_id": "VC-8",
+      "status": "PRODUCT-CLAIM",
+      "message": "VC-8 is a PRODUCT-CLAIM — needs product-truth validation (confirm the product actually delivers this before publishing).",
+      "excerpt": "Vera reads the signed SOAP and drafts the discharge in plain English for one-click approval."
+    },
+    {
+      "kind": "tag",
+      "severity": "flag",
+      "vc_id": "VC-8",
+      "status": "PRODUCT-CLAIM",
+      "message": "VC-8 is a PRODUCT-CLAIM — needs product-truth validation (confirm the product actually delivers this before publishing).",
+      "excerpt": ""
+    },
+    {
+      "kind": "tag",
+      "severity": "flag",
+      "vc_id": "VC-8",
+      "status": "PRODUCT-CLAIM",
+      "message": "VC-8 is a PRODUCT-CLAIM — needs product-truth validation (confirm the product actually delivers this before publishing).",
+      "excerpt": "Vera fills cancellations from the waitlist and flags overdue patients before they're gone."
+    },
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-4",
+      "status": "VERIFIED",
+      "message": "VC-4 resolves to a VERIFIED claim.",
+      "excerpt": ""
+    },
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-4",
+      "status": "VERIFIED",
+      "message": "VC-4 resolves to a VERIFIED claim.",
+      "excerpt": "works nights and weekends, never forgets a patient, gets more capable as she learns."
+    },
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-9",
+      "status": "VERIFIED",
+      "message": "VC-9 resolves to a VERIFIED claim.",
+      "excerpt": "Your investment is in your data — and all of it migrates with you. Cornerstone has no cloud, no mobile, and zero AI (every agentic feature scores ❌). The question is whether to mov…"
+    },
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-1",
+      "status": "VERIFIED",
+      "message": "VC-1 resolves to a VERIFIED claim.",
+      "excerpt": "The decision's been made for you — Covetrus is sunsetting it. You have a switching event already; make it count on the platform where AI fills the schedule and chases follow-up, no…"
+    },
+    {
+      "kind": "tag",
+      "severity": "flag",
+      "vc_id": "VC-8",
+      "status": "PRODUCT-CLAIM",
+      "message": "VC-8 is a PRODUCT-CLAIM — needs product-truth validation (confirm the product actually delivers this before publishing).",
+      "excerpt": "Shepherd's SOAP AI is genuinely great. The gap is everything around it — click-heavy UX, no agentic follow-up, and you still pay for PetDesk on top. VetAgent includes native comms…"
+    }
+  ]
+}

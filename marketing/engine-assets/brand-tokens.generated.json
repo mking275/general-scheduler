@@ -1,0 +1,86 @@
+{
+  "vertical": "vetagent",
+  "name": "VetAgent",
+  "draft": true,
+  "generated_by": "marketing-asset-engine/brandgen (T018, FR-13)",
+  "note": "DRAFT generated brand identity — palette/type/logo/voice for human finish.",
+  "colors": {
+    "brand": {
+      "blue": "#3d259d",
+      "green": "#5c7dbc",
+      "gold": "#dad42f",
+      "ink": "#191528"
+    },
+    "brand_shades": {
+      "blue-deep": "#2b1877",
+      "green-deep": "#3a5b9c",
+      "gold-deep": "#a5a027"
+    },
+    "neutrals": {
+      "paper": "#f8f8f9",
+      "card": "#ffffff",
+      "line": "#e3e2e9",
+      "muted": "#605c70",
+      "faint": "#8f8b9c",
+      "white": "#ffffff",
+      "black": "#000000"
+    },
+    "logo": {
+      "fs-green": "#5c7dbc",
+      "fs-blue": "#3d259d"
+    },
+    "deck": {
+      "void": "#0a0812",
+      "surface": "#141023",
+      "surface2": "#1e1933",
+      "border": "#2e2749",
+      "blue-b": "#512fda",
+      "green-d": "#4265a9",
+      "cream": "#eae8b8",
+      "grey-m": "#60587e",
+      "grey-l": "#afa9c6",
+      "text": "#f0eef6",
+      "text2": "#b4aecb"
+    }
+  },
+  "fonts": {
+    "display": "Verdana",
+    "body": "Georgia",
+    "display_stack": "Verdana,Geneva,system-ui,sans-serif",
+    "body_stack": "Georgia,'Times New Roman',serif",
+    "mono_stack": "ui-monospace,Menlo,Consolas,monospace",
+    "system_fallbacks": [
+      "Consolas",
+      "Geneva",
+      "Georgia",
+      "Menlo",
+      "Times New Roman",
+      "Verdana",
+      "monospace",
+      "sans-serif",
+      "serif",
+      "system-ui",
+      "ui-monospace"
+    ]
+  },
+  "logo": {
+    "name": "VetAgent mark (generated)",
+    "viewBox": "0 0 64 64",
+    "svg": "<svg viewBox=\"0 0 64 64\" role=\"img\" aria-label=\"VetAgent\"><rect x=\"3\" y=\"3\" width=\"58\" height=\"58\" rx=\"15\" fill=\"#3d259d\"/><circle cx=\"32\" cy=\"32\" r=\"20\" fill=\"none\" stroke=\"#dad42f\" stroke-width=\"3\"/><circle cx=\"32\" cy=\"32\" r=\"6\" fill=\"#5c7dbc\"/><text x=\"32\" y=\"33\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"Georgia,serif\" font-size=\"20\" font-weight=\"700\" fill=\"#ffffff\">VA</text></svg>",
+    "monogram": "VA"
+  },
+  "wordmark": "Vet<span>Agent</span>",
+  "voice": {
+    "persona": "Vera",
+    "persona_note": "generated profile (DRAFT) — confirm naming/clearance before use",
+    "tone": [
+      "concrete",
+      "numeric",
+      "no-hype",
+      "competent",
+      "warm"
+    ],
+    "register": "respect the reader's intelligence; lead with real numbers, then the story",
+    "boundary": "proposes and acts on routine admin; the human retains final approval"
+  }
+}

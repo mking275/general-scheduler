@@ -1,0 +1,35 @@
+{
+  "asset": "enablement-whatsapp",
+  "ready": true,
+  "summary": {
+    "ok": 3,
+    "flag": 0,
+    "fail": 0
+  },
+  "findings": [
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-1",
+      "status": "VERIFIED",
+      "message": "VC-1 resolves to a VERIFIED claim.",
+      "excerpt": "> Tone: warm, clear, reassuring. The decision is always the customer's; we help. ### Message 1 · Reminder The biggest displacement wave in PIMS history is here: Cornerstone has no…"
+    },
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-2",
+      "status": "VERIFIED",
+      "message": "VC-2 resolves to a VERIFIED claim.",
+      "excerpt": "acement wave in PIMS history is here: Cornerstone has no cloud roadmap and Avimark is being sunset — 25,000+ practices are being forced to move. [VC-1] The average 3-vet practice p…"
+    },
+    {
+      "kind": "tag",
+      "severity": "ok",
+      "vc_id": "VC-5",
+      "status": "VERIFIED",
+      "message": "VC-5 resolves to a VERIFIED claim.",
+      "excerpt": "t wave in PIMS history is here: Cornerstone has no cloud roadmap and Avimark is being sunset — 25,000+ practices are being forced to move. [VC-1] The average 3-vet practice pays ~$…"
+    }
+  ]
+}

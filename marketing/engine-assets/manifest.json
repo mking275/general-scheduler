@@ -1,0 +1,97 @@
+{
+  "engine": "marketing-asset-engine",
+  "phase": "A",
+  "task": "T008-orchestrator + T017-locale + T018-brandgen",
+  "vertical": "vetagent",
+  "inputs_dir": "/home/matt/SMB_Hunt/General_Scheduler/marketing/engine-inputs",
+  "locales": [
+    "en"
+  ],
+  "primary_locale": "en",
+  "brand_tokens": "GENERATED -> /home/matt/COS-platform/skills/marketing-asset-engine/outputs/vetagent/brand-tokens.generated.json",
+  "brand_generated": true,
+  "publish": false,
+  "all_ready": true,
+  "assets": [
+    {
+      "name": "landing",
+      "kind": "html",
+      "file": "landing.html",
+      "claimcheck_report": "landing.claimcheck.json",
+      "ready": true,
+      "claimcheck": {
+        "ok": 9,
+        "flag": 10,
+        "fail": 0
+      },
+      "claimcheck_by_locale": {
+        "en": {
+          "ok": 9,
+          "flag": 10,
+          "fail": 0
+        }
+      },
+      "brand_offtoken": 0
+    },
+    {
+      "name": "deck",
+      "kind": "html",
+      "file": "deck.html",
+      "claimcheck_report": "deck.claimcheck.json",
+      "ready": true,
+      "claimcheck": {
+        "ok": 8,
+        "flag": 11,
+        "fail": 0
+      },
+      "claimcheck_by_locale": {
+        "en": {
+          "ok": 8,
+          "flag": 11,
+          "fail": 0
+        }
+      },
+      "brand_offtoken": 0
+    },
+    {
+      "name": "enablement-onepager",
+      "kind": "html",
+      "file": "enablement-onepager.html",
+      "claimcheck_report": "enablement-onepager.claimcheck.json",
+      "ready": true,
+      "claimcheck": {
+        "ok": 7,
+        "flag": 6,
+        "fail": 0
+      },
+      "claimcheck_by_locale": {
+        "en": {
+          "ok": 7,
+          "flag": 6,
+          "fail": 0
+        }
+      },
+      "brand_offtoken": 0
+    },
+    {
+      "name": "enablement-whatsapp",
+      "kind": "markdown",
+      "file": "enablement-whatsapp.md",
+      "claimcheck_report": "enablement-whatsapp.claimcheck.json",
+      "ready": true,
+      "claimcheck": {
+        "ok": 3,
+        "flag": 0,
+        "fail": 0
+      },
+      "claimcheck_by_locale": {
+        "all": {
+          "ok": 3,
+          "flag": 0,
+          "fail": 0
+        }
+      },
+      "brand_offtoken": 0
+    }
+  ]
+}
