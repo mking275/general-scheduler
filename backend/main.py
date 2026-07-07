@@ -505,7 +505,9 @@ def create_soap_draft(req: SoapDraftRequest):
     note = soap_agent.generate(req.timeblock_id, procedure, patient, brief)
     db.save_soap_note(note)
 
-    log_agent_step("SOAP AGENT", f"Draft generated from {(procedure or 'General')} template" + (" + intake brief" if brief and brief.status == "received" else ""))
+    from .agents.soap import _LLM_AVAILABLE as soap_llm
+    mode = "Gemini LLM" if soap_llm else f"{(procedure or 'General')} template"
+    log_agent_step("SOAP AGENT", f"Draft generated via {mode}" + (" + intake brief" if brief and brief.status == "received" else ""))
     return note.model_dump()
 
 @app.put("/api/soap/{note_id}")

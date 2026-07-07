@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VetAgent — Demo for Dr. Jay Goldsmith</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #09090b; --surface: #18181b; --surface2: #27272a;
+    --border: rgba(63,63,70,0.4); --text: #fafafa; --text2: #a1a1aa;
+    --text3: #71717a; --accent: #818cf8; --accent2: #6366f1;
+    --green: #34d399; --amber: #fbbf24; --red: #f87171;
+    --pink: #ec4899; --cyan: #06b6d4; --purple: #a855f7;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.6; overflow-x: hidden;
+  }
+  a { color: var(--accent); text-decoration: none; }
+
+  /* ── Hero ── */
+  .hero {
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    padding: 60px 24px;
+    background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(99,102,241,0.15) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 40% at 80% 80%, rgba(236,72,153,0.08) 0%, transparent 50%);
+    position: relative;
+  }
+  .hero::before {
+    content: ''; position: absolute; inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h60v60H0z' fill='none'/%3E%3Cpath d='M30 0v60M0 30h60' stroke='%2327272a' stroke-width='0.5'/%3E%3C/svg%3E");
+    opacity: 0.3;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px; border-radius: 99px;
+    background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3);
+    font-size: 0.78rem; font-weight: 600; color: var(--accent);
+    margin-bottom: 24px; position: relative; letter-spacing: 0.04em;
+  }
+  .hero-badge::before { content: '●'; color: var(--green); font-size: 0.6rem; animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .hero h1 {
+    font-size: clamp(2.4rem, 5vw, 4.2rem); font-weight: 900;
+    letter-spacing: -0.03em; line-height: 1.1; position: relative;
+    background: linear-gradient(135deg, #fff 0%, #a5b4fc 50%, #818cf8 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 20px; max-width: 800px;
+  }
+  .hero-sub {
+    font-size: 1.15rem; color: var(--text2); max-width: 620px;
+    line-height: 1.7; position: relative; margin-bottom: 32px;
+  }
+  .hero-meta {
+    display: flex; gap: 32px; font-size: 0.82rem; color: var(--text3);
+    position: relative; flex-wrap: wrap; justify-content: center;
+  }
+  .hero-meta span { display: flex; align-items: center; gap: 6px; }
+
+  /* ── Sections ── */
+  section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
+  .section-label {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--accent); margin-bottom: 8px;
+  }
+  .section-title {
+    font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em;
+    margin-bottom: 12px; line-height: 1.2;
+  }
+  .section-desc {
+    font-size: 1rem; color: var(--text2); max-width: 680px;
+    margin-bottom: 48px; line-height: 1.7;
+  }
+
+  /* ── Stat Cards ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 60px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px 24px; text-align: center;
+    transition: all 0.3s ease;
+  }
+  .stat-card:hover { border-color: rgba(129,140,248,0.4); transform: translateY(-2px); }
+  .stat-value {
+    font-size: 2.8rem; font-weight: 900; letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--accent), var(--green));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .stat-label { font-size: 0.82rem; color: var(--text3); margin-top: 6px; font-weight: 500; }
+
+  /* ── Demo Flow ── */
+  .demo-flow { display: flex; flex-direction: column; gap: 0; position: relative; }
+  .demo-flow::before {
+    content: ''; position: absolute; left: 23px; top: 0; bottom: 0;
+    width: 2px; background: linear-gradient(to bottom, var(--accent), rgba(129,140,248,0.1));
+  }
+  .demo-step {
+    display: flex; gap: 20px; padding: 24px 0;
+    position: relative; transition: all 0.2s ease;
+  }
+  .demo-step:hover { transform: translateX(4px); }
+  .demo-dot {
+    width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; font-weight: 800; z-index: 1;
+    background: var(--surface); border: 2px solid var(--accent);
+    color: var(--accent);
+  }
+  .demo-content h3 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  .demo-content p { font-size: 0.85rem; color: var(--text2); }
+  .demo-tag {
+    display: inline-block; padding: 2px 10px; border-radius: 6px;
+    font-size: 0.68rem; font-weight: 700; margin-top: 8px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .demo-tag.live { background: rgba(52,211,153,0.12); color: var(--green); border: 1px solid rgba(52,211,153,0.3); }
+  .demo-tag.ai { background: rgba(129,140,248,0.12); color: var(--accent); border: 1px solid rgba(129,140,248,0.3); }
+  .demo-tag.data { background: rgba(251,191,36,0.12); color: var(--amber); border: 1px solid rgba(251,191,36,0.3); }
+
+  /* ── Feature Comparison ── */
+  .comp-table-wrap {
+    overflow-x: auto; border-radius: 16px;
+    border: 1px solid var(--border); background: var(--surface);
+  }
+  .comp-table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  .comp-table th, .comp-table td { padding: 12px 16px; text-align: center; border-bottom: 1px solid rgba(63,63,70,0.25); }
+  .comp-table th { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text3); background: rgba(9,9,11,0.5); }
+  .comp-table th:first-child, .comp-table td:first-child { text-align: left; font-weight: 600; min-width: 200px; }
+  .comp-table td { font-size: 0.82rem; }
+  .comp-table tbody tr:hover { background: rgba(129,140,248,0.04); }
+  .comp-table .cat-row td { background: rgba(99,102,241,0.06); font-weight: 800; color: var(--accent); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 2px solid rgba(99,102,241,0.15); }
+  .comp-table .va-col { background: rgba(129,140,248,0.04); }
+  .comp-table th.va-col { background: rgba(99,102,241,0.12); color: var(--accent); font-size: 0.82rem; }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: 700; }
+  .chip.yes { background: rgba(52,211,153,0.12); color: var(--green); }
+  .chip.partial { background: rgba(251,191,36,0.12); color: var(--amber); }
+  .chip.no { background: rgba(248,113,113,0.08); color: rgba(248,113,113,0.5); }
+  .chip.unique { background: rgba(129,140,248,0.15); color: var(--accent); border: 1px solid rgba(129,140,248,0.3); }
+  .chip.plan { background: rgba(168,85,247,0.12); color: var(--purple); }
+  .score-bar { display: flex; gap: 4px; justify-content: center; align-items: center; }
+  .score-bar .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .score-bar .dot.on { background: var(--green); }
+  .score-bar .dot.off { background: rgba(63,63,70,0.4); }
+
+  /* ── Module Cards ── */
+  .mod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  .mod-card {
+    border-radius: 16px; padding: 28px; border: 1px solid var(--border);
+    background: var(--surface); transition: all 0.3s ease; position: relative;
+    overflow: hidden;
+  }
+  .mod-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 3px; border-radius: 16px 16px 0 0;
+  }
+  .mod-card:hover { transform: translateY(-3px); border-color: rgba(129,140,248,0.3); }
+  .mod-icon { font-size: 2rem; margin-bottom: 12px; }
+  .mod-name { font-size: 1.1rem; font-weight: 800; margin-bottom: 2px; }
+  .mod-id { font-size: 0.68rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .mod-desc { font-size: 0.82rem; color: var(--text2); line-height: 1.6; margin-bottom: 16px; }
+  .mod-features { list-style: none; padding: 0; margin: 0 0 16px; }
+  .mod-features li {
+    font-size: 0.78rem; color: var(--text2); padding: 4px 0;
+    display: flex; align-items: flex-start; gap: 8px;
+  }
+  .mod-features li::before { content: '→'; color: var(--accent); font-weight: 700; flex-shrink: 0; }
+  .mod-price { font-size: 0.82rem; font-weight: 700; }
+  .mod-status {
+    display: inline-block; padding: 3px 10px; border-radius: 6px;
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Market Opportunity ── */
+  .opp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .opp-card {
+    border-radius: 16px; padding: 32px; border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .opp-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
+  .opp-item { padding: 10px 0; border-bottom: 1px solid rgba(63,63,70,0.2); }
+  .opp-item:last-child { border-bottom: none; }
+  .opp-item .label { font-size: 0.82rem; color: var(--text2); }
+  .opp-item .value { font-size: 1.1rem; font-weight: 700; margin-top: 2px; }
+
+  /* ── CTA ── */
+  .cta-section {
+    text-align: center; padding: 100px 24px;
+    background: radial-gradient(ellipse 70% 50% at 50% 100%, rgba(99,102,241,0.12) 0%, transparent 60%);
+  }
+  .cta-section h2 { font-size: 2.4rem; font-weight: 900; margin-bottom: 16px; letter-spacing: -0.02em; }
+  .cta-section p { font-size: 1.05rem; color: var(--text2); max-width: 600px; margin: 0 auto 32px; }
+  .cta-pillars { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin-top: 40px; }
+  .cta-pillar {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px; width: 220px; text-align: center;
+  }
+  .cta-pillar .icon { font-size: 1.8rem; margin-bottom: 10px; }
+  .cta-pillar h4 { font-size: 0.92rem; font-weight: 700; margin-bottom: 6px; }
+  .cta-pillar p { font-size: 0.78rem; color: var(--text3); margin: 0; }
+
+  /* ── Nav ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(9,9,11,0.85); backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(63,63,70,0.3); padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between; height: 56px;
+  }
+  nav .logo { font-size: 1.05rem; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 8px; }
+  nav .logo span { color: var(--accent); }
+  nav .links { display: flex; gap: 24px; }
+  nav .links a { font-size: 0.78rem; font-weight: 500; color: var(--text3); transition: color 0.15s; }
+  nav .links a:hover { color: var(--text); }
+
+  .divider { height: 1px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: 0 auto; max-width: 800px; }
+
+  /* ── Cost Comparison ── */
+  .cost-section { max-width: 1200px; margin: 0 auto; padding: 80px 24px; }
+  .cost-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+  .cost-col {
+    border-radius: 16px; padding: 32px; border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .cost-col.legacy { border-color: rgba(248,113,113,0.25); }
+  .cost-col.legacy h3 { color: var(--red); }
+  .cost-col.va { border-color: rgba(52,211,153,0.3); background: rgba(52,211,153,0.03); }
+  .cost-col.va h3 { color: var(--green); }
+  .cost-vs {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem; font-weight: 900; color: var(--text3);
+    padding: 0 20px; min-width: 60px;
+  }
+  .cost-line {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 8px 0; border-bottom: 1px solid rgba(63,63,70,0.15);
+  }
+  .cost-line:last-of-type { border-bottom: none; }
+  .cost-line .cl-name { font-size: 0.82rem; color: var(--text2); }
+  .cost-line .cl-price { font-size: 0.88rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cost-line .cl-note { font-size: 0.68rem; color: var(--text3); display: block; }
+  .cost-total {
+    margin-top: 16px; padding-top: 16px;
+    border-top: 2px solid rgba(63,63,70,0.3);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .cost-total .ct-label { font-size: 0.88rem; font-weight: 700; }
+  .cost-total .ct-price { font-size: 1.5rem; font-weight: 900; }
+  .cost-savings {
+    margin-top: 24px; padding: 24px; border-radius: 14px;
+    border: 1px solid rgba(52,211,153,0.25); background: rgba(52,211,153,0.05);
+    text-align: center;
+  }
+  .cost-savings .sv-label { font-size: 0.78rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .cost-savings .sv-value { font-size: 2.4rem; font-weight: 900; color: var(--green); letter-spacing: -0.02em; }
+  .cost-savings .sv-sub { font-size: 0.82rem; color: var(--text2); margin-top: 4px; }
+  .cost-col h3 { font-size: 1rem; font-weight: 800; margin-bottom: 4px; }
+  .cost-col .cost-sub { font-size: 0.72rem; color: var(--text3); margin-bottom: 20px; }
+
+  @media (max-width: 900px) {
+    .cost-grid { grid-template-columns: 1fr; gap: 16px; }
+    .cost-vs { padding: 12px 0; font-size: 1.1rem; }
+  }
+  @media (max-width: 768px) {
+    .opp-grid { grid-template-columns: 1fr; }
+    .hero-meta { flex-direction: column; gap: 8px; }
+    .cta-pillars { flex-direction: column; align-items: center; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">🐾 <span>Vet</span>Agent</div>
+  <div class="links">
+    <a href="#overview">Overview</a>
+    <a href="#demo">Live Demo</a>
+    <a href="#comparison">vs. Competitors</a>
+    <a href="#modules">Modules</a>
+    <a href="#market">Market</a>
+    <a href="#cost">Cost</a>
+    <a href="#partnership">Partnership</a>
+  </div>
+</nav>
+
+<!-- ═══ HERO ═══ -->
+<div class="hero">
+  <div class="hero-badge">PRIVATE DEMO · JULY 7, 2026</div>
+  <h1>The AI-Native Practice Management Platform Built for Modern Veterinary Medicine</h1>
+  <p class="hero-sub">
+    VetAgent replaces passive record-keeping with autonomous AI agents that draft SOAP notes,
+    triage intake, manage care protocols, score patient risk, and act on your behalf — without waiting for a click.
+  </p>
+  <div class="hero-meta">
+    <span>📋 Prepared for <strong style="color:#e4e4e7">Dr. Jay Goldsmith</strong></span>
+    <span>🏥 <strong style="color:#e4e4e7">23-Clinic Veterinary Group</strong></span>
+    <span>🤝 <strong style="color:#e4e4e7">Development Partnership Discussion</strong></span>
+  </div>
+</div>
+
+<!-- ═══ MARKET STATS ═══ -->
+<section id="overview">
+  <div class="section-label">The Opportunity</div>
+  <div class="section-title">A $4.2B Market Running on 1990s Software</div>
+  <div class="section-desc">
+    Over 33,000 veterinary practices in the US alone run on legacy PIMS — Cornerstone (1985), Avimark (1989), or newer but still reactive cloud tools. None have true AI automation. VetAgent is built from the ground up as an agent-first platform.
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value">33K+</div>
+      <div class="stat-label">US Vet Practices</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">$4.2B</div>
+      <div class="stat-label">PIMS Market Size (2026)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">72%</div>
+      <div class="stat-label">Still on Legacy On-Prem</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0</div>
+      <div class="stat-label">Competitors with Agentic AI</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══ DEMO WALKTHROUGH ═══ -->
+<section id="demo">
+  <div class="section-label">Today's Demo</div>
+  <div class="section-title">What You'll See Today</div>
+  <div class="section-desc">
+    A complete clinical workflow — from scheduling through discharge — powered by autonomous AI agents.
+    All running live with Rex, a 6-year-old German Shepherd scheduled for TPLO surgery.
+  </div>
+
+  <div class="demo-flow">
+    <div class="demo-step">
+      <div class="demo-dot">1</div>
+      <div class="demo-content">
+        <h3>Multi-Clinic Scheduling & Role-Based Views</h3>
+        <p>5 role perspectives (Front Desk, Vet Tech, Veterinarian, Regional Manager, Account Admin). Multi-location support with clinic switching, floating vet assignments, and resource management.</p>
+        <span class="demo-tag live">Live Demo</span>
+      </div>
+    </div>
+    <div class="demo-step">
+      <div class="demo-dot">2</div>
+      <div class="demo-content">
+        <h3>Rex's Complete 4-Year Clinical History</h3>
+        <p>8 signed SOAP notes, 9 lab panels with full analytes, 4 radiograph studies with AI-generated X-ray images, 5 prescriptions, 15 vaccine/care events — all viewable in the patient card.</p>
+        <span class="demo-tag data">Rich Demo Data</span>
+      </div>
+    </div>
+    <div class="demo-step">
+      <div class="demo-dot">3</div>
+      <div class="demo-content">
+        <h3>AI-Powered SOAP Note Drafting</h3>
+        <p>Open the SOAP Workspace → AI agent drafts the note from appointment context, pre-visit intake, and patient history. Vet edits and signs. No dictation — the agent <em>writes</em>.</p>
+        <span class="demo-tag ai">Agentic AI</span>
+      </div>
+    </div>
+    <div class="demo-step">
+      <div class="demo-dot">4</div>
+      <div class="demo-content">
+        <h3>Breed Intelligence & Risk Scoring</h3>
+        <p>German Shepherd breed protocol fires automatically: hip dysplasia screening alert, DM carrier risk, bloat prevention. Patient risk scoring visible on every appointment card.</p>
+        <span class="demo-tag ai">Agentic AI</span>
+      </div>
+    </div>
+    <div class="demo-step">
+      <div class="demo-dot">5</div>
+      <div class="demo-content">
+        <h3>Lab Integration & Critical Value Workflow</h3>
+        <p>Order panels, simulate IDEXX/Antech/Heska results, see auto-filed analyte tables with critical value flagging and vet acknowledgment flow.</p>
+        <span class="demo-tag live">Live Demo</span>
+      </div>
+    </div>
+    <div class="demo-step">
+      <div class="demo-dot">6</div>
+      <div class="demo-content">
+        <h3>Autonomous Agent Pipeline</h3>
+        <p>Watch the Verbose Log as 8+ agents coordinate: Intake Agent → Risk Agent → SOAP Agent → Billing Agent → Follow-Up Agent → Reminder Agent — all without manual triggers.</p>
+        <span class="demo-tag ai">Agentic AI</span>
+      </div>
+    </div>
+    <div class="demo-step">
+      <div class="demo-dot">7</div>
+      <div class="demo-content">
+        <h3>Checkout & Invoice Generation</h3>
+        <p>Front Desk view: Mark Complete → Invoice auto-drafted from SOAP Plan → payment terminal ready. Full appointment-to-checkout flow.</p>
+        <span class="demo-tag live">Live Demo</span>
+      </div>
+    </div>
+    <div class="demo-step">
+      <div class="demo-dot">8</div>
+      <div class="demo-content">
+        <h3>Module Marketplace & Account Management</h3>
+        <p>9 add-on modules with expandable marketing cards. Full account portal with billing, invoices, clinics, plan management, and user administration.</p>
+        <span class="demo-tag live">Live Demo</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══ FEATURE COMPARISON ═══ -->
+<section id="comparison">
+  <div class="section-label">Competitive Landscape</div>
+  <div class="section-title">Feature-by-Feature: VetAgent vs. the Market</div>
+  <div class="section-desc">
+    We've scored 66 features across 8 categories against the 4 major competitors.
+    VetAgent leads in AI/Agentic, Clinical, and Laboratory — and matches or exceeds on Scheduling and Platform.
+  </div>
+
+  <div class="comp-table-wrap">
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th class="va-col">VetAgent</th>
+          <th>Cornerstone<br><span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.65rem;color:#52525b">IDEXX · Legacy</span></th>
+          <th>ezyVet<br><span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.65rem;color:#52525b">IDEXX · Cloud</span></th>
+          <th>Shepherd<br><span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.65rem;color:#52525b">Cloud · US</span></th>
+          <th>Digitail<br><span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.65rem;color:#52525b">Cloud · AI</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- SCHEDULING -->
+        <tr class="cat-row"><td colspan="6">Scheduling (8 features)</td></tr>
+        <tr><td>Appointment Scheduling</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>Multi-Location Support</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>Room & Resource Mgmt</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip partial">⚠️</span></td></tr>
+        <tr><td>Waitlist Management</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip no">❌</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip yes">✅</span></td><td><span class="chip no">❌</span></td></tr>
+        <tr><td>Automated Reminders</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>Two-Way Client Texting</td><td class="va-col"><span class="chip partial">⚠️ Sim</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>Online Self-Scheduling</td><td class="va-col"><span class="chip plan">🗓 Planned</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>Boarding/Kennel Mgmt</td><td class="va-col"><span class="chip plan">🗓 Planned</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip no">❌</span></td></tr>
+
+        <!-- CLINICAL -->
+        <tr class="cat-row"><td colspan="6">Clinical (10 features)</td></tr>
+        <tr><td>SOAP Note Creation</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>AI SOAP Drafting</td><td class="va-col"><span class="chip unique">🧠 Agentic</span></td><td><span class="chip no">❌</span></td><td><span class="chip partial">⚠️ Beta</span></td><td><span class="chip partial">⚠️ Dictation</span></td><td><span class="chip partial">⚠️ Advisory</span></td></tr>
+        <tr><td>Pre-Visit Intake</td><td class="va-col"><span class="chip unique">🧠 Agentic</span></td><td><span class="chip no">❌</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip no">❌</span></td><td><span class="chip partial">⚠️</span></td></tr>
+        <tr><td>Photo/Imaging Attach</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>Vaccine & Care Protocols</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>Prescription Mgmt</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>Breed-Specific Alerts</td><td class="va-col"><span class="chip unique">🧠 Agentic</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td></tr>
+        <tr><td>Patient Risk Scoring</td><td class="va-col"><span class="chip unique">🧠 Agentic</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip partial">⚠️</span></td></tr>
+        <tr><td>Post-Visit Follow-Up</td><td class="va-col"><span class="chip unique">🧠 Agentic</span></td><td><span class="chip no">❌</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip no">❌</span></td><td><span class="chip partial">⚠️</span></td></tr>
+        <tr><td>Telemedicine</td><td class="va-col"><span class="chip plan">MOD-TEL</span></td><td><span class="chip no">❌</span></td><td><span class="chip partial">⚠️ 3rd</span></td><td><span class="chip no">❌</span></td><td><span class="chip partial">⚠️ 3rd</span></td></tr>
+
+        <!-- AI/AGENTIC -->
+        <tr class="cat-row"><td colspan="6">AI & Agentic Capabilities (10 features)</td></tr>
+        <tr><td>AI SOAP Drafting</td><td class="va-col"><span class="chip unique">🧠 Autonomous</span></td><td><span class="chip no">❌</span></td><td><span class="chip partial">⚠️ Beta</span></td><td><span class="chip partial">⚠️ Listen</span></td><td><span class="chip partial">⚠️ Advisory</span></td></tr>
+        <tr><td>Agentic Pre-Visit Intake</td><td class="va-col"><span class="chip unique">🧠 Autonomous</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td></tr>
+        <tr><td>Automated Risk Scoring</td><td class="va-col"><span class="chip unique">🧠 Autonomous</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td></tr>
+        <tr><td>Agentic Follow-Up</td><td class="va-col"><span class="chip unique">🧠 Autonomous</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td></tr>
+        <tr><td>AI Waitlist Backfill</td><td class="va-col"><span class="chip unique">🧠 Autonomous</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td></tr>
+        <tr><td>Agentic Reminder Pipeline</td><td class="va-col"><span class="chip unique">🧠 Autonomous</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td></tr>
+        <tr><td>Predictive Forecasting</td><td class="va-col"><span class="chip unique">🧠 Autonomous</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td></tr>
+        <tr><td>Agentic Billing from SOAP</td><td class="va-col"><span class="chip partial">⚠️ Partial</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td></tr>
+        <tr><td>Agent Audit Log</td><td class="va-col"><span class="chip unique">🧠 Built</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td></tr>
+        <tr><td>Modular AI Architecture</td><td class="va-col"><span class="chip partial">⚠️ Partial</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td><td><span class="chip no">❌</span></td></tr>
+
+        <!-- LABORATORY -->
+        <tr class="cat-row"><td colspan="6">Laboratory & Diagnostics (8 features)</td></tr>
+        <tr><td>IDEXX In-House</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅ Native</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>IDEXX Reference Lab</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅ Native</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+        <tr><td>Antech Integration</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip yes">✅</span></td><td><span class="chip partial">⚠️</span></td></tr>
+        <tr><td>Heska / Vetscan</td><td class="va-col"><span class="chip yes">✅ Both</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip yes">✅</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip partial">⚠️</span></td></tr>
+        <tr><td>DICOM/Imaging</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip partial">⚠️</span></td><td><span class="chip partial">⚠️</span></td></tr>
+        <tr><td>Auto-File Results</td><td class="va-col"><span class="chip yes">✅ Built</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td><td><span class="chip yes">✅</span></td></tr>
+
+        <!-- SUMMARY ROW -->
+        <tr class="cat-row"><td colspan="6">Overall Score Summary</td></tr>
+        <tr>
+          <td style="font-weight:800">Total Features Built</td>
+          <td class="va-col" style="font-weight:800;color:#34d399;font-size:1.2rem">42 / 66</td>
+          <td style="color:#a1a1aa">28 / 66</td>
+          <td style="color:#a1a1aa">35 / 66</td>
+          <td style="color:#a1a1aa">26 / 66</td>
+          <td style="color:#a1a1aa">24 / 66</td>
+        </tr>
+        <tr>
+          <td style="font-weight:800">AI/Agentic Score</td>
+          <td class="va-col" style="font-weight:800;color:#818cf8;font-size:1.2rem">8 / 10</td>
+          <td style="color:#52525b">0 / 10</td>
+          <td style="color:#52525b">1 / 10</td>
+          <td style="color:#52525b">1 / 10</td>
+          <td style="color:#52525b">1 / 10</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══ MODULES ═══ -->
+<section id="modules">
+  <div class="section-label">Product Roadmap</div>
+  <div class="section-title">9 Add-On Modules — From Base to Enterprise</div>
+  <div class="section-desc">
+    Each module replaces a passive record with a proactive AI agent.
+    Modular pricing means clinics pay only for what they use.
+  </div>
+
+  <div class="mod-grid">
+    <div class="mod-card" style="border-top: 3px solid #10b981">
+      <div class="mod-icon">💳</div>
+      <div class="mod-name">Financial Operations</div>
+      <div class="mod-id">MOD-FIN · $79/mo</div>
+      <div class="mod-desc">Auto-invoice from SOAP, integrated payment terminal, end-of-day reconciliation, insurance claims, and collections tracking.</div>
+      <ul class="mod-features">
+        <li>SOAP-to-invoice in one click — no double entry</li>
+        <li>Card, Apple Pay, Cash, Split-Tender, Payment Plans</li>
+        <li>QuickBooks / Xero real-time sync</li>
+      </ul>
+      <span class="mod-status" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.25)">Active in Demo</span>
+    </div>
+
+    <div class="mod-card" style="border-top: 3px solid #6366f1">
+      <div class="mod-icon">💬</div>
+      <div class="mod-name">Client Communications</div>
+      <div class="mod-id">MOD-COM · $49/mo</div>
+      <div class="mod-desc">Real SMS/email via Twilio & SendGrid. Two-way conversations, smart reminder pipeline, and digital intake forms.</div>
+      <ul class="mod-features">
+        <li>67% reduction in no-shows with automated sequences</li>
+        <li>Owner replies auto-routed to correct workflow</li>
+        <li>CAN-SPAM / TCPA compliant opt-out management</li>
+      </ul>
+      <span class="mod-status" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.25)">Active in Demo</span>
+    </div>
+
+    <div class="mod-card" style="border-top: 3px solid #f59e0b">
+      <div class="mod-icon">💊</div>
+      <div class="mod-name">Inventory & Pharmacy</div>
+      <div class="mod-id">MOD-INV · $69/mo</div>
+      <div class="mod-desc">Per-clinic drug stock, DEA controlled substance logging, smart reorder agent, pharmacy dispensing workflow, distributor integration.</div>
+      <ul class="mod-features">
+        <li>$18K avg annual savings from optimized ordering</li>
+        <li>Auto PO to Covetrus, MWI, Patterson</li>
+        <li>Lot & expiry tracking with FIFO alerts</li>
+      </ul>
+      <span class="mod-status" style="background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.25)">Designed · P2</span>
+    </div>
+
+    <div class="mod-card" style="border-top: 3px solid #ec4899">
+      <div class="mod-icon">📹</div>
+      <div class="mod-name">Telemedicine</div>
+      <div class="mod-id">MOD-TEL · $89/mo</div>
+      <div class="mod-desc">HIPAA-compliant video consults, async triage, remote prescribing, and virtual waiting room with VCPR tracking.</div>
+      <ul class="mod-features">
+        <li>3.2× ROI within 6 months on virtual follow-ups</li>
+        <li>AI triage: routine vs. urgent vs. emergency</li>
+        <li>SOAP workspace in split-view during call</li>
+      </ul>
+      <span class="mod-status" style="background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.25)">Designed · P2</span>
+    </div>
+
+    <div class="mod-card" style="border-top: 3px solid #8b5cf6">
+      <div class="mod-icon">📊</div>
+      <div class="mod-name">Analytics & BI</div>
+      <div class="mod-id">MOD-ANL · $59/mo</div>
+      <div class="mod-desc">Practice Health Score, retention cohorts, revenue intelligence, custom report builder, and multi-clinic dashboards.</div>
+      <ul class="mod-features">
+        <li>14% avg revenue increase in 90 days</li>
+        <li>Churn risk flags with auto win-back campaigns</li>
+        <li>Per-vet, per-service revenue breakdowns</li>
+      </ul>
+      <span class="mod-status" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.25)">Active in Demo</span>
+    </div>
+
+    <div class="mod-card" style="border-top: 3px solid #06b6d4">
+      <div class="mod-icon">📣</div>
+      <div class="mod-name">Marketing & Social</div>
+      <div class="mod-id">MOD-MAR · $49/mo</div>
+      <div class="mod-desc">AI-powered review requests, social content calendar, segmented campaigns, and referral rewards tracking.</div>
+      <ul class="mod-features">
+        <li>4.8★ avg Google rating with automated requests</li>
+        <li>AI drafts 3-5 social posts/week from clinic activity</li>
+        <li>A/B campaign testing with booking attribution</li>
+      </ul>
+      <span class="mod-status" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.25)">Active in Demo</span>
+    </div>
+
+    <div class="mod-card" style="border-top: 3px solid #f97316">
+      <div class="mod-icon">👥</div>
+      <div class="mod-name">Staff & HR</div>
+      <div class="mod-id">MOD-STF · $59/mo</div>
+      <div class="mod-desc">Staff scheduling, CE tracking, DEA/state license expiry alerts, time & attendance, and payroll export.</div>
+      <ul class="mod-features">
+        <li>40% reduction in scheduling conflicts</li>
+        <li>90/60/30-day license expiry warnings</li>
+        <li>Overtime flagging with payroll export</li>
+      </ul>
+      <span class="mod-status" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.25)">Active in Demo</span>
+    </div>
+
+    <div class="mod-card" style="border-top: 3px solid #14b8a6">
+      <div class="mod-icon">🔗</div>
+      <div class="mod-name">Referral Network</div>
+      <div class="mod-id">MOD-REF · $29/mo</div>
+      <div class="mod-desc">Specialist directory, AI-drafted referral letters from SOAP, bi-directional report tracking, and network analytics.</div>
+      <ul class="mod-features">
+        <li>2.1× faster specialist feedback</li>
+        <li>Auto-attach specialist reports to patient record</li>
+        <li>5-day no-response auto-escalation</li>
+      </ul>
+      <span class="mod-status" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.25)">Active in Demo</span>
+    </div>
+
+    <div class="mod-card" style="border-top: 3px solid #a855f7">
+      <div class="mod-icon">🏢</div>
+      <div class="mod-name">Enterprise & Franchise</div>
+      <div class="mod-id">MOD-ENT · $149/mo</div>
+      <div class="mod-desc">Multi-location ownership dashboard, cross-clinic benchmarking, SSO, centralized procurement, and investor reporting.</div>
+      <ul class="mod-features">
+        <li>30% operational cost reduction via centralized procurement</li>
+        <li>Protocol drift detection across locations</li>
+        <li>Board-ready consolidated P&L reports</li>
+      </ul>
+      <span class="mod-status" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.25)">Active in Demo</span>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══ MARKET OPPORTUNITY ═══ -->
+<section id="market">
+  <div class="section-label">Market Analysis</div>
+  <div class="section-title">Why Now, Why Veterinary</div>
+  <div class="section-desc">
+    The vet PIMS market is at an inflection point: consolidation pressure from PE, staff shortages,
+    and AI readiness create a once-in-a-decade window for a new entrant.
+  </div>
+
+  <div class="opp-grid">
+    <div class="opp-card">
+      <h3>📈 Market Tailwinds</h3>
+      <div class="opp-item">
+        <div class="label">PE Consolidation Wave</div>
+        <div class="value">Multi-clinic groups are the fastest-growing segment. Mars (Banfield/VCA), NVA, and Thrive have acquired 4,000+ practices. They need enterprise tooling.</div>
+      </div>
+      <div class="opp-item">
+        <div class="label">Staff Shortage Crisis</div>
+        <div class="value">AVMA reports 1 in 3 vet positions unfilled. AI automation isn't a luxury — it's survival. VetAgent automates 45+ tasks that currently require manual vet/tech time.</div>
+      </div>
+      <div class="opp-item">
+        <div class="label">Legacy Lock-In Breaking</div>
+        <div class="value">IDEXX's acquisition of ezyVet and Cornerstone's stagnation have frustrated customers. Practices are actively looking for alternatives for the first time in 20 years.</div>
+      </div>
+    </div>
+
+    <div class="opp-card" style="grid-column: 1 / -1">
+      <h3>💰 Revenue Model</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+        <div class="opp-item">
+          <div class="label">Base Platform (3 tiers)</div>
+          <div class="value" style="color:#10b981">$99 · $249 · $599/mo</div>
+        </div>
+        <div class="opp-item">
+          <div class="label">Module Add-Ons (9 modules)</div>
+          <div class="value" style="color:#818cf8">$29 – $149/mo each</div>
+        </div>
+        <div class="opp-item">
+          <div class="label">Full Stack per Clinic</div>
+          <div class="value" style="color:#fbbf24">~$1,190/mo all-in</div>
+        </div>
+        <div class="opp-item">
+          <div class="label">23-Clinic Group (Dr. Goldsmith)</div>
+          <div class="value" style="color:#f87171;font-size:1.3rem">$27,370/mo · $328K ARR</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opp-card">
+      <h3>🏆 Competitive Moat</h3>
+      <div class="opp-item">
+        <div class="label">Agentic AI Architecture</div>
+        <div class="value">8/10 AI features built vs. 0-1 for any competitor. This is a 2+ year head start that compounds as more agents launch.</div>
+      </div>
+      <div class="opp-item">
+        <div class="label">Vendor-Agnostic Lab Integration</div>
+        <div class="value">IDEXX, Antech, Heska, Vetscan — all supported. Cornerstone is IDEXX-locked. We give practices freedom.</div>
+      </div>
+      <div class="opp-item">
+        <div class="label">Minutes-Not-Months Onboarding</div>
+        <div class="value">Avimark fixture import, seed data in seconds. Provet needs 8–12 weeks. We can have a clinic live in a day.</div>
+      </div>
+    </div>
+
+    <div class="opp-card">
+      <h3>🎯 Ideal Customer Profile</h3>
+      <div class="opp-item">
+        <div class="label">Primary Target</div>
+        <div class="value">Multi-clinic groups (3-50 locations) frustrated with legacy software and ready for AI</div>
+      </div>
+      <div class="opp-item">
+        <div class="label">Secondary Target</div>
+        <div class="value">Growth-oriented single-clinic practices (3+ vets) with a tech-forward owner</div>
+      </div>
+      <div class="opp-item">
+        <div class="label">Enterprise Target</div>
+        <div class="value">PE-backed consolidators needing unified visibility across 20+ locations — <strong style="color:#fbbf24">exactly Dr. Goldsmith's profile</strong></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══ COST DESTRUCTION ═══ -->
+<section class="cost-section" id="cost">
+  <div class="section-label">Cost Destruction</div>
+  <div class="section-title">Replace 6+ Vendors With One Platform</div>
+  <div class="section-desc">
+    Today's vet practice cobbles together a patchwork of disconnected software —
+    each with its own contract, login, support team, and monthly bill.
+    VetAgent replaces the entire stack at a fraction of the cost.
+  </div>
+
+  <div class="cost-grid">
+    <div class="cost-col legacy">
+      <h3>🔴 Typical Legacy Stack</h3>
+      <div class="cost-sub">Per clinic / month — fragmented vendors</div>
+
+      <div class="cost-line">
+        <div><span class="cl-name">Core PIMS</span><span class="cl-note">Cornerstone, ezyVet, Shepherd, or Avimark</span></div>
+        <div class="cl-price" style="color:var(--red)">$260 – $400</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">Client Communication</span><span class="cl-note">PetDesk, Weave, or Demandforce</span></div>
+        <div class="cl-price" style="color:var(--red)">$250 – $400</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">Inventory Management</span><span class="cl-note">Covetrus NVS, VetScripts, or manual</span></div>
+        <div class="cl-price" style="color:var(--red)">$150 – $300</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">Analytics & Reporting</span><span class="cl-note">VetSuccess, Vetsource, or manual Excel</span></div>
+        <div class="cl-price" style="color:var(--red)">$200 – $350</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">Marketing & Reviews</span><span class="cl-note">Podium, BirdEye, or agency</span></div>
+        <div class="cl-price" style="color:var(--red)">$200 – $500</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">Staff Scheduling</span><span class="cl-note">Deputy, When I Work, or paper</span></div>
+        <div class="cl-price" style="color:var(--red)">$100 – $200</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">IT / Server Maintenance</span><span class="cl-note">On-prem only: hardware, backups, MSP</span></div>
+        <div class="cl-price" style="color:var(--red)">$200 – $400</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">Implementation & Training</span><span class="cl-note">Amortized over 36 months</span></div>
+        <div class="cl-price" style="color:var(--red)">$150 – $300</div>
+      </div>
+
+      <div class="cost-total">
+        <span class="ct-label">Total per Clinic</span>
+        <span class="ct-price" style="color:var(--red)">$1,510 – $2,850</span>
+      </div>
+      <div style="margin-top:8px;font-size:0.72rem;color:var(--text3)">
+        × 23 clinics = <strong style="color:var(--red)">$34,730 – $65,550/mo</strong>
+      </div>
+    </div>
+
+    <div class="cost-vs">VS</div>
+
+    <div class="cost-col va">
+      <h3>🟢 VetAgent Full Stack</h3>
+      <div class="cost-sub">Per clinic / month — one unified platform</div>
+
+      <div class="cost-line">
+        <div><span class="cl-name">Enterprise Base Platform</span><span class="cl-note">Scheduling, SOAP, labs, Rx, care protocols, multi-clinic</span></div>
+        <div class="cl-price" style="color:var(--green)">$599</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">MOD-FIN Financial Operations</span><span class="cl-note">Auto-invoice, payments, reconciliation</span></div>
+        <div class="cl-price" style="color:var(--green)">$79</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">MOD-COM Communications</span><span class="cl-note">SMS, email, two-way, campaigns</span></div>
+        <div class="cl-price" style="color:var(--green)">$49</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">MOD-INV Inventory & Pharmacy</span><span class="cl-note">Stock tracking, DEA logs, smart reorder</span></div>
+        <div class="cl-price" style="color:var(--green)">$69</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">MOD-ANL Analytics & BI</span><span class="cl-note">Health score, retention, revenue mix</span></div>
+        <div class="cl-price" style="color:var(--green)">$59</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">MOD-MAR Marketing & Social</span><span class="cl-note">Reviews, content calendar, campaigns</span></div>
+        <div class="cl-price" style="color:var(--green)">$49</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">MOD-STF Staff & HR</span><span class="cl-note">Scheduling, CE, license tracking</span></div>
+        <div class="cl-price" style="color:var(--green)">$59</div>
+      </div>
+      <div class="cost-line">
+        <div><span class="cl-name">MOD-ENT Enterprise</span><span class="cl-note">Multi-location, benchmarking, SSO</span></div>
+        <div class="cl-price" style="color:var(--green)">$149</div>
+      </div>
+
+      <div class="cost-total">
+        <span class="ct-label">Total per Clinic</span>
+        <span class="ct-price" style="color:var(--green)">$1,112/mo</span>
+      </div>
+      <div style="margin-top:8px;font-size:0.72rem;color:var(--text3)">
+        × 23 clinics = <strong style="color:var(--green)">$25,576/mo</strong> · AI agents included at no extra charge
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:24px">
+    <div class="cost-savings">
+      <div class="sv-label">Annual Savings (vs. mid-range legacy)</div>
+      <div class="sv-value">$234K+</div>
+      <div class="sv-sub">23 clinics × ~$850/mo savings per clinic</div>
+    </div>
+    <div class="cost-savings">
+      <div class="sv-label">Vendors Replaced</div>
+      <div class="sv-value">6 → 1</div>
+      <div class="sv-sub">One login, one support team, one bill</div>
+    </div>
+    <div class="cost-savings">
+      <div class="sv-label">Capability Not Available Elsewhere</div>
+      <div class="sv-value">8 AI Agents</div>
+      <div class="sv-sub">Autonomous agents — no competitor has this at any price</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══ PARTNERSHIP CTA ═══ -->
+<section class="cta-section" id="partnership">
+  <div class="section-label">The Ask</div>
+  <h2 style="background:linear-gradient(135deg,#fff,#a5b4fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Build VetAgent Together</h2>
+  <p>
+    We're looking for a development partner — not just a customer.
+    Dr. Goldsmith's 23-clinic group provides the real-world environment to refine VetAgent
+    into the definitive AI-native veterinary platform.
+  </p>
+
+  <div class="cta-pillars">
+    <div class="cta-pillar">
+      <div class="icon">🧪</div>
+      <h4>Design Partner</h4>
+      <p>Shape the product roadmap with real clinical workflows and feedback from your team</p>
+    </div>
+    <div class="cta-pillar">
+      <div class="icon">🏥</div>
+      <h4>Pilot Deployment</h4>
+      <p>Roll out VetAgent in 2-3 clinics first, prove ROI, then expand across the group</p>
+    </div>
+    <div class="cta-pillar">
+      <div class="icon">💎</div>
+      <h4>Founder Pricing</h4>
+      <p>Development partners lock in permanently discounted rates as early believers</p>
+    </div>
+    <div class="cta-pillar">
+      <div class="icon">🚀</div>
+      <h4>Co-Development</h4>
+      <p>Priority module development based on your highest-impact needs (MOD-INV, MOD-ENT)</p>
+    </div>
+  </div>
+</section>
+
+<div style="text-align:center;padding:40px;font-size:0.72rem;color:#3f3f46">
+  VetAgent · Confidential · Prepared July 2026
+</div>
+
+</body>
+</html>
