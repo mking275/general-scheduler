@@ -5,6 +5,7 @@ import PatientPanel from "./PatientPanel";
 import RiskBadge from "./RiskBadge";
 import IntakePanel from "./IntakePanel";
 import FollowUpPanel from "./FollowUpPanel";
+import CheckoutPanel from "./CheckoutPanel";
 import { User, Clock, FileText, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
@@ -145,7 +146,7 @@ export default function AppointmentCard({ item, patient, role, onLogEntry, curre
       {/* Expanded section */}
       <div
         style={{
-          maxHeight: expanded ? "600px" : "0px",
+          maxHeight: expanded ? "1200px" : "0px",
           overflow: "hidden",
           transition: "max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
@@ -232,6 +233,16 @@ export default function AppointmentCard({ item, patient, role, onLogEntry, curre
               timeblockId={tbId}
               followupStatus={followupStatus}
               onStatusChange={setFollowupStatus}
+              onLogEntry={onLogEntry}
+            />
+          )}
+
+          {/* Checkout / Visit Invoice — Front Desk only */}
+          {role === "front_desk" && isComplete && tbId && (
+            <CheckoutPanel
+              timeblockId={tbId}
+              patientName={patient?.name ?? item.job?.patient_name}
+              ownerName={patient?.owner_name}
               onLogEntry={onLogEntry}
             />
           )}

@@ -296,7 +296,8 @@ def seed_clinics_and_assignments():
         db.save_assignment(assign)
 
     # --- Create floating vet Dr. Chen ---
-    chen_id = "vet-chen"
+    import uuid as _uuid_mod
+    chen_id = str(_uuid_mod.uuid5(_uuid_mod.NAMESPACE_DNS, 'vet-chen'))
     windows_json = json.dumps([
         {"start_time": datetime.now().replace(hour=8, minute=0, second=0, microsecond=0).isoformat(),
          "end_time": datetime.now().replace(hour=17, minute=0, second=0, microsecond=0).isoformat()}
@@ -383,7 +384,7 @@ def seed_westside_appointment():
     # Get Dr. Chen and a Westside room
     with _get_conn() as conn:
         chen_row = conn.execute(
-            "SELECT id FROM resources WHERE id='vet-chen'"
+            "SELECT id FROM resources WHERE name='Dr. Chen' AND type='Vet' LIMIT 1"
         ).fetchone()
         ws_room_row = conn.execute(
             "SELECT id FROM resources WHERE type='Room' AND clinic_id='clinic-westside' LIMIT 1"

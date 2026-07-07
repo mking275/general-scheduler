@@ -1,0 +1,1023 @@
+/* ============================================================
+   Feature 008 — Vera Onboarding CSS
+   Vanilla CSS — no Tailwind. Custom properties throughout.
+   ============================================================ */
+
+/* ── Custom Properties ─────────────────────────────────────── */
+:root {
+  --vera-purple: #6C63FF;
+  --vera-purple-dim: #4f48c4;
+  --vera-purple-glow: rgba(108, 99, 255, 0.18);
+  --vera-dark: #0d0d14;
+  --vera-dark-2: #12121e;
+  --vera-dark-3: #1a1a2e;
+  --vera-panel-bg: #141420;
+  --vera-chat-bg: #0f0f1a;
+  --vera-border: rgba(255, 255, 255, 0.08);
+  --vera-text: #e8e8f0;
+  --vera-text-dim: #8888aa;
+  --vera-text-muted: #55557a;
+  --vera-success: #22c55e;
+  --vera-warning: #f59e0b;
+  --vera-error: #ef4444;
+  --vera-gold: #f0a500;
+  --vera-radius: 12px;
+  --vera-radius-sm: 8px;
+  --vera-transition: 0.2s ease;
+}
+
+/* ── Reset ─────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Global onboarding body ────────────────────────────────── */
+.onboarding-body {
+  background: var(--vera-dark);
+  color: var(--vera-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Welcome Page ──────────────────────────────────────────── */
+.welcome-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at 50% 30%, rgba(108,99,255,0.12) 0%, var(--vera-dark) 70%);
+  padding: 2rem;
+  text-align: center;
+}
+
+.welcome-vera-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--vera-purple), #a78bfa);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 0 40px var(--vera-purple-glow);
+}
+
+.welcome-title {
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 700;
+  color: var(--vera-text);
+  margin-bottom: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.welcome-intro {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: var(--vera-text-dim);
+  max-width: 520px;
+  margin: 0 auto 2rem;
+}
+
+.welcome-intro .vera-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: var(--vera-purple);
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: blink 1s step-end infinite;
+}
+
+.welcome-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+.btn-primary {
+  background: var(--vera-purple);
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: var(--vera-radius);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--vera-transition), transform var(--vera-transition);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-primary:hover {
+  background: var(--vera-purple-dim);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--vera-text-dim);
+  border: 1px solid var(--vera-border);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--vera-radius);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: color var(--vera-transition), border-color var(--vera-transition);
+}
+
+.btn-ghost:hover {
+  color: var(--vera-text);
+  border-color: rgba(255,255,255,0.2);
+}
+
+/* ── Onboarding Shell ──────────────────────────────────────── */
+.onboarding-shell {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--vera-dark);
+}
+
+/* ── Live Panel (65%) ──────────────────────────────────────── */
+.live-panel {
+  flex: 0 0 65%;
+  display: flex;
+  flex-direction: column;
+  background: var(--vera-panel-bg);
+  border-right: 1px solid var(--vera-border);
+  overflow: hidden;
+  position: relative;
+}
+
+.live-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--vera-border);
+  min-height: 72px;
+}
+
+.practice-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--vera-purple);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: white;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.practice-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.practice-name-header {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--vera-text);
+  transition: color 0.3s ease;
+}
+
+.practice-name-placeholder {
+  color: var(--vera-text-muted);
+  font-style: italic;
+  font-size: 0.95rem;
+}
+
+.live-panel-go-live {
+  margin-left: auto;
+}
+
+.btn-go-live {
+  background: linear-gradient(135deg, var(--vera-purple), var(--vera-gold));
+  color: white;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--vera-radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--vera-transition), transform var(--vera-transition);
+}
+
+.btn-go-live:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.live-panel-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--vera-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.live-panel-tabs::-webkit-scrollbar { display: none; }
+
+.room-tab {
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  color: var(--vera-text-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--vera-transition), border-color var(--vera-transition);
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.room-tab:hover { color: var(--vera-text); }
+.room-tab.active {
+  color: var(--vera-purple);
+  border-bottom-color: var(--vera-purple);
+}
+
+.live-panel-schedule {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.schedule-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--vera-text-muted);
+  gap: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: 60px repeat(var(--provider-count, 3), 1fr);
+  gap: 2px;
+  min-width: 500px;
+}
+
+.schedule-header-cell {
+  background: var(--vera-dark-3);
+  padding: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--vera-text-dim);
+  text-align: center;
+  border-radius: var(--vera-radius-sm);
+}
+
+.schedule-time-cell {
+  font-size: 0.72rem;
+  color: var(--vera-text-muted);
+  padding: 0.5rem 0;
+  text-align: right;
+  padding-right: 0.5rem;
+}
+
+.schedule-slot {
+  background: var(--vera-dark-3);
+  border-radius: var(--vera-radius-sm);
+  height: 36px;
+  border: 1px solid transparent;
+  transition: border-color var(--vera-transition);
+}
+
+.schedule-slot:hover {
+  border-color: var(--vera-purple);
+  cursor: pointer;
+}
+
+.schedule-slot.booked {
+  background: var(--vera-purple-glow);
+  border-color: rgba(108,99,255,0.3);
+}
+
+/* ── Chat Panel (35%) ──────────────────────────────────────── */
+.chat-panel {
+  flex: 0 0 35%;
+  display: flex;
+  flex-direction: column;
+  background: var(--vera-chat-bg);
+  overflow: hidden;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--vera-border);
+}
+
+.vera-avatar-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--vera-purple), #a78bfa);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+.vera-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--vera-text);
+}
+
+.vera-role-label {
+  font-size: 0.75rem;
+  color: var(--vera-text-muted);
+  margin-left: auto;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--vera-border) transparent;
+}
+
+.chat-messages::-webkit-scrollbar { width: 4px; }
+.chat-messages::-webkit-scrollbar-thumb { background: var(--vera-border); border-radius: 2px; }
+
+/* ── Message Bubbles ───────────────────────────────────────── */
+.message {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.message.vera {
+  align-items: flex-start;
+}
+
+.message.user {
+  flex-direction: row-reverse;
+  align-items: flex-start;
+}
+
+.message-bubble {
+  padding: 0.75rem 1rem;
+  border-radius: var(--vera-radius);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-width: 85%;
+}
+
+.vera .message-bubble {
+  background: var(--vera-dark-3);
+  color: var(--vera-text);
+  border-bottom-left-radius: 4px;
+}
+
+.user .message-bubble {
+  background: var(--vera-purple);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.message-skip-btn {
+  font-size: 0.72rem;
+  color: var(--vera-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  margin-top: 0.25rem;
+  transition: color var(--vera-transition);
+}
+.message-skip-btn:hover { color: var(--vera-text); }
+
+/* ── Typewriter cursor ─────────────────────────────────────── */
+.vera-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--vera-purple);
+  margin-left: 1px;
+  vertical-align: middle;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ── Chat Input Bar ────────────────────────────────────────── */
+.chat-input-bar {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--vera-border);
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.chat-input {
+  flex: 1;
+  background: var(--vera-dark-3);
+  border: 1px solid var(--vera-border);
+  border-radius: var(--vera-radius-sm);
+  color: var(--vera-text);
+  font-size: 0.9rem;
+  padding: 0.6rem 0.9rem;
+  resize: none;
+  outline: none;
+  min-height: 40px;
+  max-height: 120px;
+  transition: border-color var(--vera-transition);
+  font-family: inherit;
+}
+
+.chat-input:focus {
+  border-color: var(--vera-purple);
+}
+
+.chat-input::placeholder {
+  color: var(--vera-text-muted);
+}
+
+.chat-send-btn {
+  background: var(--vera-purple);
+  color: white;
+  border: none;
+  border-radius: var(--vera-radius-sm);
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--vera-transition);
+  flex-shrink: 0;
+}
+
+.chat-send-btn:hover { background: var(--vera-purple-dim); }
+.chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Role Selector ─────────────────────────────────────────── */
+.role-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.role-card {
+  background: var(--vera-dark-3);
+  border: 1px solid var(--vera-border);
+  border-radius: var(--vera-radius-sm);
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: border-color var(--vera-transition), background var(--vera-transition);
+  text-align: left;
+}
+
+.role-card:hover {
+  border-color: var(--vera-purple);
+  background: var(--vera-purple-glow);
+}
+
+.role-card.selected {
+  border-color: var(--vera-purple);
+  background: var(--vera-purple-glow);
+}
+
+.role-card-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--vera-text);
+  margin-bottom: 0.2rem;
+}
+
+.role-card-desc {
+  font-size: 0.75rem;
+  color: var(--vera-text-muted);
+}
+
+/* ── Magic Link Prompt ─────────────────────────────────────── */
+.magic-link-prompt {
+  background: var(--vera-dark-3);
+  border: 1px solid var(--vera-border);
+  border-radius: var(--vera-radius);
+  padding: 1rem;
+  margin-top: 0.5rem;
+}
+
+.magic-link-prompt-title {
+  font-size: 0.85rem;
+  color: var(--vera-text-dim);
+  margin-bottom: 0.75rem;
+}
+
+.magic-link-input-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.magic-link-input {
+  flex: 1;
+  background: var(--vera-dark);
+  border: 1px solid var(--vera-border);
+  border-radius: var(--vera-radius-sm);
+  color: var(--vera-text);
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  outline: none;
+  transition: border-color var(--vera-transition);
+}
+
+.magic-link-input:focus { border-color: var(--vera-purple); }
+
+.btn-send-link {
+  background: var(--vera-purple);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--vera-radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--vera-transition);
+}
+
+.btn-send-link:hover { background: var(--vera-purple-dim); }
+.btn-send-link:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.magic-link-skip {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--vera-text-muted);
+  text-align: center;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  background: none;
+  border: none;
+  transition: color var(--vera-transition);
+}
+.magic-link-skip:hover { color: var(--vera-text); }
+
+.magic-link-sent {
+  font-size: 0.85rem;
+  color: var(--vera-success);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0;
+}
+
+/* ── Document Drop Zone ────────────────────────────────────── */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(108, 99, 255, 0.12);
+  border: 2px dashed var(--vera-purple);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.drop-overlay.active {
+  pointer-events: all;
+}
+
+.drop-overlay-inner {
+  text-align: center;
+  color: var(--vera-purple);
+}
+
+.drop-overlay-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.drop-overlay-label {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.file-upload-btn {
+  background: var(--vera-dark-3);
+  border: 1px dashed var(--vera-border);
+  border-radius: var(--vera-radius);
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--vera-transition), background var(--vera-transition);
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.file-upload-btn:hover {
+  border-color: var(--vera-purple);
+  background: var(--vera-purple-glow);
+}
+
+.file-upload-btn-label {
+  font-size: 0.85rem;
+  color: var(--vera-text-dim);
+}
+
+.file-upload-btn-hint {
+  font-size: 0.75rem;
+  color: var(--vera-text-muted);
+  margin-top: 0.25rem;
+}
+
+/* ── Extraction Stream ─────────────────────────────────────── */
+.extraction-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.extraction-status {
+  font-size: 0.8rem;
+  color: var(--vera-text-muted);
+  padding: 0.25rem 0;
+}
+
+.entity-row {
+  background: var(--vera-dark-3);
+  border: 1px solid var(--vera-border);
+  border-radius: var(--vera-radius-sm);
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  animation: slideInUp 0.2s ease;
+}
+
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.entity-name {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--vera-text);
+}
+
+.entity-role {
+  font-size: 0.75rem;
+  color: var(--vera-text-muted);
+}
+
+/* Confidence badges */
+.badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.badge-high { background: rgba(34,197,94,0.15); color: #22c55e; }
+.badge-medium { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.badge-low { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+.entity-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.confirm-btn {
+  background: rgba(34,197,94,0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34,197,94,0.3);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background var(--vera-transition);
+}
+
+.confirm-btn:hover { background: rgba(34,197,94,0.2); }
+.confirm-btn.confirmed { opacity: 0.5; cursor: not-allowed; }
+
+.rename-btn {
+  background: rgba(245,158,11,0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245,158,11,0.3);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background var(--vera-transition);
+}
+
+.rename-btn:hover { background: rgba(245,158,11,0.2); }
+
+.rename-input-row {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+  width: 100%;
+}
+
+.rename-input {
+  flex: 1;
+  background: var(--vera-dark);
+  border: 1px solid var(--vera-purple);
+  border-radius: 4px;
+  color: var(--vera-text);
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+  outline: none;
+}
+
+.rename-submit-btn {
+  background: var(--vera-purple);
+  color: white;
+  border: none;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+/* ── Logo Confirmation ─────────────────────────────────────── */
+.logo-confirmation-card {
+  background: var(--vera-dark-3);
+  border: 1px solid var(--vera-border);
+  border-radius: var(--vera-radius);
+  padding: 1rem;
+  margin-top: 0.5rem;
+}
+
+.logo-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: white;
+  margin: 0 auto 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.logo-monogram {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  background: var(--vera-purple);
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.logo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.btn-logo-confirm {
+  background: rgba(34,197,94,0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34,197,94,0.3);
+  padding: 0.5rem;
+  border-radius: var(--vera-radius-sm);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background var(--vera-transition);
+  text-align: center;
+}
+.btn-logo-confirm:hover { background: rgba(34,197,94,0.2); }
+
+.btn-logo-try-next {
+  background: var(--vera-dark);
+  color: var(--vera-text-dim);
+  border: 1px solid var(--vera-border);
+  padding: 0.5rem;
+  border-radius: var(--vera-radius-sm);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color var(--vera-transition);
+  text-align: center;
+}
+.btn-logo-try-next:hover { border-color: rgba(255,255,255,0.2); color: var(--vera-text); }
+
+.btn-logo-upload {
+  background: transparent;
+  color: var(--vera-text-muted);
+  border: none;
+  padding: 0.3rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  transition: color var(--vera-transition);
+}
+.btn-logo-upload:hover { color: var(--vera-text); }
+
+/* ── Replace Animation ─────────────────────────────────────── */
+.replace-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.replace-container.replacing {
+  animation: practiceDissolve 3s ease forwards;
+}
+
+@keyframes practiceDissolve {
+  0%   { opacity: 1; filter: blur(0px) brightness(1); }
+  25%  { opacity: 0.7; filter: blur(2px) brightness(1.3); }
+  50%  { opacity: 0; filter: blur(8px) brightness(2); }
+  70%  { opacity: 0; filter: blur(4px) brightness(1.5); }
+  100% { opacity: 1; filter: blur(0px) brightness(1); }
+}
+
+/* ── Mobile Tab Bar ────────────────────────────────────────── */
+.tab-bar {
+  display: none;
+  border-bottom: 1px solid var(--vera-border);
+  background: var(--vera-dark-2);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 0.75rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--vera-text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--vera-transition), border-color var(--vera-transition);
+}
+
+.tab-btn.active {
+  color: var(--vera-purple);
+  border-bottom-color: var(--vera-purple);
+}
+
+/* ── Responsive: 768px breakpoint ─────────────────────────── */
+@media (max-width: 768px) {
+  .onboarding-shell {
+    flex-direction: column;
+  }
+
+  .live-panel {
+    flex: none;
+    height: 100%;
+  }
+
+  .chat-panel {
+    flex: none;
+    height: 100%;
+  }
+
+  .tab-bar {
+    display: flex;
+  }
+
+  .tab-content {
+    display: none;
+    height: calc(100vh - 42px);
+    overflow: hidden;
+  }
+
+  .tab-content.active {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .onboarding-shell {
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Reorganize as single column with tabs */
+  .live-panel,
+  .chat-panel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  .role-selector {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Loading / Thinking ────────────────────────────────────── */
+.vera-thinking {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 0.25rem 0;
+}
+
+.vera-thinking span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vera-text-muted);
+  animation: thinking 1.2s ease infinite;
+}
+
+.vera-thinking span:nth-child(2) { animation-delay: 0.2s; }
+.vera-thinking span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes thinking {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ── Phase indicators ──────────────────────────────────────── */
+.phase-badge {
+  font-size: 0.72rem;
+  color: var(--vera-text-muted);
+  background: var(--vera-dark-3);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  margin-left: auto;
+}
+
+/* ── First action targets ──────────────────────────────────── */
+.first-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.first-action-item {
+  background: var(--vera-purple-glow);
+  border: 1px solid rgba(108,99,255,0.3);
+  border-radius: var(--vera-radius-sm);
+  padding: 0.6rem 0.9rem;
+  font-size: 0.85rem;
+  color: var(--vera-text);
+  cursor: pointer;
+  transition: background var(--vera-transition);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.first-action-item:hover { background: rgba(108,99,255,0.25); }
+.first-action-number {
+  font-size: 0.75rem;
+  color: var(--vera-purple);
+  font-weight: 700;
+  min-width: 18px;
+}

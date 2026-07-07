@@ -633,3 +633,166 @@ class WaitlistJoinRequest(BaseModel):
     min_notice_hours: int = 3                  # 1 | 3 | 24
     phone: str
     sms_consent: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Feature 008 — Vera Onboarding Models
+# ---------------------------------------------------------------------------
+
+# Vera Constitution: professional boundaries fragment.
+# MUST be included in the docstring/system prompt of every onboarding agent.
+VERA_PROFESSIONAL_BOUNDARIES = """
+I am your Chief of Staff — not a veterinarian, not your attorney.
+Clinical decisions remain with your licensed DVMs.
+Regulatory compliance determinations belong to you or your qualified legal counsel.
+I can brief, organize, surface, and schedule — I do not diagnose or prescribe.
+""".strip()
+
+# Role-appropriate first-action targets post-Replace
+ONBOARDING_FIRST_ACTION_TARGETS = {
+    "owner": [
+        "Share your booking link with clients",
+        "Set your availability",
+        "Configure online booking",
+    ],
+    "manager": [
+        "Invite the vets to their accounts",
+        "Set room schedules",
+        "Configure notifications",
+    ],
+    "associate": [
+        "Book a test appointment to see how it feels",
+        "Review your schedule",
+        "Set your availability",
+    ],
+    "proxy": [
+        "Send the practice owner a link to review and activate",
+        "Preview the booking portal",
+    ],
+}
+
+
+class OnboardingPersonaRole(str, Enum):
+    OWNER = "owner"
+    MANAGER = "manager"
+    ASSOCIATE = "associate"
+    PROXY = "proxy"
+
+
+class OnboardingPhase(int, Enum):
+    WELCOME = 0
+    DEMO = 1
+    PIVOT = 2
+    OPEN_PROMPT = 3
+    DOCUMENT = 4
+    REPLACE = 5
+    LIVE = 6
+
+
+class OnboardingSessionCreate(BaseModel):
+    device_fingerprint: Optional[str] = None
+
+
+class OnboardingSessionResponse(BaseModel):
+    session_id: str
+    session_token: str
+    phase: int = 0
+    persona_role: Optional[str] = None
+    practice_name: Optional[str] = None
+    track: str = "greenfield"
+    state_json: Dict[str, Any] = Field(default_factory=dict)
+    email_anchor: Optional[str] = None
+    created_at: str
+    updated_at: str
+    verbose_log: List[str] = Field(default_factory=list)
+
+
+class OnboardingSessionPatch(BaseModel):
+    phase: Optional[int] = None
+    persona_role: Optional[str] = None
+    practice_name: Optional[str] = None
+    track: Optional[str] = None
+    state_json: Optional[Dict[str, Any]] = None
+
+
+class MagicLinkCreate(BaseModel):
+    session_id: str
+    email: str
+
+
+class MagicLinkResponse(BaseModel):
+    sent: bool
+    email: str
+    expires_at: str
+    magic_token: str  # raw token — demo: returned in response + console
+    verbose_log: List[str] = Field(default_factory=list)
+
+
+class DocumentUploadResponse(BaseModel):
+    document_id: str
+    mime_type: str
+    file_size_bytes: int
+    classified_type: Optional[str] = None
+    streaming_status: str
+    verbose_log: List[str] = Field(default_factory=list)
+
+
+class EntityConfirmRequest(BaseModel):
+    confirmed: bool = True
+    correction: Optional[Dict[str, str]] = None  # {field_name, correct_value}
+
+
+class EntityConfirmResponse(BaseModel):
+    entity_id: str
+    confirmed: bool
+    corrected: bool
+    verbose_log: List[str] = Field(default_factory=list)
+
+
+class LogoScrapeRequest(BaseModel):
+    session_id: str
+    url: str
+
+
+class LogoScrapeResponse(BaseModel):
+    logo_asset_id: str
+    source_type: str
+    image_url: Optional[str] = None
+    fallback_type: str  # image | monogram
+    initials: Optional[str] = None
+    verbose_log: List[str] = Field(default_factory=list)
+
+
+class LogoConfirmRequest(BaseModel):
+    action: str  # confirm | try_next | upload
+    uploaded_file_path: Optional[str] = None
+
+
+class LogoConfirmResponse(BaseModel):
+    logo_asset_id: str
+    confirmed: bool
+    source_type: str
+    verbose_log: List[str] = Field(default_factory=list)
+
+
+class GoLiveRequest(BaseModel):
+    session_id: str
+
+
+class GoLiveResponse(BaseModel):
+    clinic_id: str
+    practice_name: str
+    first_action_targets: List[str]
+    boundary_statement: str
+    verbose_log: List[str] = Field(default_factory=list)
+
+
+class ActivationRequest(BaseModel):
+    session_id: str
+    booking_id: str
+
+
+class ActivationResponse(BaseModel):
+    activated_at: str
+    session_id: str
+    verbose_log: List[str] = Field(default_factory=list)

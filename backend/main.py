@@ -26,6 +26,7 @@ from .solver import HeuristicSolver
 from .agents.dispatch import DispatchAgent
 from fastapi.middleware.cors import CORSMiddleware
 import uuid as _uuid
+import json
 from datetime import datetime, date as _date
 
 # SMS gateway — uses Twilio when credentials are set, simulation fallback otherwise
@@ -317,7 +318,37 @@ def get_patient(patient_id: str):
     p = db.get_patient_with_owner(patient_id)
     if not p:
         raise HTTPException(status_code=404, detail="Patient not found")
-    return p.model_dump()
+    result = p.model_dump()
+
+    # Build visit_history from completed timeblocks for this patient
+    try:
+        from backend.repository import _get_conn
+        with _get_conn() as conn:
+            rows = conn.execute(
+                """SELECT t.id, t.start_time, t.status, j.data as job_data,
+                          s.assessment, s.signed_by
+                   FROM timeblocks t
+                   JOIN jobs j ON j.id = t.job_id
+                   LEFT JOIN soap_notes s ON s.timeblock_id = t.id
+                   WHERE t.patient_id = ? AND t.status = 'complete'
+                   ORDER BY t.start_time DESC""",
+                (patient_id,)
+            ).fetchall()
+
+        visit_history = []
+        for row in rows:
+            jd = json.loads(row["job_data"]) if row["job_data"] else {}
+            visit_history.append({
+                "date": row["start_time"][:10] if row["start_time"] else "",
+                "procedure": jd.get("procedure", "Visit"),
+                "vet": row["signed_by"] or "",
+                "summary": (row["assessment"] or "")[:120],
+            })
+        result["visit_history"] = visit_history
+    except Exception:
+        result["visit_history"] = []
+
+    return result
 
 @app.post("/api/patients", status_code=201)
 def create_patient(patient: Patient):
@@ -555,6 +586,49 @@ def sign_soap_note(note_id: str, body: SoapSignRequest):
         "signed_at": signed.signed_at if signed else None,
         "followup_draft_id": followup_draft_id,
     }
+
+
+# ============================================================
+# Patient SOAP Note History — for clinical record review
+# ============================================================
+
+@app.get("/api/patients/{patient_id}/soap-notes")
+def get_patient_soap_notes(patient_id: str):
+    """Return all SOAP notes for a patient across all visits, newest first."""
+    from backend.repository import _get_conn
+    try:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                """SELECT s.id, s.timeblock_id, s.subjective, s.objective,
+                          s.assessment, s.plan, s.signed, s.signed_at, s.signed_by,
+                          t.start_time, j.data as job_data
+                   FROM soap_notes s
+                   JOIN timeblocks t ON t.id = s.timeblock_id
+                   JOIN jobs j ON j.id = t.job_id
+                   WHERE t.patient_id = ?
+                   ORDER BY t.start_time DESC""",
+                (patient_id,)
+            ).fetchall()
+
+        result = []
+        for row in rows:
+            jd = json.loads(row["job_data"]) if row["job_data"] else {}
+            result.append({
+                "id": row["id"],
+                "timeblock_id": row["timeblock_id"],
+                "date": row["start_time"][:10] if row["start_time"] else "",
+                "procedure": jd.get("procedure", "Visit"),
+                "subjective": row["subjective"] or "",
+                "objective": row["objective"] or "",
+                "assessment": row["assessment"] or "",
+                "plan": row["plan"] or "",
+                "signed": bool(row["signed"]),
+                "signed_at": row["signed_at"],
+                "signed_by": row["signed_by"] or "",
+            })
+        return result
+    except Exception:
+        return []
 
 
 # ============================================================
@@ -1985,7 +2059,7 @@ def get_patient_images(patient_id: str, source: Optional[str] = Query(None)):
     images = db.get_images_for_patient(patient_id)
     if source:
         images = [img for img in images if img.get("source") == source]
-    # Strip binary data for listing (only keep metadata)
+    # Include image data for rendering in the UI
     result = []
     for img in images:
         result.append({
@@ -1999,6 +2073,8 @@ def get_patient_images(patient_id: str, source: Optional[str] = Query(None)):
             "study_date": img.get("study_date"),
             "report_text": img.get("report_text"),
             "imaging_system": img.get("imaging_system"),
+            "content_type": img.get("content_type", "image/png"),
+            "data": img.get("data"),
         })
     return result
 
@@ -3449,3 +3525,714 @@ def update_booking_config(clinic_id: str, body: ClinicBookingConfigUpdate, reque
     appt_types = db.get_bookable_appointment_types(clinic_id)
     config["bookable_appointment_types"] = appt_types
     return config
+
+
+# ============================================================
+# Feature 008 — Vera Onboarding Routes
+# All routes prefixed /api/onboarding/
+# ============================================================
+
+# --- Startup: init onboarding tables ---
+@app.on_event("startup")
+def _init_onboarding_db():
+    try:
+        from .onboarding_repository import onboarding_repo
+        onboarding_repo.init_db()
+        log_step("VERA (Onboarding): DB tables initialized")
+    except Exception as e:
+        print(f"[ONBOARDING] DB init error (non-fatal): {e}")
+
+
+# --- Imports (lazy within route handlers to avoid circular imports at startup) ---
+
+
+# T005 + T018 + T020-T022 + T025-T026 + T034
+
+@app.post("/api/onboarding/session")
+async def create_onboarding_session(request: Request):
+    """Create a new onboarding session (Phase 0 — WELCOME)."""
+    try:
+        from .agents.onboarding_agent import OnboardingAgent
+        from .models import OnboardingSessionCreate
+        import json as _json
+        body = await request.json()
+        device_fp = body.get("device_fingerprint")
+        agent = OnboardingAgent()
+        result = agent.handle_session_create(device_fp)
+        response = Response(
+            content=_json.dumps(result),
+            media_type="application/json",
+        )
+        # Set httpOnly cookie
+        response.set_cookie(
+            key="onboarding_session",
+            value=result["session_token"],
+            max_age=2592000,  # 30 days
+            httponly=True,
+            samesite="lax",
+        )
+        log_step(result["verbose_log"][0] if result.get("verbose_log") else "VERA (Onboarding): session created")
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/session/create")
+async def create_onboarding_session_post(request: Request):
+    """Create onboarding session — body-based endpoint (JS fetch friendly)."""
+    try:
+        from .agents.onboarding_agent import OnboardingAgent
+        import json as _json
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        device_fp = body.get("device_fingerprint")
+        agent = OnboardingAgent()
+        result = agent.handle_session_create(device_fp)
+        log_step(result["verbose_log"][0] if result.get("verbose_log") else "VERA (Onboarding): session created")
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/onboarding/session/{session_token}")
+def get_onboarding_session(session_token: str):
+    """Retrieve session state by cookie token."""
+    try:
+        from .onboarding_repository import onboarding_repo
+        session = onboarding_repo.get_session_by_token(session_token)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found or expired")
+        return session
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/onboarding/resume/{magic_token}")
+def resume_onboarding_session(magic_token: str):
+    """Resume a session from a magic link click (FR-035, FR-036)."""
+    try:
+        from .agents.onboarding_agent import OnboardingAgent
+        agent = OnboardingAgent()
+        result = agent.handle_session_resume(magic_token)
+        if result.get("error") == "invalid_or_expired":
+            raise HTTPException(status_code=403, detail="Magic link is invalid, expired, or already used")
+        log_step(result["verbose_log"][0] if result.get("verbose_log") else "VERA (Onboarding): session resumed")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/onboarding/session/{session_id}")
+async def patch_onboarding_session(session_id: str, request: Request):
+    """Update session fields (phase, role, practice_name, state_json, track)."""
+    try:
+        from .onboarding_repository import onboarding_repo
+        from .agents.onboarding_agent import OnboardingAgent
+        body = await request.json()
+
+        agent = OnboardingAgent()
+        logs = []
+
+        # Handle role selection with agent
+        if "persona_role" in body:
+            role_result = agent.handle_role_selection(session_id, body["persona_role"])
+            logs.extend(role_result.get("verbose_log", []))
+
+        # Handle practice name with agent
+        if "practice_name" in body and isinstance(body.get("practice_name"), str):
+            name_result = agent.handle_practice_name(session_id, body["practice_name"])
+            logs.extend(name_result.get("verbose_log", []))
+        else:
+            # Direct patch for other fields
+            patch_fields = {k: v for k, v in body.items()
+                            if k in {"phase", "track", "state_json"}}
+            if patch_fields:
+                onboarding_repo.patch_session(session_id, **patch_fields)
+                logs.append(f"VERA (Onboarding): Session {session_id[:8]} updated — {list(patch_fields.keys())}")
+
+        for entry in logs:
+            log_step(entry)
+
+        session = onboarding_repo.get_session_by_id(session_id)
+        return {**(session or {}), "verbose_log": logs}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/magic-link")
+async def send_magic_link(request: Request):
+    """Issue a 30-day magic link for session resume (FR-008b)."""
+    try:
+        from .agents.onboarding_agent import OnboardingAgent
+        body = await request.json()
+        session_id = body.get("session_id", "")
+        email = body.get("email", "")
+        if not session_id or not email:
+            raise HTTPException(status_code=400, detail="session_id and email required")
+        agent = OnboardingAgent()
+        result = agent.handle_magic_link_request(session_id, email)
+        log_step(result["verbose_log"][0])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/open-prompt")
+async def onboarding_open_prompt(request: Request):
+    """Process Q2 open prompt (free-text or URL) and extract practice context."""
+    try:
+        from .agents.onboarding_agent import OnboardingAgent
+        body = await request.json()
+        session_id = body.get("session_id", "")
+        text = body.get("text", "")
+        if not session_id or not text:
+            raise HTTPException(status_code=400, detail="session_id and text required")
+        agent = OnboardingAgent()
+        result = agent.handle_open_prompt(session_id, text)
+        for entry in result.get("verbose_log", []):
+            log_step(entry)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/upload")
+async def upload_onboarding_document(
+    file: UploadFile = File(...),
+    session_id: str = Query(...),
+):
+    """
+    Upload a document for Vera's extraction pipeline.
+    25MB limit enforced. Supported: CSV, XLSX, XLS, PDF, DOC, DOCX, PNG, JPG, JPEG, WEBP, GIF, HEIC.
+    """
+    import os as _os
+    from .onboarding_repository import onboarding_repo, UPLOADS_DIR
+    from .agents.document_parser_agent import classify_document
+
+    MAX_SIZE = 26_214_400  # 25MB in bytes
+    ALLOWED_MIMES = {
+        "text/csv", "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/png", "image/jpeg", "image/webp", "image/gif", "image/heic",
+    }
+
+    try:
+        content = await file.read()
+        size = len(content)
+
+        if size > MAX_SIZE:
+            size_mb = round(size / 1_048_576, 1)
+            raise HTTPException(
+                status_code=400,
+                detail=f"That file is {size_mb}MB — I can handle up to 25MB. Can you export a smaller version, or paste the key columns as text?",
+            )
+
+        mime = file.content_type or "application/octet-stream"
+        # Also allow by extension for files with wrong MIME
+        ext = _os.path.splitext(file.filename or "")[1].lower()
+        ext_to_mime = {
+            ".csv": "text/csv", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xls": "application/vnd.ms-excel", ".pdf": "application/pdf",
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".webp": "image/webp", ".gif": "image/gif", ".heic": "image/heic",
+        }
+        if mime not in ALLOWED_MIMES and ext in ext_to_mime:
+            mime = ext_to_mime[ext]
+
+        if mime not in ALLOWED_MIMES:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {mime}")
+
+        # Save to staging
+        _os.makedirs(UPLOADS_DIR, exist_ok=True)
+        import uuid as _uuid2
+        safe_name = f"{str(_uuid2.uuid4())}{ext}"
+        storage_path = _os.path.join(UPLOADS_DIR, safe_name)
+        with open(storage_path, "wb") as f_out:
+            f_out.write(content)
+
+        # Create document record
+        doc = onboarding_repo.create_document(session_id, mime, size, storage_path)
+
+        # Classify immediately
+        classified = classify_document(storage_path, mime)
+        onboarding_repo.update_document_status(doc["id"], "pending", classified_type=classified)
+
+        log_entry = f"VERA (Onboarding): File received — {classified} ({ext.lstrip('.').upper()}, {round(size/1024)}KB)"
+        log_step(log_entry)
+
+        return {
+            "document_id": doc["id"],
+            "mime_type": mime,
+            "file_size_bytes": size,
+            "classified_type": classified,
+            "streaming_status": "pending",
+            "verbose_log": [log_entry],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/onboarding/extract-stream/{document_id}")
+async def extract_stream(document_id: str):
+    """
+    SSE stream — extract entities from an uploaded document.
+    Streams partial results within 2s (FR-022a).
+    30-second hard cap with graceful surface (FR-022b).
+    """
+    import json as _json
+    import asyncio
+    from fastapi.responses import StreamingResponse as _SSE
+    from .onboarding_repository import onboarding_repo
+    from .agents.document_parser_agent import (
+        classify_document, parse_csv, parse_xlsx, parse_pdf, parse_image
+    )
+    import os as _os
+    import time as _time
+
+    doc = onboarding_repo.get_document(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    storage_path = doc["storage_path"]
+    mime_type = doc["mime_type"]
+    ext = _os.path.splitext(storage_path)[1].lower()
+
+    # Mark in-progress
+    onboarding_repo.update_document_status(document_id, "in_progress")
+
+    async def event_generator():
+        start_time = _time.time()
+        TIMEOUT = 30.0
+        entity_count = 0
+        timed_out = False
+
+        yield f"data: {_json.dumps({'type': 'start', 'message': 'Reading your file...'})}\n\n"
+
+        try:
+            # Select parser
+            if ext == ".csv":
+                parser = parse_csv(storage_path)
+            elif ext in (".xlsx", ".xls"):
+                parser = parse_xlsx(storage_path)
+            elif ext == ".pdf":
+                parser = parse_pdf(storage_path)
+            elif ext in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".heic"):
+                parser = parse_image(storage_path)
+            else:
+                yield f"data: {_json.dumps({'type': 'error', 'message': 'Unsupported file type'})}\n\n"
+                return
+
+            for raw_entity in parser:
+                elapsed = _time.time() - start_time
+
+                # 30-second hard cap
+                if elapsed >= TIMEOUT:
+                    timed_out = True
+                    yield f"data: {_json.dumps({'type': 'timeout', 'message': 'I got most of it — still working in the background. You can confirm what is here and I will add the rest shortly.'})}\n\n"
+                    break
+
+                # Handle tab_found notifications
+                entity_type = raw_entity.get("entity_type", "")
+                if entity_type == "tab_found":
+                    msg = raw_entity.get("extracted_fields", {}).get("message", "Found a tab...")
+                    yield f"data: {_json.dumps({'type': 'tab_found', 'message': msg})}\n\n"
+                    continue
+
+                if entity_type == "error":
+                    err_msg = raw_entity.get("extracted_fields", {}).get("error", "Parse error")
+                    yield f"data: {_json.dumps({'type': 'error', 'message': err_msg})}\n\n"
+                    continue
+
+                if entity_type == "raw_text":
+                    yield f"data: {_json.dumps({'type': 'raw_text', 'message': 'OCR text extracted — reviewing...'})}\n\n"
+                    continue
+
+                # Save entity to DB
+                try:
+                    saved = onboarding_repo.create_extracted_entity(
+                        document_id=document_id,
+                        entity_type=raw_entity.get("entity_type", "unknown"),
+                        source_text=raw_entity.get("source_text", ""),
+                        confidence=raw_entity.get("confidence", 0.5),
+                        fields=raw_entity.get("extracted_fields", {}),
+                        position=raw_entity.get("source_position"),
+                    )
+                    entity_id = saved["id"]
+                except Exception:
+                    entity_id = "unsaved"
+
+                confidence = raw_entity.get("confidence", 0.5)
+                if confidence >= 0.8:
+                    confidence_label = "high"
+                elif confidence >= 0.5:
+                    confidence_label = "medium"
+                else:
+                    confidence_label = "low"
+
+                fields = raw_entity.get("extracted_fields", {})
+                display = fields.get("name", raw_entity.get("source_text", "entity"))
+
+                event_data = {
+                    "type": "entity",
+                    "entity_id": entity_id,
+                    "entity_type": raw_entity.get("entity_type", "unknown"),
+                    "display": display,
+                    "confidence": confidence,
+                    "confidence_label": confidence_label,
+                    "source_text": raw_entity.get("source_text", ""),
+                    "extracted_fields": fields,
+                }
+                yield f"data: {_json.dumps(event_data)}\n\n"
+                entity_count += 1
+
+                # Small async yield to allow event loop to breathe
+                await asyncio.sleep(0.01)
+
+        except Exception as e:
+            yield f"data: {_json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+        # Final status
+        final_status = "timed_out" if timed_out else "complete"
+        onboarding_repo.update_document_status(document_id, final_status)
+        log_step(f"VERA (Onboarding): Extraction {final_status} — {entity_count} entities found")
+
+        yield f"data: {_json.dumps({'type': 'done', 'entity_count': entity_count, 'status': final_status})}\n\n"
+
+    return _SSE(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@app.post("/api/onboarding/confirm-entity/{entity_id}")
+async def confirm_onboarding_entity(entity_id: str, request: Request):
+    """Confirm or correct an extracted entity (FR-024 through FR-027)."""
+    try:
+        from .onboarding_repository import onboarding_repo
+        body = await request.json()
+        confirmed = body.get("confirmed", True)
+        correction = body.get("correction")  # {field_name, correct_value}
+
+        entity = onboarding_repo.get_entity(entity_id)
+        if not entity:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        corrected = False
+        if correction and isinstance(correction, dict):
+            field_name = correction.get("field_name", "")
+            correct_value = correction.get("correct_value", "")
+            vera_value = entity.get("extracted_fields", {}).get(field_name, "")
+            if field_name and correct_value:
+                onboarding_repo.correct_entity(
+                    entity_id, field_name, vera_value, correct_value,
+                    entity.get("confidence", 0.5),
+                )
+                corrected = True
+                log_step(f"VERA (Onboarding): Entity corrected — {field_name}: '{vera_value}' → '{correct_value}' (training signal logged)")
+        else:
+            onboarding_repo.confirm_entity(entity_id)
+
+        if not corrected:
+            log_step(f"VERA (Onboarding): Entity confirmed — {entity.get('entity_type')} '{entity.get('source_text', '')[:40]}'")
+
+        return {
+            "entity_id": entity_id,
+            "confirmed": confirmed,
+            "corrected": corrected,
+            "verbose_log": [
+                f"VERA (Onboarding): Entity {'corrected' if corrected else 'confirmed'} — {entity.get('entity_type')}"
+            ],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/scrape-logo")
+async def scrape_logo(request: Request):
+    """
+    Scrape best logo candidate from a URL.
+    Cascade: og:image → link[rel=icon] → header img → favicon → monogram.
+    """
+    try:
+        from .onboarding_repository import onboarding_repo
+        body = await request.json()
+        session_id = body.get("session_id", "")
+        url = body.get("url", "")
+        if not session_id or not url:
+            raise HTTPException(status_code=400, detail="session_id and url required")
+
+        result = _scrape_logo_cascade(session_id, url)
+        for entry in result.get("verbose_log", []):
+            log_step(entry)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _scrape_logo_cascade(session_id: str, url: str) -> dict:
+    """
+    Logo scraping cascade: og:image → link[rel=icon] → largest header img → favicon → monogram.
+    Returns a logo asset dict with source_type, image_url/initials.
+    """
+    from .onboarding_repository import onboarding_repo
+
+    logs = []
+    candidates = []
+
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+        import re as _re
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; VetAgent/1.0; +https://vetagent.app/bot)"
+        }
+        with httpx.Client(timeout=8.0, follow_redirects=True) as client:
+            resp = client.get(url, headers=headers)
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        base_url = f"{resp.url.scheme}://{resp.url.host}"
+
+        # 1. og:image
+        og = soup.find("meta", property="og:image") or soup.find("meta", attrs={"name": "og:image"})
+        if og and og.get("content"):
+            candidates.append(("og_image", og["content"]))
+
+        # 2. Apple touch icon / large icon
+        for rel_val in ["apple-touch-icon", "icon"]:
+            tag = soup.find("link", rel=lambda r: r and rel_val in r)
+            if tag and tag.get("href"):
+                href = tag["href"]
+                if not href.startswith("http"):
+                    href = base_url + href
+                candidates.append(("favicon", href))
+
+        # 3. Largest image in header/nav
+        for section in soup.find_all(["header", "nav"]):
+            for img in section.find_all("img"):
+                src = img.get("src", "")
+                if src and not src.endswith(".gif"):
+                    if not src.startswith("http"):
+                        src = base_url + src
+                    candidates.append(("header_img", src))
+
+        # 4. /favicon.ico fallback
+        candidates.append(("favicon", base_url + "/favicon.ico"))
+
+    except Exception as e:
+        logs.append(f"VERA (Onboarding): Logo scrape error — {str(e)[:80]}")
+
+    # Pick first valid candidate
+    asset = None
+    for source_type, image_url in candidates:
+        try:
+            import httpx
+            with httpx.Client(timeout=4.0) as client:
+                r = client.head(image_url)
+            if r.status_code < 400:
+                asset = onboarding_repo.create_logo_asset(
+                    session_id=session_id,
+                    source_type=source_type,
+                    source_url=image_url,
+                    initials=None,
+                )
+                logs.append(f"VERA (Onboarding): Logo found via {source_type} — pending confirmation")
+                return {
+                    "logo_asset_id": asset["id"],
+                    "source_type": source_type,
+                    "image_url": image_url,
+                    "fallback_type": "image",
+                    "initials": None,
+                    "verbose_log": logs,
+                }
+        except Exception:
+            continue
+
+    # Monogram fallback
+    session = onboarding_repo.get_session_by_id(session_id)
+    practice_name = (session or {}).get("practice_name", "Practice")
+    initials = _generate_initials(practice_name)
+    asset = onboarding_repo.create_logo_asset(
+        session_id=session_id,
+        source_type="monogram",
+        source_url=None,
+        initials=initials,
+    )
+    logs.append(f"VERA (Onboarding): No logo found — initials monogram '{initials}' generated")
+    return {
+        "logo_asset_id": asset["id"],
+        "source_type": "monogram",
+        "image_url": None,
+        "fallback_type": "monogram",
+        "initials": initials,
+        "verbose_log": logs,
+    }
+
+
+def _generate_initials(name: str) -> str:
+    """Generate initials monogram from practice name (e.g. 'Riverside Animal Hospital' → 'RAH')."""
+    stop_words = {"animal", "hospital", "clinic", "veterinary", "vet", "care", "center",
+                  "the", "of", "and", "for", "a", "an"}
+    words = name.split()
+    significant = [w for w in words if w.lower() not in stop_words]
+    if not significant:
+        significant = words
+    initials = "".join(w[0].upper() for w in significant if w)
+    return initials[:4]  # max 4 chars
+
+
+@app.post("/api/onboarding/confirm-logo/{logo_asset_id}")
+async def confirm_logo(logo_asset_id: str, request: Request):
+    """Confirm, cycle, or replace the logo asset (FR-017, FR-018, FR-020)."""
+    try:
+        from .onboarding_repository import onboarding_repo
+        body = await request.json()
+        action = body.get("action", "confirm")  # confirm | try_next | upload
+
+        if action == "confirm":
+            asset = onboarding_repo.confirm_logo_asset(logo_asset_id)
+            if not asset:
+                raise HTTPException(status_code=404, detail="Logo asset not found")
+            log_step("VERA (Onboarding): Logo confirmed — placed in practice header")
+            return {
+                "logo_asset_id": logo_asset_id,
+                "confirmed": True,
+                "source_type": asset.get("source_type", "unknown"),
+                "verbose_log": ["VERA (Onboarding): Logo confirmed — placed in practice header"],
+            }
+
+        elif action == "try_next":
+            # Return next unconfirmed asset for session (or monogram if none)
+            with __import__("sqlite3").connect(__import__("os").path.join(__import__("os").path.dirname(__file__), "scheduler.db")) as conn:
+                conn.row_factory = __import__("sqlite3").Row
+                # Get session_id from this asset
+                row = conn.execute("SELECT session_id FROM logo_assets WHERE id=?", (logo_asset_id,)).fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Logo asset not found")
+                session_id = row["session_id"]
+                # Get next unconfirmed, not this asset
+                next_row = conn.execute(
+                    "SELECT * FROM logo_assets WHERE session_id=? AND id!=? AND confirmed=0 ORDER BY created_at",
+                    (session_id, logo_asset_id),
+                ).fetchone()
+            if next_row:
+                next_asset = dict(next_row)
+                log_step(f"VERA (Onboarding): Showing next logo candidate — {next_asset['source_type']}")
+                return {
+                    "logo_asset_id": next_asset["id"],
+                    "confirmed": False,
+                    "source_type": next_asset["source_type"],
+                    "image_url": next_asset.get("source_url"),
+                    "initials": next_asset.get("initials"),
+                    "verbose_log": [f"VERA (Onboarding): Showing next logo candidate — {next_asset['source_type']}"],
+                }
+            else:
+                log_step("VERA (Onboarding): No more logo candidates — offering upload")
+                return {
+                    "logo_asset_id": logo_asset_id,
+                    "confirmed": False,
+                    "source_type": "none",
+                    "message": "No more candidates — want to upload yours?",
+                    "verbose_log": ["VERA (Onboarding): No more logo candidates — offering upload"],
+                }
+
+        elif action == "upload":
+            # Upload path — frontend sends file separately; here we just acknowledge
+            log_step("VERA (Onboarding): Logo upload requested — awaiting file")
+            return {
+                "logo_asset_id": logo_asset_id,
+                "confirmed": False,
+                "source_type": "upload",
+                "verbose_log": ["VERA (Onboarding): Logo upload requested"],
+            }
+
+        raise HTTPException(status_code=400, detail="action must be confirm|try_next|upload")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/go-live")
+async def go_live(request: Request):
+    """
+    Trigger the Replace event (FR-028 to FR-033).
+    Creates live Clinic + Resource records, archives Harmony demo,
+    returns role-appropriate first_action_targets.
+    """
+    try:
+        from .agents.onboarding_agent import OnboardingAgent
+        body = await request.json()
+        session_id = body.get("session_id", "")
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id required")
+
+        agent = OnboardingAgent()
+        result = agent.handle_go_live(session_id)
+
+        # Get persona role for boundary statement
+        from .onboarding_repository import onboarding_repo
+        session = onboarding_repo.get_session_by_id(session_id)
+        persona_role = (session or {}).get("persona_role", "owner")
+
+        boundary = agent.handle_post_replace_intro(session_id, persona_role)
+        result["boundary_statement"] = boundary["message"]
+        result["verbose_log"].extend(boundary.get("verbose_log", []))
+
+        for entry in result.get("verbose_log", []):
+            log_step(entry)
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/onboarding/activation")
+async def record_activation(request: Request):
+    """Record activation event — first real client appointment booked (FR-033)."""
+    try:
+        from .agents.onboarding_agent import OnboardingAgent
+        body = await request.json()
+        session_id = body.get("session_id", "")
+        booking_id = body.get("booking_id", "")
+        if not session_id or not booking_id:
+            raise HTTPException(status_code=400, detail="session_id and booking_id required")
+        agent = OnboardingAgent()
+        result = agent.handle_activation(session_id, booking_id)
+        log_step(result["verbose_log"][0])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

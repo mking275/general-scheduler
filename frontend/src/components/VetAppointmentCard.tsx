@@ -77,6 +77,9 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
   const [isComplete, setIsComplete]   = useState(item.status === "complete");
   const [soapOpen, setSoapOpen]       = useState(false);
   const [ownerPhotos, setOwnerPhotos] = useState<any[] | null>(null);
+  const [patientStudies, setPatientStudies] = useState<any[] | null>(null);
+  const [soapHistory, setSoapHistory] = useState<any[] | null>(null);
+  const [soapHistLoading, setSoapHistLoading] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const tbId = item.timeblock_id ?? item.id;
@@ -113,6 +116,27 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
         .catch(() => setOwnerPhotos([]));
     }
   }, [activeTab, expanded, tbId]);
+
+  // Fetch patient-level imaging studies (historical X-rays, DICOM)
+  useEffect(() => {
+    if (activeTab === "imaging" && expanded && patient?.id && patientStudies === null) {
+      fetch(`${API}/api/patients/${patient.id}/images`)
+        .then(r => r.ok ? r.json() : [])
+        .then(studies => setPatientStudies(studies))
+        .catch(() => setPatientStudies([]));
+    }
+  }, [activeTab, expanded, patient?.id]);
+
+  // Fetch SOAP history when tab opened
+  useEffect(() => {
+    if (activeTab === "soap" && expanded && patient?.id && soapHistory === null) {
+      setSoapHistLoading(true);
+      fetch(`${API}/api/patients/${patient.id}/soap-notes`)
+        .then(r => r.ok ? r.json() : [])
+        .then(notes => { setSoapHistory(notes); setSoapHistLoading(false); })
+        .catch(() => { setSoapHistory([]); setSoapHistLoading(false); });
+    }
+  }, [activeTab, expanded, patient?.id]);
 
   const handleComplete = async () => {
     const res = await fetch(`${API}/api/appointments/${tbId}/complete`, {
@@ -213,7 +237,7 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
 
       {/* ── EXPANDED CLINICAL BODY ──────────────────────────────── */}
       <div style={{
-        maxHeight: expanded ? "700px" : "0px", overflow: "hidden",
+        maxHeight: expanded ? "1600px" : "0px", overflow: expanded ? "auto" : "hidden",
         transition: "max-height 0.3s cubic-bezier(0.4,0,0.2,1)",
       }}>
         <div style={{ padding: "0 16px 16px", borderTop: "1px solid rgba(63,63,70,0.35)" }}>
@@ -304,6 +328,97 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
               >
                 <FileText size={14} /> Open SOAP Workspace
               </button>
+
+              {/* ── Historical SOAP Notes ── */}
+              {soapHistLoading ? (
+                <div style={{ color: "#52525b", fontSize: "0.72rem", padding: "12px 0" }}>Loading SOAP history…</div>
+              ) : soapHistory && soapHistory.length > 0 ? (
+                <div style={{ marginTop: "14px" }}>
+                  <div style={{ fontSize: "0.65rem", color: "#52525b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ background: "rgba(139,92,246,0.12)", color: "#c4b5fd", border: "1px solid rgba(139,92,246,0.25)", borderRadius: "4px", padding: "1px 6px", fontSize: "0.6rem", fontWeight: 700 }}>HISTORY</span>
+                    {soapHistory.length} Prior SOAP Notes
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {soapHistory.map((note: any) => (
+                      <details key={note.id} style={{
+                        borderRadius: "8px", overflow: "hidden",
+                        background: "rgba(39,39,42,0.5)", border: "1px solid rgba(63,63,70,0.3)",
+                      }}>
+                        <summary style={{
+                          padding: "10px 14px", cursor: "pointer", userSelect: "none",
+                          display: "flex", alignItems: "center", gap: "8px", fontSize: "0.73rem",
+                          listStyle: "none",
+                        }}>
+                          <span style={{ color: "#52525b", fontSize: "0.65rem", fontVariantNumeric: "tabular-nums", minWidth: "72px" }}>
+                            {note.date}
+                          </span>
+                          <span style={{ color: "#d4d4d8", fontWeight: 600, flex: 1 }}>{note.procedure}</span>
+                          {note.signed ? (
+                            <span style={{ fontSize: "0.58rem", fontWeight: 700, padding: "1px 6px", borderRadius: "4px", background: "rgba(16,185,129,0.1)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)" }}>✓ SIGNED</span>
+                          ) : (
+                            <span style={{ fontSize: "0.58rem", fontWeight: 700, padding: "1px 6px", borderRadius: "4px", background: "rgba(251,191,36,0.1)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.25)" }}>DRAFT</span>
+                          )}
+                          <span style={{ color: "#52525b", fontSize: "0.65rem" }}>{note.signed_by}</span>
+                        </summary>
+                        <div style={{ padding: "0 14px 14px", borderTop: "1px solid rgba(63,63,70,0.25)" }}>
+                          {/* S — Subjective */}
+                          {note.subjective && (
+                            <div style={{ marginTop: "10px", marginBottom: "10px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.68rem", fontWeight: 700, color: "#818cf8", marginBottom: "4px" }}>
+                                <span style={{ width: "3px", height: "12px", background: "#818cf8", borderRadius: "2px", display: "inline-block" }} />
+                                S — Subjective
+                              </div>
+                              <div style={{ color: "#a1a1aa", fontSize: "0.7rem", lineHeight: 1.5, padding: "6px 10px", background: "rgba(9,9,11,0.5)", borderRadius: "6px", border: "1px solid rgba(63,63,70,0.25)" }}>
+                                {note.subjective}
+                              </div>
+                            </div>
+                          )}
+                          {/* O — Objective */}
+                          {note.objective && (
+                            <div style={{ marginBottom: "10px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.68rem", fontWeight: 700, color: "#34d399", marginBottom: "4px" }}>
+                                <span style={{ width: "3px", height: "12px", background: "#34d399", borderRadius: "2px", display: "inline-block" }} />
+                                O — Objective
+                              </div>
+                              <div style={{ color: "#a1a1aa", fontSize: "0.7rem", lineHeight: 1.5, padding: "6px 10px", background: "rgba(9,9,11,0.5)", borderRadius: "6px", border: "1px solid rgba(63,63,70,0.25)", whiteSpace: "pre-wrap" }}>
+                                {typeof note.objective === "string" ? note.objective : JSON.stringify(note.objective, null, 2)}
+                              </div>
+                            </div>
+                          )}
+                          {/* A — Assessment */}
+                          {note.assessment && (
+                            <div style={{ marginBottom: "10px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.68rem", fontWeight: 700, color: "#fbbf24", marginBottom: "4px" }}>
+                                <span style={{ width: "3px", height: "12px", background: "#fbbf24", borderRadius: "2px", display: "inline-block" }} />
+                                A — Assessment
+                              </div>
+                              <div style={{ color: "#a1a1aa", fontSize: "0.7rem", lineHeight: 1.5, padding: "6px 10px", background: "rgba(9,9,11,0.5)", borderRadius: "6px", border: "1px solid rgba(63,63,70,0.25)" }}>
+                                {note.assessment}
+                              </div>
+                            </div>
+                          )}
+                          {/* P — Plan */}
+                          {note.plan && (
+                            <div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.68rem", fontWeight: 700, color: "#60a5fa", marginBottom: "4px" }}>
+                                <span style={{ width: "3px", height: "12px", background: "#60a5fa", borderRadius: "2px", display: "inline-block" }} />
+                                P — Plan
+                              </div>
+                              <div style={{ color: "#a1a1aa", fontSize: "0.7rem", lineHeight: 1.5, padding: "6px 10px", background: "rgba(9,9,11,0.5)", borderRadius: "6px", border: "1px solid rgba(63,63,70,0.25)" }}>
+                                {note.plan}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              ) : soapHistory && soapHistory.length === 0 ? (
+                <div style={{ color: "#52525b", fontSize: "0.72rem", padding: "12px 0", textAlign: "center" }}>
+                  No prior SOAP notes on file.
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -388,9 +503,97 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
                     </div>
                   )}
                 </div>
-              ) : ownerPhotos?.length === 0 && (
+              ) : ownerPhotos?.length === 0 && (!patientStudies || patientStudies.length === 0) && (
                 <div style={{ padding: "10px 0", textAlign: "center", color: "#52525b", fontSize: "0.75rem" }}>
                   No imaging studies for this appointment.
+                </div>
+              )}
+
+              {/* ── Patient imaging history (historical studies) ── */}
+              {patientStudies && patientStudies.length > 0 && (
+                <div style={{ marginTop: "12px" }}>
+                  <div style={{ fontSize: "0.65rem", color: "#52525b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ background: "rgba(129,140,248,0.12)", color: "#a5b4fc", border: "1px solid rgba(129,140,248,0.25)", borderRadius: "4px", padding: "1px 6px", fontSize: "0.6rem", fontWeight: 700 }}>HISTORY</span>
+                    Patient Imaging Studies ({patientStudies.length})
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {patientStudies.map((study: any, i: number) => {
+                      const imgSrc = study.data
+                        ? (study.data.startsWith("data:") ? study.data : `data:${study.content_type ?? "image/png"};base64,${study.data}`)
+                        : null;
+                      return (
+                      <div key={study.id ?? i} style={{
+                        padding: "10px 14px", borderRadius: "8px",
+                        background: "rgba(39,39,42,0.5)", border: "1px solid rgba(63,63,70,0.3)",
+                        fontSize: "0.73rem",
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
+                          <Image size={13} color="#818cf8" />
+                          <span style={{ color: "#d4d4d8", fontWeight: 600, flex: 1 }}>
+                            {study.caption || study.filename || "Study"}
+                          </span>
+                          <span style={{ color: "#52525b", fontSize: "0.65rem", fontVariantNumeric: "tabular-nums" }}>
+                            {study.study_date || study.submitted_at?.slice(0, 10) || ""}
+                          </span>
+                        </div>
+                        {/* Radiograph thumbnail */}
+                        {imgSrc && (
+                          <div
+                            onClick={() => setLightboxSrc(imgSrc)}
+                            style={{ cursor: "pointer", marginBottom: "6px", position: "relative" }}
+                          >
+                            <img
+                              src={imgSrc}
+                              alt={study.caption || "Radiograph"}
+                              style={{
+                                width: "100%", maxHeight: "220px", objectFit: "contain",
+                                borderRadius: "6px", border: "1px solid rgba(63,63,70,0.5)",
+                                background: "#000",
+                                transition: "border-color 0.15s ease",
+                              }}
+                              onMouseEnter={e => { (e.target as HTMLImageElement).style.borderColor = "rgba(129,140,248,0.5)"; }}
+                              onMouseLeave={e => { (e.target as HTMLImageElement).style.borderColor = "rgba(63,63,70,0.5)"; }}
+                            />
+                            <span style={{
+                              position: "absolute", bottom: "8px", right: "8px",
+                              background: "rgba(0,0,0,0.7)", color: "#a1a1aa",
+                              fontSize: "0.58rem", padding: "2px 6px", borderRadius: "4px",
+                            }}>
+                              Click to enlarge
+                            </span>
+                          </div>
+                        )}
+                        {study.modality && (
+                          <span style={{
+                            display: "inline-block", fontSize: "0.58rem", fontWeight: 700,
+                            padding: "1px 6px", borderRadius: "4px", marginBottom: "5px",
+                            background: study.modality === "Radiograph" ? "rgba(96,165,250,0.1)" : "rgba(192,132,252,0.1)",
+                            color: study.modality === "Radiograph" ? "#60a5fa" : "#c084fc",
+                            border: `1px solid ${study.modality === "Radiograph" ? "rgba(96,165,250,0.25)" : "rgba(192,132,252,0.25)"}`,
+                          }}>
+                            {study.modality}
+                          </span>
+                        )}
+                        {study.report_text && (
+                          <details style={{ marginTop: "4px" }}>
+                            <summary style={{ color: "#71717a", fontSize: "0.68rem", cursor: "pointer", userSelect: "none" }}>
+                              View Report
+                            </summary>
+                            <pre style={{
+                              marginTop: "6px", padding: "10px 12px", borderRadius: "6px",
+                              background: "rgba(9,9,11,0.6)", border: "1px solid rgba(63,63,70,0.3)",
+                              color: "#a1a1aa", fontSize: "0.65rem", lineHeight: 1.5,
+                              whiteSpace: "pre-wrap", wordBreak: "break-word",
+                              fontFamily: "inherit", maxHeight: "200px", overflow: "auto",
+                            }}>
+                              {study.report_text}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
