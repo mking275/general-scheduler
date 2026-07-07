@@ -93,9 +93,25 @@ export default function ClinicInfo({ onEnter }: { onEnter: () => void }) {
             Veterinary Clinic
           </span>
         </h1>
-        <p className="text-zinc-400 max-w-xl mx-auto text-base leading-relaxed">
-          Vera is your Chief of Staff — a persistent operational intelligence who runs your practice so you can practice medicine. She coordinates intake, scheduling, clinical support, and follow-up across every provider.
+        <p className="text-zinc-400 max-w-2xl mx-auto text-base leading-relaxed mb-6">
+          This is a fully-seeded demo practice — 9 appointments, 8 patients with complete histories, 
+          multiple providers and rooms. Vera, your Chief of Staff, is already running it.
         </p>
+
+        {/* Demo context cards */}
+        <div className="max-w-2xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
+          {[
+            { value: "9", label: "Appointments Today" },
+            { value: "8", label: "Patients with History" },
+            { value: "5", label: "Role-Based Views" },
+            { value: "6", label: "Exam/Surgery Rooms" },
+          ].map((s, i) => (
+            <div key={i} className="bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2.5 text-center">
+              <div className="text-xl font-bold text-emerald-400">{s.value}</div>
+              <div className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">{s.label}</div>
+            </div>
+          ))}
+        </div>
       </motion.div>
 
       {/* How it works */}
