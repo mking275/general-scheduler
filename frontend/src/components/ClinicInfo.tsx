@@ -54,18 +54,39 @@ const item: Variants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.45 } },
 };
 
+// Fallback demo data so cards always render even if backend is unavailable
+const FALLBACK_VETS: Resource[] = [
+  { id: "v1", name: "Dr. Sarah Martinez", type: "Vet", hard_skills: ["Surgery", "General Practice", "X-Ray"], attributes: "Board-certified surgeon, 12 years experience. Specializes in orthopedic procedures." },
+  { id: "v2", name: "Dr. James Rivera", type: "Vet", hard_skills: ["General Practice", "Dental", "Vaccination"], attributes: "Small animal generalist, 8 years experience. Passionate about preventive care." },
+  { id: "v3", name: "Dr. Emily Chen", type: "Vet", hard_skills: ["Avian", "Exotics", "General Practice"], attributes: "Exotic animal specialist, 6 years experience. One of few avian-certified DVMs in region." },
+  { id: "v4", name: "Dr. Michael Torres", type: "Vet", hard_skills: ["General Practice", "Grooming", "Dental"], attributes: "General practice with grooming certification, 5 years experience." },
+];
+const FALLBACK_ROOMS: Resource[] = [
+  { id: "r1", name: "Surgery Suite A", type: "Room", hard_skills: ["Surgery"], attributes: "Full surgical suite with anesthesia monitoring, heated table, and laminar flow." },
+  { id: "r2", name: "Surgery Suite B", type: "Room", hard_skills: ["Surgery"], attributes: "Secondary surgical suite for minor procedures." },
+  { id: "r3", name: "Dental Suite", type: "Room", hard_skills: ["Dental"], attributes: "Dental radiology, ultrasonic scaler, and polishing equipment." },
+  { id: "r4", name: "Exam Room 1", type: "Room", hard_skills: ["General Practice"], attributes: "Standard examination room with digital scale and otoscope." },
+  { id: "r5", name: "Exam Room 2", type: "Room", hard_skills: ["General Practice"], attributes: "Standard examination room." },
+  { id: "r6", name: "Exam Room 3", type: "Room", hard_skills: ["General Practice"], attributes: "Standard examination room with ophthalmoscope." },
+  { id: "r7", name: "Imaging Suite", type: "Room", hard_skills: ["X-Ray", "Ultrasound"], attributes: "Digital X-ray and ultrasound with PACS integration." },
+  { id: "r8", name: "Avian / Exotics Room", type: "Room", hard_skills: ["Avian", "Exotics"], attributes: "Temperature-controlled room for exotic species." },
+  { id: "r9", name: "Grooming Station", type: "Room", hard_skills: ["Grooming"], attributes: "Full grooming station with hydraulic table and dryer." },
+];
+
 export default function ClinicInfo({ onEnter }: { onEnter: () => void }) {
-  const [vets, setVets] = useState<Resource[]>([]);
-  const [rooms, setRooms] = useState<Resource[]>([]);
+  const [vets, setVets] = useState<Resource[]>(FALLBACK_VETS);
+  const [rooms, setRooms] = useState<Resource[]>(FALLBACK_ROOMS);
 
   useEffect(() => {
     fetch(`${API}/api/resources`)
       .then(r => r.json())
       .then((data: Resource[]) => {
-        setVets(data.filter(r => r.type === "Vet"));
-        setRooms(data.filter(r => r.type === "Room"));
+        const liveVets = data.filter(r => r.type === "Vet");
+        const liveRooms = data.filter(r => r.type === "Room");
+        if (liveVets.length) setVets(liveVets);
+        if (liveRooms.length) setRooms(liveRooms);
       })
-      .catch(() => {});
+      .catch(() => { /* fallback data already set */ });
   }, []);
 
   return (
