@@ -55,7 +55,7 @@ export default function AppointmentCard({ item, patient, role, onLogEntry, curre
       setIsComplete(true);
       setCompletedAt(new Date().toISOString());
       setFollowupStatus("draft");
-      onLogEntry?.("DISPATCH: Appointment marked complete");
+      onLogEntry?.("VERA (Dispatch): Appointment marked complete");
     }
   };
 

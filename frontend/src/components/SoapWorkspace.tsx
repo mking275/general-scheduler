@@ -64,7 +64,7 @@ export default function SoapWorkspace({ item, patient, onClose, onLogEntry }: So
       const d = await res.json();
       setNote(d);
       setLocalNote(JSON.parse(JSON.stringify(d)));  // deep copy for editing
-      onLogEntry?.(`SOAP AGENT: Draft generated from ${item.job?.procedure ?? "General"} template`);
+      onLogEntry?.(`VERA (SOAP): Draft generated from ${item.job?.procedure ?? "General"} template`);
     }
     setLoading(false);
   };
@@ -129,8 +129,8 @@ export default function SoapWorkspace({ item, patient, onClose, onLogEntry }: So
       const d = await res.json();
       setNote((prev: any) => ({ ...prev, signed: true, signed_at: d.signed_at }));
       setLocalNote((prev: any) => ({ ...prev, signed: true, signed_at: d.signed_at }));
-      onLogEntry?.("SOAP AGENT: Note signed — triggering follow-up generation");
-      onLogEntry?.(`FOLLOWUP AGENT: Follow-up draft created (id: ${d.followup_draft_id?.substring(0, 8)}...)`);
+      onLogEntry?.("VERA (SOAP): Note signed — triggering follow-up generation");
+      onLogEntry?.(`VERA (Follow-Up): Follow-up draft created (id: ${d.followup_draft_id?.substring(0, 8)}...)`);
       // Close after brief delay
       setTimeout(() => onClose(), 1500);
     }
@@ -175,7 +175,7 @@ export default function SoapWorkspace({ item, patient, onClose, onLogEntry }: So
 
       {loading ? (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#52525b" }}>
-          Generating SOAP draft...
+          Vera is drafting the SOAP note...
         </div>
       ) : (
         <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>

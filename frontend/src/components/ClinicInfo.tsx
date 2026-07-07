@@ -84,7 +84,7 @@ export default function ClinicInfo({ onEnter }: { onEnter: () => void }) {
 
         <div className="relative inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium px-4 py-1.5 rounded-full mb-6">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Neuro-Symbolic Agentic Dispatch System
+          Powered by Vera · Chief of Staff
         </div>
 
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
@@ -94,8 +94,7 @@ export default function ClinicInfo({ onEnter }: { onEnter: () => void }) {
           </span>
         </h1>
         <p className="text-zinc-400 max-w-xl mx-auto text-base leading-relaxed">
-          An AI-powered scheduling assistant that uses a constraint-solving agent
-          pipeline to match patients with the right staff and space — automatically.
+          Vera is your Chief of Staff — a persistent operational intelligence who runs your practice so you can practice medicine. She coordinates intake, scheduling, clinical support, and follow-up across every provider.
         </p>
       </motion.div>
 
@@ -108,9 +107,9 @@ export default function ClinicInfo({ onEnter }: { onEnter: () => void }) {
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { icon: <Brain size={20} className="text-violet-400" />, label: "Intake Agent", desc: "Parses natural language into a structured Job with skills, patient, and date." },
-            { icon: <Zap size={20} className="text-amber-400" />, label: "Semantic Matcher", desc: "Ranks vets and rooms by skill overlap with the job's requirements." },
-            { icon: <Cpu size={20} className="text-emerald-400" />, label: "Heuristic Solver", desc: "Walks forward through time slots enforcing hard constraints — no double-bookings." },
+            { icon: <Brain size={20} className="text-violet-400" />, label: "Vera · Intake", desc: "Parses natural language into a structured Job with skills, patient, and date." },
+            { icon: <Zap size={20} className="text-amber-400" />, label: "Vera · Matching", desc: "Ranks vets and rooms by skill overlap with the job's requirements." },
+            { icon: <Cpu size={20} className="text-emerald-400" />, label: "Vera · Scheduling", desc: "Walks forward through time slots enforcing hard constraints — no double-bookings." },
           ].map((step, i) => (
             <div key={i} className="flex gap-3 bg-white/[0.03] border border-white/[0.07] rounded-xl p-4">
               <div className="mt-0.5 flex-shrink-0">{step.icon}</div>
@@ -207,7 +206,7 @@ export default function ClinicInfo({ onEnter }: { onEnter: () => void }) {
           onClick={onEnter}
           className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold px-8 py-3.5 rounded-xl transition-all duration-200 hover:scale-[1.03] active:scale-95 shadow-lg shadow-emerald-500/20"
         >
-          Enter VPMA
+          Enter VetAgent
           <ChevronRight size={18} />
         </button>
         <p className="text-zinc-600 text-xs mt-3">Type anything in natural language to book an appointment</p>

@@ -145,13 +145,13 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
     });
     if (res.ok) {
       setIsComplete(true);
-      onLogEntry?.("DISPATCH: Appointment marked complete");
+      onLogEntry?.("VERA (Dispatch): Appointment marked complete");
     }
   };
 
   const handleSuggestMessage = (msg: string) => {
     window.dispatchEvent(new CustomEvent("vet-suggest-message", { detail: { message: msg } }));
-    onLogEntry?.(`AGENT HINT: ${msg}`);
+    onLogEntry?.(`VERA: ${msg}`);
   };
 
   const accentColor =
@@ -637,7 +637,7 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
                 background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                  <span style={{ fontSize: "0.6rem", fontWeight: 700, color: "#818cf8", textTransform: "uppercase", letterSpacing: "0.07em" }}>AI Recommendation</span>
+                  <span style={{ fontSize: "0.6rem", fontWeight: 700, color: "#818cf8", textTransform: "uppercase", letterSpacing: "0.07em" }}>Vera's Recommendation</span>
                   <span style={{ fontSize: "0.6rem", color: "#52525b", background: "rgba(99,102,241,0.15)", padding: "1px 6px", borderRadius: "4px" }}>based on {procedure}</span>
                 </div>
                 <p style={{ margin: "0 0 4px", color: "#d4d4d8", fontSize: "0.78rem", fontWeight: 600 }}>
@@ -662,7 +662,7 @@ export default function VetAppointmentCard({ item, patient, onLogEntry }: Props)
                 onMouseLeave={e => { e.currentTarget.style.background = "linear-gradient(135deg,rgba(99,102,241,0.2) 0%,rgba(139,92,246,0.15) 100%)"; e.currentTarget.style.borderColor = "rgba(99,102,241,0.35)"; }}
               >
                 <CalendarPlus size={14} />
-                Schedule via Agent — "{followUp.prompt.slice(0, 48)}…"
+                Schedule via Vera — "{followUp.prompt.slice(0, 48)}…"
               </button>
             </div>
           )}

@@ -81,9 +81,9 @@ export default function PrescriptionPanel({ patientId, patientName, timeblockId,
         const data = await res.json();
         if (data.allergy_alert) {
           setAllergyAlert(data.allergy_alert.detail);
-          onLogEntry?.(`PRESCRIPTION AGENT: [CRITICAL] Allergy alert — ${data.allergy_alert.detail.slice(0, 80)}`);
+          onLogEntry?.(`VERA (Rx): [CRITICAL] Allergy alert — ${data.allergy_alert.detail.slice(0, 80)}`);
         } else {
-          onLogEntry?.(`PRESCRIPTION AGENT: Rx created — ${form.drug_name} ${form.dose} ${form.frequency}`);
+          onLogEntry?.(`VERA (Rx): Rx created — ${form.drug_name} ${form.dose} ${form.frequency}`);
         }
         setShowNew(false);
         setForm({ drug_name: "", dose: "", frequency: "SID", duration_days: "14", refills_remaining: "0" });
@@ -104,7 +104,7 @@ export default function PrescriptionPanel({ patientId, patientName, timeblockId,
       if (res.ok) {
         const data = await res.json();
         const status = data.status === "auto_approved" ? "AUTO-APPROVED ✓" : "Flagged for vet review";
-        onLogEntry?.(`PRESCRIPTION AGENT: ${drugName} refill — ${status}`);
+        onLogEntry?.(`VERA (Rx): ${drugName} refill — ${status}`);
         load();
       }
     } catch {}

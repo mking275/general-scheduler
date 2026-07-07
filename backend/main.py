@@ -411,8 +411,8 @@ def intake_send(req: IntakeSendRequest):
         f"(skin conditions, swelling, discharge, changes in posture or gait) are really helpful "
         f"for us to prepare before your visit."
     )
-    log_agent_step("INTAKE AGENT", f"Sent pre-visit questionnaire to owner ({owner_name}) for {patient_name}")
-    log_agent_step("INTAKE AGENT", "Photo attachment option included in owner message")
+    log_agent_step("VERA (Intake)", f"Sent pre-visit questionnaire to owner ({owner_name}) for {patient_name}")
+    log_agent_step("VERA (Intake)", "Photo attachment option included in owner message")
     return {"status": "pending", "message": intake_msg}
 
 @app.post("/api/intake/parse")
@@ -422,7 +422,7 @@ def intake_parse(req: IntakeParseRequest):
         raise HTTPException(status_code=404, detail="Timeblock not found")
 
     # Extract symptoms
-    log_agent_step("INTAKE AGENT", "Owner response received — extracting symptoms...")
+    log_agent_step("VERA (Intake)", "Owner response received — extracting symptoms...")
     intake_agent = IntakeAgent()
     extracted = intake_agent.extract_symptoms(req.owner_response)
 
@@ -431,8 +431,8 @@ def intake_parse(req: IntakeParseRequest):
         f"{s['name']} ({s['duration_days']}d, {s['severity']})"
         for s in extracted["symptoms"]
     ) if extracted["symptoms"] else "none detected"
-    log_agent_step("INTAKE AGENT", f"Parsed → {sym_str}")
-    log_agent_step("INTAKE AGENT", f"Suggested focus areas: {', '.join(extracted['suggested_focus']) or 'general assessment'}")
+    log_agent_step("VERA (Intake)", f"Parsed → {sym_str}")
+    log_agent_step("VERA (Intake)", f"Suggested focus areas: {', '.join(extracted['suggested_focus']) or 'general assessment'}")
 
     # Persist PreExamBrief
     brief = PreExamBrief(
@@ -445,7 +445,7 @@ def intake_parse(req: IntakeParseRequest):
     )
     db.save_pre_exam_brief(brief)
     db.update_timeblock_field(req.timeblock_id, "intake_status", "received")
-    log_agent_step("INTAKE AGENT", "Pre-Exam Brief saved")
+    log_agent_step("VERA (Intake)", "Pre-Exam Brief saved")
 
     return brief.model_dump()
 
@@ -507,7 +507,7 @@ def create_soap_draft(req: SoapDraftRequest):
 
     from .agents.soap import _LLM_AVAILABLE as soap_llm
     mode = "Gemini LLM" if soap_llm else f"{(procedure or 'General')} template"
-    log_agent_step("SOAP AGENT", f"Draft generated via {mode}" + (" + intake brief" if brief and brief.status == "received" else ""))
+    log_agent_step("VERA (SOAP)", f"Draft generated via {mode}" + (" + intake brief" if brief and brief.status == "received" else ""))
     return note.model_dump()
 
 @app.put("/api/soap/{note_id}")
@@ -581,7 +581,7 @@ def sign_soap_note(note_id: str, body: SoapSignRequest):
         db.save_followup_draft(draft)
         db.update_timeblock_field(note.timeblock_id, "followup_status", "draft")
         followup_draft_id = draft.id
-        log_agent_step("FOLLOWUP AGENT", f"{'Wellness' if draft.tone == 'wellness' else draft.tone.capitalize()} follow-up draft generated for {patient.name if patient else 'patient'}")
+        log_agent_step("VERA (Follow-Up)", f"{'Wellness' if draft.tone == 'wellness' else draft.tone.capitalize()} follow-up draft generated for {patient.name if patient else 'patient'}")
 
     return {
         "signed": True,
@@ -680,7 +680,7 @@ def create_followup_draft(req: FollowUpDraftRequest):
     draft = agent.generate(tb, patient, owner, vet_name, procedure)
     db.save_followup_draft(draft)
     db.update_timeblock_field(req.timeblock_id, "followup_status", "draft")
-    log_agent_step("FOLLOWUP AGENT", f"{draft.tone.capitalize()} follow-up draft generated for {patient.name if patient else 'patient'}")
+    log_agent_step("VERA (Follow-Up)", f"{draft.tone.capitalize()} follow-up draft generated for {patient.name if patient else 'patient'}")
     return draft.model_dump()
 
 @app.put("/api/followup/{draft_id}")
@@ -704,7 +704,7 @@ def approve_followup_draft(draft_id: str):
     approved = db.approve_followup_draft(draft_id)
     if not approved:
         raise HTTPException(status_code=404, detail="Follow-up draft not found")
-    log_agent_step("FOLLOWUP AGENT", "Follow-up approved and sent (simulated)")
+    log_agent_step("VERA (Follow-Up)", "Follow-up approved and sent (simulated)")
     return {"status": "sent", "approved_at": approved.approved_at}
 
 
@@ -731,7 +731,7 @@ def complete_appointment(timeblock_id: str, body: CompleteRequest):
 
     # Mark complete
     db.update_timeblock_field(timeblock_id, "status", "complete")
-    log_agent_step("DISPATCH", f"Appointment {timeblock_id[:8]}... marked complete")
+    log_agent_step("VERA (Dispatch)", f"Appointment {timeblock_id[:8]}... marked complete")
 
     # Generate follow-up draft
     patient = db.get_patient(tb.patient_id) if tb.patient_id else None
@@ -762,7 +762,7 @@ def complete_appointment(timeblock_id: str, body: CompleteRequest):
         draft = agent.generate(tb, patient, owner, vet_name, procedure)
         db.save_followup_draft(draft)
         db.update_timeblock_field(timeblock_id, "followup_status", "draft")
-        log_agent_step("FOLLOWUP AGENT", f"{draft.tone.capitalize()} follow-up draft generated for {patient.name if patient else 'patient'} ({owner.name if owner else ''})")
+        log_agent_step("VERA (Follow-Up)", f"{draft.tone.capitalize()} follow-up draft generated for {patient.name if patient else 'patient'} ({owner.name if owner else ''})")
         draft_id = draft.id
     else:
         draft_id = existing_draft.id
@@ -774,7 +774,7 @@ def complete_appointment(timeblock_id: str, body: CompleteRequest):
         procedure_hint = procedure or "default"
         visit_inv = generate_visit_invoice(db, timeblock_id, tb, patient, owner, procedure_hint, log_agent_step)
     except Exception as e:
-        log_agent_step("BILLING AGENT", f"[warn] Visit invoice draft failed — {e}")
+        log_agent_step("VERA (Billing)", f"[warn] Visit invoice draft failed — {e}")
         visit_inv = None
 
     return {"status": "complete", "followup_draft_id": draft_id, "visit_invoice_id": visit_inv["id"] if visit_inv else None}
@@ -2226,9 +2226,9 @@ async def subscribe_module(
             "status": "pending",
             "created_at": now_dt.isoformat(),
         })
-        log_agent_step("ACCOUNT AGENT", f"Invoice {inv_num} generated for {module_id} activation")
+        log_agent_step("VERA (Account)", f"Invoice {inv_num} generated for {module_id} activation")
     except Exception as e:
-        log_agent_step("ACCOUNT AGENT", f"[warn] Module invoice generation failed — {e}")
+        log_agent_step("VERA (Account)", f"[warn] Module invoice generation failed — {e}")
 
     return {
         "module_id": module_id,
@@ -2291,7 +2291,7 @@ def generate_account_invoice(body: GenerateInvoiceRequest):
         "status": "pending",
         "created_at": now_dt.isoformat(),
     })
-    log_agent_step("ACCOUNT AGENT", f"Invoice {inv_num} manually generated — ${subtotal/100:.2f}")
+    log_agent_step("VERA (Account)", f"Invoice {inv_num} manually generated — ${subtotal/100:.2f}")
     return inv
 
 
@@ -2419,9 +2419,9 @@ def upgrade_account_plan(body: PlanUpgradeRequest):
                 "status": "pending",
                 "created_at": now_dt.isoformat(),
             })
-            log_agent_step("ACCOUNT AGENT", f"Invoice {inv_num} generated for plan upgrade to {new_tier}")
+            log_agent_step("VERA (Account)", f"Invoice {inv_num} generated for plan upgrade to {new_tier}")
     except Exception as e:
-        log_agent_step("ACCOUNT AGENT", f"[warn] Upgrade invoice generation failed — {e}")
+        log_agent_step("VERA (Account)", f"[warn] Upgrade invoice generation failed — {e}")
 
     return {
         "account_id": account["id"],
@@ -2504,7 +2504,7 @@ def send_visit_invoice(invoice_id: str):
     inv = db.update_visit_invoice(invoice_id, {"status": "sent", "sent_at": datetime.utcnow().isoformat()})
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    log_agent_step("BILLING AGENT", f"Visit invoice {invoice_id[:8]} marked as sent")
+    log_agent_step("VERA (Billing)", f"Visit invoice {invoice_id[:8]} marked as sent")
     return inv
 
 
@@ -2514,7 +2514,7 @@ def mark_visit_invoice_paid(invoice_id: str):
     inv = db.update_visit_invoice(invoice_id, {"status": "paid", "paid_at": datetime.utcnow().isoformat()})
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    log_agent_step("BILLING AGENT", f"Visit invoice {invoice_id[:8]} marked as paid")
+    log_agent_step("VERA (Billing)", f"Visit invoice {invoice_id[:8]} marked as paid")
     return inv
 
 
@@ -2551,7 +2551,7 @@ def add_account_user(body: AccountUserCreate):
         "created_at": datetime.utcnow().isoformat(),
     }
     db.create_account_user(user)
-    log_agent_step("ACCOUNT AGENT", f"User {body.email} added as {body.role}")
+    log_agent_step("VERA (Account)", f"User {body.email} added as {body.role}")
     return user
 
 
@@ -2561,7 +2561,7 @@ def remove_account_user(user_id: str):
     from .repository import _get_conn
     with _get_conn() as conn:
         conn.execute("DELETE FROM account_users WHERE id=?", (user_id,))
-    log_agent_step("ACCOUNT AGENT", f"User {user_id[:8]} removed")
+    log_agent_step("VERA (Account)", f"User {user_id[:8]} removed")
     return
 
 

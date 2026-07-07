@@ -23,7 +23,7 @@ export default function ChatInput({ onSend, isProcessing, isClarifying = false, 
 
   const placeholder = isClarifying
     ? "Type your answer and press Enter..."
-    : "e.g. 'Book an emergency surgery for a Golden Retriever at 2pm'";
+    : "Ask Vera — e.g. 'Book an emergency surgery for a Golden Retriever at 2pm'";
 
   const ringClass = isClarifying
     ? "focus:ring-indigo-500/60 border-indigo-500/40 animate-pulse-slow"
@@ -54,7 +54,7 @@ export default function ChatInput({ onSend, isProcessing, isClarifying = false, 
               >
                 {/* Agent avatar dot */}
                 <div className="mt-1 w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center flex-shrink-0">
-                  <MessageCircle size={11} className="text-indigo-400" />
+                  <span style={{ fontWeight: 800, fontSize: "10px", color: "white" }}>V</span>
                 </div>
                 <div className="bg-indigo-950/60 border border-indigo-500/25 text-indigo-200 text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 leading-relaxed max-w-[90%]">
                   {q}
@@ -62,7 +62,7 @@ export default function ChatInput({ onSend, isProcessing, isClarifying = false, 
               </motion.div>
             ))}
             <p className="text-[11px] text-indigo-400/60 pl-7 pb-1">
-              Agent is waiting for your response
+              Vera is waiting for your response
             </p>
           </motion.div>
         )}

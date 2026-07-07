@@ -67,7 +67,7 @@ export default function CareTimelinePanel({ patientId, patientName, timeblockId,
       });
       if (res.ok) {
         const ev = await res.json();
-        onLogEntry?.(`PREVENTIVE CARE AGENT: Recorded ${ev.protocol_name} — next due ${ev.next_due_date}`);
+        onLogEntry?.(`VERA (Care): Recorded ${ev.protocol_name} — next due ${ev.next_due_date}`);
         setShowRecord(false);
         setForm({ protocol_id: "", administered_date: new Date().toISOString().slice(0, 10), batch_number: "", administered_by: "" });
         load();

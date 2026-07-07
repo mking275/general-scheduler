@@ -49,7 +49,7 @@ export default function FollowUpPanel({
       setDraft(d);
       setEditedBody(d.body);
       setSelectedTone(d.tone);
-      onLogEntry?.(`FOLLOWUP AGENT: ${d.tone.charAt(0).toUpperCase() + d.tone.slice(1)} draft loaded`);
+      onLogEntry?.(`VERA (Follow-Up): ${d.tone.charAt(0).toUpperCase() + d.tone.slice(1)} draft loaded`);
     }
   };
 
@@ -71,7 +71,7 @@ export default function FollowUpPanel({
       const d = await res.json();
       setDraft(d);
       setEditedBody(d.body);
-      onLogEntry?.(`FOLLOWUP AGENT: Regenerated with ${selectedTone} tone`);
+      onLogEntry?.(`VERA (Follow-Up): Regenerated with ${selectedTone} tone`);
     }
     setLoading(false);
   };
@@ -94,7 +94,7 @@ export default function FollowUpPanel({
     if (res.ok) {
       setApproved(true);
       onStatusChange("sent");
-      onLogEntry?.("FOLLOWUP AGENT: Follow-up approved and sent (simulated)");
+      onLogEntry?.("VERA (Follow-Up): Follow-up approved and sent (simulated)");
     }
     setLoading(false);
   };

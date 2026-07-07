@@ -100,7 +100,7 @@ export default function Dashboard({
             {selectedClinic?.name ?? "Vet Clinic Schedule"}
           </h1>
           <p style={{ color: "#52525b", fontSize: "0.72rem", margin: "2px 0 0" }}>
-            Neuro-Symbolic Agentic Dispatch System
+            Powered by Vera · Chief of Staff
           </p>
         </div>
 

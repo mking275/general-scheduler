@@ -59,7 +59,7 @@ export default function ForecastPanel({ clinicId, clinicName, onLogEntry }: Fore
       if (res.ok) {
         const data: ForecastResult = await res.json();
         setForecast(data);
-        data.verbose_log?.forEach(l => onLogEntry?.(`FORECAST AGENT: ${l}`));
+        data.verbose_log?.forEach(l => onLogEntry?.(`VERA (Forecast): ${l}`));
       }
     } catch {}
     setLoading(false);

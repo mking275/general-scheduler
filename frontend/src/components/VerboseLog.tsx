@@ -16,43 +16,43 @@ export default function VerboseLog({ logs }: { logs: string[] }) {
     if (!log) return { icon: <Terminal size={16} className="text-zinc-500 mt-1" />, cls: "border-zinc-800/50 bg-zinc-900/50", textCls: "text-zinc-300" };
 
     // T035: New agent step styles
-    if (log.startsWith("INTAKE AGENT:") || log.includes("INTAKE AGENT"))
+    if (log.startsWith("VERA (Intake):") || log.includes("VERA (Intake)"))
       return {
         icon: <Activity size={16} style={{ color: "#60a5fa", marginTop: "2px" }} />,
         cls: "border-blue-900/40 bg-blue-950/20",
         textCls: "text-blue-200",
-        label: "INTAKE",
+        label: "VERA · Intake",
         labelColor: "#60a5fa",
       };
-    if (log.startsWith("RISK AGENT:") || log.includes("RISK AGENT"))
+    if (log.startsWith("VERA (Risk):") || log.includes("VERA (Risk)"))
       return {
         icon: <HeartPulse size={16} style={{ color: "#fbbf24", marginTop: "2px" }} />,
         cls: "border-amber-900/30 bg-amber-950/15",
         textCls: "text-amber-200",
-        label: "RISK",
+        label: "VERA · Risk",
         labelColor: "#fbbf24",
       };
-    if (log.startsWith("SOAP AGENT:") || log.includes("SOAP AGENT"))
+    if (log.startsWith("VERA (SOAP):") || log.includes("VERA (SOAP)"))
       return {
         icon: <FileText size={16} style={{ color: "#a78bfa", marginTop: "2px" }} />,
         cls: "border-purple-900/30 bg-purple-950/15",
         textCls: "text-purple-200",
-        label: "SOAP",
+        label: "VERA · SOAP",
         labelColor: "#a78bfa",
       };
-    if (log.startsWith("FOLLOWUP AGENT:") || log.includes("FOLLOWUP AGENT"))
+    if (log.startsWith("VERA (Follow-Up):") || log.includes("VERA (Follow-Up)"))
       return {
         icon: <Send size={16} style={{ color: "#4ade80", marginTop: "2px" }} />,
         cls: "border-emerald-900/30 bg-emerald-950/15",
         textCls: "text-emerald-200",
-        label: "FOLLOWUP",
+        label: "VERA · Follow-Up",
         labelColor: "#4ade80",
       };
 
     // Existing step styles
-    if (log.startsWith("AGENT:"))
+    if (log.startsWith("VERA:"))
       return { icon: <MessageCircle size={16} style={{ color: "#818cf8", marginTop: "2px" }} />, cls: "border-indigo-500/30 bg-indigo-950/40", textCls: "text-indigo-200" };
-    if (log.startsWith("INTAKE:"))
+    if (log.startsWith("VERA (Intake):"))
       return { icon: <Activity size={16} style={{ color: "#60a5fa", marginTop: "2px" }} />, cls: "border-zinc-800/50 bg-zinc-900/50", textCls: "text-zinc-300" };
     if (log.startsWith("MATCH:"))
       return { icon: <Zap size={16} style={{ color: "#c084fc", marginTop: "2px" }} />, cls: "border-zinc-800/50 bg-zinc-900/50", textCls: "text-zinc-300" };
@@ -65,12 +65,12 @@ export default function VerboseLog({ logs }: { logs: string[] }) {
     if (log.startsWith("ERROR:") || log.startsWith("SOLVE ERROR:"))
       return { icon: <AlertCircle size={16} style={{ color: "#f87171", marginTop: "2px" }} />, cls: "border-red-800/40 bg-red-950/30", textCls: "text-red-300" };
     // T019: CLINIC RESOLVER step style
-    if (log.startsWith("CLINIC RESOLVER:"))
+    if (log.startsWith("VERA (Clinic):"))
       return {
         icon: <MessageCircle size={16} style={{ color: "#6366f1", marginTop: "2px" }} />,
         cls: "border-indigo-800/40 bg-indigo-950/25",
         textCls: "text-indigo-200",
-        label: "CLINIC RESOLVER",
+        label: "VERA · Clinic",
         labelColor: "#6366f1",
       };
 
@@ -108,7 +108,7 @@ export default function VerboseLog({ logs }: { logs: string[] }) {
       }}>
         <Terminal size={16} style={{ color: "#10b981" }} />
         <h2 style={{ fontFamily: "monospace", fontSize: "0.78rem", fontWeight: 700, color: "#10b981", letterSpacing: "0.1em", margin: 0 }}>
-          AGENT THOUGHT PROCESS
+          VERA
         </h2>
       </div>
 
@@ -145,7 +145,7 @@ export default function VerboseLog({ logs }: { logs: string[] }) {
               animate={{ opacity: 1 }}
               style={{ color: "#3f3f46", fontStyle: "italic", textAlign: "center", marginTop: "40px", fontSize: "0.78rem" }}
             >
-              Awaiting natural language scheduling request...
+              Vera is ready. Ask her anything.
             </motion.div>
           )}
         </AnimatePresence>

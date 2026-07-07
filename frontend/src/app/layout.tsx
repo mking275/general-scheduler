@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VPMA — Veterinary Practice Management Agent",
-  description: "AI-powered veterinary practice management: scheduling, intake, SOAP notes, and follow-ups.",
+  title: "VetAgent — Powered by Vera",
+  description: "VetAgent: AI-native veterinary practice management powered by Vera, your Chief of Staff.",
 };
 
 export default function RootLayout({

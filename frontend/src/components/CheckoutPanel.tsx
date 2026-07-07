@@ -100,7 +100,7 @@ export default function CheckoutPanel({ timeblockId, patientName, ownerName, onL
         const updated = await res.json();
         if (typeof updated.line_items === "string") updated.line_items = JSON.parse(updated.line_items);
         setInvoice(updated);
-        onLogEntry?.(`BILLING: Invoice ${invoice.invoice_number} sent to ${ownerName || "client"}`);
+        onLogEntry?.(`VERA (Billing): Invoice ${invoice.invoice_number} sent to ${ownerName || "client"}`);
       }
     } catch { /* ignore */ }
     setActionLoading(null);
@@ -115,7 +115,7 @@ export default function CheckoutPanel({ timeblockId, patientName, ownerName, onL
         const updated = await res.json();
         if (typeof updated.line_items === "string") updated.line_items = JSON.parse(updated.line_items);
         setInvoice(updated);
-        onLogEntry?.(`BILLING: Invoice ${invoice.invoice_number} — payment collected (${formatCents(updated.total_cents)})`);
+        onLogEntry?.(`VERA (Billing): Invoice ${invoice.invoice_number} — payment collected (${formatCents(updated.total_cents)})`);
       }
     } catch { /* ignore */ }
     setActionLoading(null);
@@ -160,7 +160,7 @@ export default function CheckoutPanel({ timeblockId, patientName, ownerName, onL
         const updated = await res.json();
         if (typeof updated.line_items === "string") updated.line_items = JSON.parse(updated.line_items);
         setInvoice(updated);
-        onLogEntry?.(`BILLING: Added "${newItemDesc.trim()}" (${formatCents(amountCents)}) to invoice ${invoice.invoice_number}`);
+        onLogEntry?.(`VERA (Billing): Added "${newItemDesc.trim()}" (${formatCents(amountCents)}) to invoice ${invoice.invoice_number}`);
       }
     } catch { /* ignore */ }
     setNewItemDesc("");

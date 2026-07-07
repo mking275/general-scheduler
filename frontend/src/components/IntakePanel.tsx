@@ -63,7 +63,7 @@ export default function IntakePanel({
       const data = await res.json();
       setSentMessage(data.message ?? null);
       onStatusChange("pending");
-      onLogEntry?.("INTAKE AGENT: Questionnaire with photo prompt sent to owner (simulated)");
+      onLogEntry?.("VERA (Intake): Questionnaire with photo prompt sent to owner (simulated)");
     }
     setLoading(false);
   };
@@ -104,9 +104,9 @@ export default function IntakePanel({
       if (res.ok) {
         const data = await res.json();
         setBrief(data);
-        onLogEntry?.(`INTAKE AGENT: Parsed → ${data.symptoms?.map((s: any) => `${s.name} (${s.duration_days}d, ${s.severity})`).join(", ") || "no specific symptoms"}`);
+        onLogEntry?.(`VERA (Intake): Parsed → ${data.symptoms?.map((s: any) => `${s.name} (${s.duration_days}d, ${s.severity})`).join(", ") || "no specific symptoms"}`);
         if (data.suggested_focus?.length)
-          onLogEntry?.(`INTAKE AGENT: Suggested focus: ${data.suggested_focus.join(", ")}`);
+          onLogEntry?.(`VERA (Intake): Suggested focus: ${data.suggested_focus.join(", ")}`);
       }
     }
 
@@ -121,13 +121,13 @@ export default function IntakePanel({
         });
         if (imgRes.ok) {
           const imgData = await imgRes.json();
-          onLogEntry?.(`INTAKE AGENT: ${imgData.saved} owner photo(s) uploaded — visible in Imaging tab`);
+          onLogEntry?.(`VERA (Intake): ${imgData.saved} owner photo(s) uploaded — visible in Imaging tab`);
         }
       } catch {}
     }
 
     onStatusChange("received");
-    onLogEntry?.("INTAKE AGENT: Pre-Exam Brief saved ✓");
+    onLogEntry?.("VERA (Intake): Pre-Exam Brief saved ✓");
     setLoading(false);
   };
 

@@ -220,13 +220,13 @@ export default function Home() {
 
         const partial = clarifyData.partial_parse;
         if (partial.skills?.length) {
-          setLogs(prev => [...prev, `INTAKE: Partial parse — skill(s): ${partial.skills.join(", ")}${partial.date ? `, date: ${partial.date}` : ""}`]);
+          setLogs(prev => [...prev, `VERA (Intake): Partial parse — skill(s): ${partial.skills.join(", ")}${partial.date ? `, date: ${partial.date}` : ""}`]);
         }
 
         let i = 0;
         const streamQ = () => {
           if (i < clarifyData.questions.length) {
-            setLogs(prev => [...prev, `AGENT: ${clarifyData.questions[i]}`]);
+            setLogs(prev => [...prev, `VERA: ${clarifyData.questions[i]}`]);
             i++;
             setTimeout(streamQ, 350);
           } else {
