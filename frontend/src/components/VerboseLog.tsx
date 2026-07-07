@@ -49,9 +49,16 @@ export default function VerboseLog({ logs }: { logs: string[] }) {
         labelColor: "#4ade80",
       };
 
-    // Existing step styles
+    // Vera conversational / generic
     if (log.startsWith("VERA:"))
-      return { icon: <MessageCircle size={16} style={{ color: "#818cf8", marginTop: "2px" }} />, cls: "border-indigo-500/30 bg-indigo-950/40", textCls: "text-indigo-200" };
+      return {
+        icon: <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "linear-gradient(135deg, #6C63FF, #818cf8)", color: "white", fontWeight: 800, fontSize: "10px", marginTop: "1px", flexShrink: 0 }}>V</span>,
+        cls: "border-indigo-500/30 bg-indigo-950/40",
+        textCls: "text-indigo-100",
+        label: "VERA",
+        labelColor: "#818cf8",
+        isConversational: true,
+      };
     if (log.startsWith("VERA (Intake):"))
       return { icon: <Activity size={16} style={{ color: "#60a5fa", marginTop: "2px" }} />, cls: "border-zinc-800/50 bg-zinc-900/50", textCls: "text-zinc-300" };
     if (log.startsWith("MATCH:"))
@@ -77,8 +84,17 @@ export default function VerboseLog({ logs }: { logs: string[] }) {
     return { icon: <Terminal size={16} style={{ color: "#52525b", marginTop: "2px" }} />, cls: "border-zinc-800/50 bg-zinc-900/50", textCls: "text-zinc-400" };
   };
 
-  // T019: Bold clinic name in DISPATCH logs
-  const renderLogText = (log: string) => {
+  // T019: Bold clinic name in DISPATCH logs + Vera conversational rendering
+  const renderLogText = (log: string, meta: any) => {
+    // Vera conversational — strip prefix, render multi-line
+    if (meta?.isConversational && log.startsWith("VERA: ")) {
+      const content = log.replace(/^VERA: /, "");
+      return (
+        <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, fontSize: "0.82rem" }}>
+          {content}
+        </div>
+      );
+    }
     if (log.startsWith("DISPATCH:")) {
       // Bold any text after "at " that looks like a clinic name
       const match = log.match(/^(DISPATCH:.*? at )(.+?)( and | — |$)/);
@@ -133,8 +149,8 @@ export default function VerboseLog({ logs }: { logs: string[] }) {
                 className={meta.cls}
               >
                 <div style={{ flexShrink: 0 }}>{meta.icon}</div>
-                <div style={{ lineHeight: 1.4 }} className={meta.textCls}>
-                  {renderLogText(log)}
+                <div style={{ lineHeight: 1.4, flex: 1 }} className={meta.textCls}>
+                  {renderLogText(log, meta)}
                 </div>
               </motion.div>
             );

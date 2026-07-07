@@ -200,12 +200,29 @@ export default function Home() {
       return;
     }
 
-    // --- Fresh request: check for ambiguity first ---
+    // --- Fresh request: ask Vera first ---
     setMode("processing");
     setIsProcessing(true);
-    setLogs([`RECEIVED: Analyzing input "${text}"`]);
+    setLogs(prev => [...prev, `RECEIVED: ${text}`]);
 
     try {
+      // Route through Vera's conversational endpoint first
+      const chatRes = await fetch(`${API}/api/vera/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      const chatData = await chatRes.json();
+
+      if (chatData.type === "chat" && chatData.response) {
+        // Vera handled it conversationally
+        setLogs(prev => [...prev, `VERA: ${chatData.response}`]);
+        setIsProcessing(false);
+        setMode("idle");
+        return;
+      }
+
+      // Vera said this is a scheduling request — proceed with existing flow
       const clarifyRes = await fetch(`${API}/api/clarify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -226,11 +243,12 @@ export default function Home() {
         let i = 0;
         const streamQ = () => {
           if (i < clarifyData.questions.length) {
-            setLogs(prev => [...prev, `VERA: ${clarifyData.questions[i]}`]);
+            const q = clarifyData.questions[i];
+            if (q) setLogs(prev => [...prev, `VERA: ${q}`]);
             i++;
             setTimeout(streamQ, 350);
           } else {
-            setAgentQuestions(clarifyData.questions);
+            setAgentQuestions(clarifyData.questions.filter(Boolean));
           }
         };
         setTimeout(streamQ, 300);
