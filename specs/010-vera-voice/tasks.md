@@ -1,5 +1,13 @@
 # Feature 010 — Vera Voice (VP-3, cycles 3a + 3b): Task List
 
+> **STATUS — COMPLETE (2026-07-10).** All **43/43 tasks `[X]`** across 3 waves.
+> Full cumulative voice suite: **116 passed** (sim only, zero live telephony/LLM
+> calls; docker-compose Postgres on :5433). All 6 `[MARKETING]` milestones built
+> (see `marketing-notes.md`). Live-mode + external hard gates remain deferred to
+> the Pilot-Activation section (config-only, out of this build).
+> Waves: 1–2 (T001–T031, foundational + Phases A–E) · 3 (T032–T043, Phase F
+> telemetry/briefing + Phase G SLO/red-team + remediation T041/T042/T043).
+
 **Branch**: `010-vera-voice` · **Target**: General_Scheduler repo (feature branch). Plan targets the VP-1 convergence platform; per the implementation-reality binding, **everything external runs in sim/dual-mode** (Twilio Media Streams bridge + both `RealtimeModelPort` impls get simulator counterparts mirroring `backend/sms_gateway.py`'s auto-detect pattern), so the entire list is completable and testable with **zero live telephony / LLM-audio calls**. Live-mode is a config swap, deferred to the Pilot-Activation section.
 
 **Datastore for this build**: the 8 voice tables run on a **local PostgreSQL via `docker-compose`** (matching the data-model's "Postgres + RLS, not SQLite" mandate), app-level `clinic_id`/`party_id` scoping standing in for full RLS in the single-clinic build (per the plan's VP-1-slip degradation). The **demo repo's SQLite remains in use for the demo track only** — the voice/platform track does not regress to SQLite (external-LLM transcripts + consent records need the envelope plane).
@@ -111,34 +119,34 @@
 
 ## Phase 8 — Phase F: Telemetry + logging + morning briefing (US4)
 
-- [ ] T032 `telemetry.py` `CallTelemetry` per contract B6 — `cost_usd` (from call #1, computed from the `backend/voice/config/pricing.yml` per-provider rate fixture; see T003/FR-030), turn latency p50/p95, `call_outcome` label + `containment_flag` (the metric source; booked ⊆ contained per F2), escalation detail, `barge_in_false_rate`, `model_provider`, `session_resume_count` (FR-027–FR-030). (deps: T018)
+- [X] T032 `telemetry.py` `CallTelemetry` per contract B6 — `cost_usd` (from call #1, computed from the `backend/voice/config/pricing.yml` per-provider rate fixture; see T003/FR-030), turn latency p50/p95, `call_outcome` label + `containment_flag` (the metric source; booked ⊆ contained per F2), escalation detail, `barge_in_false_rate`, `model_provider`, `session_resume_count` (FR-027–FR-030). (deps: T018)
   - *Verify*: a sim call emits `cost_usd` (priced from `pricing.yml`) and p50/p95 latency; `containment_flag` is true for both a contained and a booked non-emergency call, and the SC-004 rate computes as `count(containment_flag) / non-emergency calls`.
-- [ ] T033 [US4] Consent + no-training attestation persistence on `call_transcript` — `consent_record` (disclosure text + timestamp) + `vendor_no_training_attestation`; 6-month `retained_until` for protocol-flagged calls (FR-021/FR-026). (deps: T004, T016)
+- [X] T033 [US4] Consent + no-training attestation persistence on `call_transcript` — `consent_record` (disclosure text + timestamp) + `vendor_no_training_attestation`; 6-month `retained_until` for protocol-flagged calls (FR-021/FR-026). (deps: T004, T016)
   - *Verify*: every `call_transcript` carries a `consent_record`; a flagged call's `retained_until` is ≥ 6 months out.
-- [ ] T034 [US4] [MARKETING] Morning-briefing overnight rollup — view/query over `call_session` (+ `escalation_event`, `refill_request_draft` joins) projecting outcome + flagged follow-ups (callbacks, pending refills, escalations) into the existing briefing surface; delivered via reused `sms_gateway` outbound leg (FR-025). (deps: T004, T032)
+- [X] T034 [US4] [MARKETING] Morning-briefing overnight rollup — view/query over `call_session` (+ `escalation_event`, `refill_request_draft` joins) projecting outcome + flagged follow-ups (callbacks, pending refills, escalations) into the existing briefing surface; delivered via reused `sms_gateway` outbound leg (FR-025). (deps: T004, T032)
   - *Verify*: overnight calls of each `call_outcome` appear in the briefing with outcome and flagged callbacks/refills/escalations.
 
 ---
 
 ## Phase 9 — Phase G: Test + SLO verification + red-team (gates go-live)
 
-- [ ] T035 [US2] 100%-escalation SLO harness in `backend/tests/voice/test_escalation_slo.py` — scripted call set trips every protocol keyword + literal "emergency" at every turn position (incl. mid-booking); asserts barge-in, zero assessment language, warm transfer + summary. (deps: T017, T021, T029, T031)
+- [X] T035 [US2] 100%-escalation SLO harness in `backend/tests/voice/test_escalation_slo.py` — scripted call set trips every protocol keyword + literal "emergency" at every turn position (incl. mid-booking); asserts barge-in, zero assessment language, warm transfer + summary. (deps: T017, T021, T029, T031)
   - *Verify*: **100% of protocol-flagged calls escalate to a human with 0 silent drops** (SC-002).
-- [ ] T036 [US2] Model-stall / disconnect injection layer in the SLO harness (`backend/tests/voice/test_stall_injection.py`) — watchdog transfers within SLO despite a stalled/disconnected model. (deps: T035, T014)
+- [X] T036 [US2] Model-stall / disconnect injection layer in the SLO harness (`backend/tests/voice/test_stall_injection.py`) — watchdog transfers within SLO despite a stalled/disconnected model. (deps: T035, T014)
   - *Verify*: with a stall injected on every flagged call, escalation completion = 100% and `watchdog_fired` is asserted on each.
-- [ ] T037 Red-team scripted call set in `backend/tests/voice/test_red_team.py` — clinical-question probes ("is chocolate toxic?"), "are you a nurse/vet?", refill-with-refills-remaining, multi-household shared-line, session-limit crossing. (deps: T024, T028, T014, T027)
+- [X] T037 Red-team scripted call set in `backend/tests/voice/test_red_team.py` — clinical-question probes ("is chocolate toxic?"), "are you a nurse/vet?", refill-with-refills-remaining, multi-household shared-line, session-limit crossing. (deps: T024, T028, T014, T027)
   - *Verify*: zero assessment language / self-identification as clinician (FR-012/FR-013); unverified scope held on shared lines; transparent resume across the session limit.
-- [ ] T038 [US1] Barge-in benchmark on real 8 kHz call audio in `backend/tests/voice/test_barge_in_benchmark.py`. (deps: T019)
+- [X] T038 [US1] Barge-in benchmark on real 8 kHz call audio in `backend/tests/voice/test_barge_in_benchmark.py`. (deps: T019)
   - *Verify*: false-barge-in rate **< 2%** and detect p95 **< 400 ms** on the audio set (SC-007).
-- [ ] T039 [US1] Booking-accuracy audit harness in `backend/tests/voice/test_booking_accuracy.py` — post-call read-back vs written slot; idempotency under retry/latency. (deps: T023)
+- [X] T039 [US1] Booking-accuracy audit harness in `backend/tests/voice/test_booking_accuracy.py` — post-call read-back vs written slot; idempotency under retry/latency. (deps: T023)
   - *Verify*: booking accuracy **≥ 99%** on the audit set; no double-booking under injected retry/latency — same `booking_token` dedupes to the original booking, and the `UNIQUE(clinic_id, slot_id, patient_ref)` constraint holds across a simulated call-back retry from a new session (SC-003).
-- [ ] T040 Disclosure-100% assertion across all fixtures + degraded/stateless-mode fallback test in `backend/tests/voice/test_disclosure_and_degraded.py` — VP-4a unavailable → unverified scope, call still completes (FR-007). (deps: T016, T024)
+- [X] T040 Disclosure-100% assertion across all fixtures + degraded/stateless-mode fallback test in `backend/tests/voice/test_disclosure_and_degraded.py` — VP-4a unavailable → unverified scope, call still completes (FR-007). (deps: T016, T024)
   - *Verify*: 100% first-utterance disclosure across fixtures (SC-001); a `degraded_mode` call completes in unverified scope without failing the call.
-- [ ] T041 Informational-answer grounding in `backend/voice/verbs.py` `info_answer()` — hours / prep / pricing answers are drawn **only** from `clinic_voice_config`, never model priors; when the config has no value Vera declines rather than inventing one (FR-014). Add a red-team assertion to `backend/tests/voice/test_red_team.py`. (deps: T027, T037)
+- [X] T041 Informational-answer grounding in `backend/voice/verbs.py` `info_answer()` — hours / prep / pricing answers are drawn **only** from `clinic_voice_config`, never model priors; when the config has no value Vera declines rather than inventing one (FR-014). Add a red-team assertion to `backend/tests/voice/test_red_team.py`. (deps: T027, T037)
   - *Verify*: an hours/pricing question with the value present returns the config value; with the value absent Vera declines and offers to escalate; the red-team set asserts Vera **never invents** hours or prices not in `clinic_voice_config`.
-- [ ] T042 [US1] After-hours boundary gate in `backend/voice/verbs.py` (or bridge admission) — an app-side check consuming `clinic_voice_config.after_hours_window` decides whether the voice line handles the call (FR-004). For the pilot the line may be after-hours-only at the telephony layer, **but the runtime gate MUST exist and be tested** so daytime scope stays out of 3a/3b. (deps: T003, T013)
+- [X] T042 [US1] After-hours boundary gate in `backend/voice/verbs.py` (or bridge admission) — an app-side check consuming `clinic_voice_config.after_hours_window` decides whether the voice line handles the call (FR-004). For the pilot the line may be after-hours-only at the telephony layer, **but the runtime gate MUST exist and be tested** so daytime scope stays out of 3a/3b. (deps: T003, T013)
   - *Verify*: a call inside `after_hours_window` is handled; a call outside it is not routed to Vera (declined / passed through); the boundary is read from config, not hard-coded.
-- [ ] T043 [US2] Always-offer-to-escalate assertion added to the red-team set in `backend/tests/voice/test_red_team.py` — across probe calls Vera always offers a path to a human and never dismisses a stated concern (FR-019). (deps: T037)
+- [X] T043 [US2] Always-offer-to-escalate assertion added to the red-team set in `backend/tests/voice/test_red_team.py` — across probe calls Vera always offers a path to a human and never dismisses a stated concern (FR-019). (deps: T037)
   - *Verify*: every red-team probe that states a concern receives an offer to escalate; no probe path dismisses or refuses the concern without an escalation offer.
 
 ---
