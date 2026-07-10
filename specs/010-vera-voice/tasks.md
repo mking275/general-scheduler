@@ -57,15 +57,15 @@
 
 ## Phase 4 — Phase B: Turn loop + adapter guarantees (safety spine)
 
-- [ ] T015 [US1] `turn_loop.py` per contract B3 — per turn: `triage_protocol.step` → `autonomy_gate.classify` → `pre_speak` hook → speak; wires the T007 shim hooks + barge-in signaling. (deps: T007, T013)
+- [X] T015 [US1] `turn_loop.py` per contract B3 — per turn: `triage_protocol.step` → `autonomy_gate.classify` → `pre_speak` hook → speak; wires the T007 shim hooks + barge-in signaling. (deps: T007, T013)
   - *Verify*: every turn passes through `pre_speak` before render (asserted over a multi-turn sim call).
-- [ ] T016 [US1] [MARKETING] Disclosure-before-model guarantee in `backend/voice/adapter_guarantees.py` — first utterance = `disclosure_script`, played before the model engages, on 100% of calls (FR-002/FR-003). (deps: T013)
+- [X] T016 [US1] [MARKETING] Disclosure-before-model guarantee in `backend/voice/adapter_guarantees.py` — first utterance = `disclosure_script`, played before the model engages, on 100% of calls (FR-002/FR-003). (deps: T013)
   - *Verify*: across 100 sim calls the disclosure is turn `seq=1` on every call; `consent_recorded_at` set = disclosure time (SC-001).
-- [ ] T017 [US2] [MARKETING] Escalation watchdog with **independent transfer authority** in `backend/voice/adapter_guarantees.py` — fires on `protocol_flag` | literal "emergency" | silence-threshold even if the model stalls or misroutes (FR-017). (deps: T015; **soft-dep T020** — the literal-"emergency"/silence branches are testable without the protocol engine, but the `protocol_flag` branch needs T020's engine to emit a flag; that path is fully validated in T035, which deps T021.)
+- [X] T017 [US2] [MARKETING] Escalation watchdog with **independent transfer authority** in `backend/voice/adapter_guarantees.py` — fires on `protocol_flag` | literal "emergency" | silence-threshold even if the model stalls or misroutes (FR-017). (deps: T015; **soft-dep T020** — the literal-"emergency"/silence branches are testable without the protocol engine, but the `protocol_flag` branch needs T020's engine to emit a flag; that path is fully validated in T035, which deps T021.)
   - *Verify*: with model-stall injection the watchdog triggers `warm_transfer` within SLO and records `watchdog_fired=true`; 0 silent drops.
-- [ ] T018 Append-only transcript + `call_turn` event logging on every session in `adapter_guarantees.py` (FR-021/FR-024). (deps: T004, T015)
+- [X] T018 Append-only transcript + `call_turn` event logging on every session in `adapter_guarantees.py` (FR-021/FR-024). (deps: T004, T015)
   - *Verify*: every turn writes an immutable `call_turn` row; any UPDATE/DELETE attempt on a logged turn is rejected.
-- [ ] T019 [US2] Barge-in detection + backchannel filter in `backend/voice/barge_in.py` — server VAD, <400 ms detect; "emergency" always cuts through; backchannels ("uh-huh") do not misfire. (deps: T013)
+- [X] T019 [US2] Barge-in detection + backchannel filter in `backend/voice/barge_in.py` — server VAD, <400 ms detect; "emergency" always cuts through; backchannels ("uh-huh") do not misfire. (deps: T013)
   - *Verify*: sim "emergency" interrupts Vera within 400 ms; "uh-huh" injected mid-utterance does not trigger barge-in.
 
 ---
