@@ -100,11 +100,11 @@
 
 ## Phase 7 — Phase E: Warm transfer + overflow fallback (US2 / US5)
 
-- [ ] T029 [US2] [US5] [MARKETING] `warm_transfer.py` Twilio Conference + Dial with whisper summary to the highest-priority `on_call_target`; live + **sim** (FR-018). (deps: T004, T017)
+- [X] T029 [US2] [US5] [MARKETING] `warm_transfer.py` Twilio Conference + Dial with whisper summary to the highest-priority `on_call_target`; live + **sim** (FR-018). (deps: T004, T017)
   - *Verify*: sim transfer whispers the call summary to the human **before** the caller is connected; target chosen by `on_call_target.priority` order.
-- [ ] T030 [US2] [US5] ER-directory readout + callback guarantee on no-answer; voicemail-with-callback last resort — never dead air (FR-020). Reuses `sms_gateway` outbound leg for the callback promise. (deps: T029)
+- [X] T030 [US2] [US5] ER-directory readout + callback guarantee on no-answer; voicemail-with-callback last resort — never dead air (FR-020). Reuses `sms_gateway` outbound leg for the callback promise. (deps: T029)
   - *Verify*: sim no-answer falls through to ER-directory readout + callback promise; the call is never silently dropped.
-- [ ] T031 [US2] Escalation-event persistence + **no-partial-write** on abandoned booking — a mid-booking emergency abandons the booking with zero rows written (FR-016 edge case). (deps: T021, T023, T029)
+- [X] T031 [US2] Escalation-event persistence + **no-partial-write** on abandoned booking — a mid-booking emergency abandons the booking with zero rows written (FR-016 edge case). (deps: T021, T023, T029)
   - *Verify*: injecting "emergency" mid-booking leaves zero booking rows and records an `escalation_event` with the fallback path taken.
 
 ---
