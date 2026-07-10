@@ -1,0 +1,70 @@
+# Feature 010 — Vera Voice: per-clinic voice config (Goldsmith pilot, 3a/3b).
+# Setup-time. Consumed by clinic_voice_config table + info_answer grounding.
+clinic_id: "goldsmith-0001"
+clinic_name: "Goldsmith Veterinary Clinic"
+
+# Regular business hours (info_answer draws ONLY from here — never model priors).
+hours:
+  monday:    { open: "08:00", close: "18:00" }
+  tuesday:   { open: "08:00", close: "18:00" }
+  wednesday: { open: "08:00", close: "18:00" }
+  thursday:  { open: "08:00", close: "18:00" }
+  friday:    { open: "08:00", close: "18:00" }
+  saturday:  { open: "09:00", close: "13:00" }
+  sunday:    null   # closed
+
+# The after-hours window the runtime gate (T042) reads to decide whether the
+# voice line handles the call. FR-004: boundary read from config, not hard-coded.
+after_hours_window:
+  # Vera handles calls OUTSIDE regular hours. Expressed as nightly windows + all-day Sunday.
+  weekday_evening: { start: "18:00", end: "08:00" }   # wraps past midnight
+  saturday:        { start: "13:00", end: "09:00" }
+  sunday_all_day:  true
+
+# Manual on-call targets (VP-5 rota deferred). Priority = transfer attempt order.
+on_call_targets:
+  - label: "On-call DVM"
+    phone: "+15551230001"
+    type: "on_call_vet"
+    priority: 1
+    active: true
+  - label: "Backup DVM"
+    phone: "+15551230002"
+    type: "on_call_vet"
+    priority: 2
+    active: true
+  - label: "Overflow line"
+    phone: "+15551230003"
+    type: "overflow"
+    priority: 3
+    active: true
+
+# ER directory readout source (VP-9-owned content).
+er_directory_ref: "goldsmith-er-directory-v1"
+er_directory:
+  - name: "Metro Animal Emergency Hospital"
+    phone: "+15559110000"
+    address: "1200 Market St"
+    hours: "24/7"
+
+# Realtime / turn params.
+model_provider_pref: "gemini_live"     # openai_realtime is the config-swap fallback
+max_hold_ms: 8000
+filler_script: "Give me just a moment while I check that for you."
+low_confidence_threshold: 0.6          # below -> low_confidence escalation (B1)
+slo_latency_ms: 3000                    # above -> slo_breach escalation (B1)
+
+voice_params:
+  voice: "vera-en-us"
+  locale: "en-US"
+  vad:
+    barge_in_detect_ms: 400
+    backchannel_filter: true
+
+vendor_no_training_attestation: "DPA-goldsmith-2026-placeholder"
+
+# Informational answers Vera may ground on (never invents values not present).
+info:
+  parking: "Free lot behind the building."
+  new_patient_prep: "Please bring any prior records and a stool sample if available."
+  # NOTE: pricing intentionally absent so the FR-014 'decline rather than invent' path is testable.

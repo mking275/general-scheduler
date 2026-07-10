@@ -1,0 +1,45 @@
+# Feature 010 — Vera Voice: SAMPLE triage protocol (UNSIGNED placeholder).
+# VP-9 authors and vet-signs the REAL content; this sample only exercises the
+# engine + format. `signed_by`/`signed_at` are null -> blocks live emergency
+# handling (T022 signature gate); usable in sim only.
+version: "0.0.0-sample"
+signed_by: null
+signed_at: null
+
+slo:
+  escalation_on_flag: 1.0     # 100% escalation on any flag (hard SLO)
+
+# keyword -> urgency class. Deterministic, keyword-first (no classifier in v0).
+urgency_classes:
+  emergency:
+    routing_target: "on_call_vet"
+    keywords:
+      - "emergency"
+      - "collapsed"
+      - "collapse"
+      - "not breathing"
+      - "cannot breathe"
+      - "can't breathe"
+      - "seizure"
+      - "seizing"
+      - "hit by a car"
+      - "bleeding heavily"
+      - "unconscious"
+      - "unresponsive"
+      - "bloat"
+      - "poisoned"
+      - "toxic"
+  urgent:
+    routing_target: "on_call_vet"
+    keywords:
+      - "vomiting blood"
+      - "won't eat"
+      - "limping badly"
+      - "in pain"
+  routine:
+    routing_target: "booking"
+    keywords:
+      - "refill"
+      - "appointment"
+      - "checkup"
+      - "vaccine"

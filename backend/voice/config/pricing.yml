@@ -1,0 +1,14 @@
+# Feature 010 — Vera Voice: per-provider cost-rate fixture.
+# Source of cost-per-call (T032 / FR-030). All rates are illustrative pilot
+# estimates ([EST], l5-voice.md), swapped for contract rates at pilot activation.
+providers:
+  gemini_live:
+    # Gemini 3.1 Flash Live — native speech-to-speech, ~$0.03-0.04/min all-in.
+    audio_in_usd_per_min: 0.010
+    audio_out_usd_per_min: 0.024
+    text_usd_per_1k_tokens: 0.0005
+  openai_realtime:
+    # OpenAI Realtime fallback — ~4x pricier audio-out.
+    audio_in_usd_per_min: 0.060
+    audio_out_usd_per_min: 0.100
+    text_usd_per_1k_tokens: 0.0020

@@ -795,4 +795,183 @@ class ActivationRequest(BaseModel):
 class ActivationResponse(BaseModel):
     activated_at: str
     session_id: str
+
+
+# ===========================================================================
+# Feature 010 — Vera Voice (VP-3): 8 voice entities + enums (data-model.md)
+# All external paths run sim/dual-mode. Rows are tenant/party-scoped via
+# clinic_id / party_id (app-level scoping standing in for RLS in the pilot).
+# ===========================================================================
+
+from typing import Literal as _Literal
+
+
+class CallOutcome(str, Enum):
+    """Descriptive outcome label — NOT the containment metric (F2)."""
+    CONTAINED = "contained"
+    BOOKED = "booked"          # booked is a contained outcome
+    ESCALATED = "escalated"
+    DEFLECTED = "deflected"
+
+
+class VerificationState(str, Enum):
+    UNVERIFIED = "unverified"
+    SOFT_CONFIRMED = "soft_confirmed"
+
+
+class GateDecision(str, Enum):
+    """C4 autonomy-gate verbs. Only do|reject|escalate act on a live voice
+    turn; advise/propose defer to post-call artifacts (B3 / D6a)."""
+    ADVISE = "advise"
+    PROPOSE = "propose"
+    DO = "do"
+    REJECT = "reject"
+    ESCALATE = "escalate"
+
+
+class EscalationTrigger(str, Enum):
+    EXPLICIT_EMERGENCY = "explicit_emergency"
+    PROTOCOL_KEYWORD = "protocol_keyword"
+    LOW_CONFIDENCE = "low_confidence"      # < clinic_voice_config.low_confidence_threshold
+    HUMAN_REQUEST = "human_request"
+    SLO_BREACH = "slo_breach"              # > clinic_voice_config.slo_latency_ms
+
+
+class TransferOutcome(str, Enum):
+    ANSWERED = "answered"
+    NO_ANSWER = "no_answer"
+    FALLBACK_ER_DIRECTORY = "fallback_er_directory"
+    VOICEMAIL_CALLBACK = "voicemail_callback"
+
+
+class ModelProvider(str, Enum):
+    GEMINI_LIVE = "gemini_live"
+    OPENAI_REALTIME = "openai_realtime"
+
+
+class TurnRole(str, Enum):
+    CALLER = "caller"
+    VERA = "vera"
+    SYSTEM = "system"
+
+
+# --- Table 1: call_session -------------------------------------------------
+class CallSession(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    inbound_number: str                       # E.164
+    party_id: Optional[str] = None            # NULL = unverified/ephemeral
+    verification_state: VerificationState = VerificationState.UNVERIFIED
+    channel_binding_id: Optional[str] = None
+    started_at: Optional[str] = None
+    answered_at: Optional[str] = None          # proves first-ring answer
+    ended_at: Optional[str] = None
+    call_outcome: Optional[CallOutcome] = None
+    containment_flag: bool = False             # single source of containment metric
+    model_provider: Optional[ModelProvider] = None
+    degraded_mode: bool = False
+    session_resume_count: int = 0
+    cost_usd: Optional[float] = None
+    consent_recorded_at: Optional[str] = None  # = time disclosure delivered
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 2: call_turn (append-only) --------------------------------------
+class CallTurn(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    call_session_id: str
+    seq: int                                   # monotonic within call
+    role: TurnRole
+    text: str = ""
+    is_final: bool = True
+    started_at: Optional[str] = None
+    latency_ms: Optional[int] = None
+    barge_in: bool = False
+    protocol_flag: Optional[str] = None
+    gate_decision: Optional[GateDecision] = None
+    tool_calls_json: Dict[str, Any] = Field(default_factory=dict)
+
+
+# --- Table 3: call_transcript (append-only) --------------------------------
+class CallTranscript(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    call_session_id: str
+    full_text: str = ""
+    audio_ref: Optional[str] = None
+    consent_record: Dict[str, Any] = Field(default_factory=dict)   # disclosure text + ts
+    vendor_no_training_attestation: Optional[str] = None
+    retained_until: Optional[str] = None       # >= 6mo for protocol-flagged calls
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 4: escalation_event ---------------------------------------------
+class EscalationEvent(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    call_session_id: str
+    trigger: EscalationTrigger
+    protocol_state: Optional[str] = None
+    triggered_at: Optional[str] = None
+    transfer_target_id: Optional[str] = None
+    whisper_summary: Optional[str] = None
+    transfer_outcome: Optional[TransferOutcome] = None
+    fallback_path: Optional[str] = None
+    watchdog_fired: bool = False               # escalation forced by adapter watchdog
+    resolved_at: Optional[str] = None
+    audit_retained_until: Optional[str] = None
+
+
+# --- Table 5: refill_request_draft -----------------------------------------
+class RefillRequestDraft(BaseModel):
+    """Never auto-approved; never touches prescriptions.py::request_refill.
+    ``status`` admits ONLY ``draft_vet_review`` (Literal + DB CHECK)."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    call_session_id: str
+    party_id: str                              # verified caller only
+    patient_ref: str
+    drug_name_asserted: str
+    status: _Literal["draft_vet_review"] = "draft_vet_review"
+    refills_remaining_at_capture: Optional[int] = None   # recorded; does NOT gate approval
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 6: clinic_voice_config ------------------------------------------
+class ClinicVoiceConfig(BaseModel):
+    clinic_id: str
+    after_hours_window: Dict[str, Any] = Field(default_factory=dict)
+    disclosure_script: Dict[str, Any] = Field(default_factory=dict)
+    triage_protocol_id: Optional[str] = None
+    er_directory_ref: Optional[str] = None
+    voice_params: Dict[str, Any] = Field(default_factory=dict)
+    model_provider_pref: ModelProvider = ModelProvider.GEMINI_LIVE
+    max_hold_ms: int = 8000
+    filler_script: str = ""
+    low_confidence_threshold: float = 0.6
+    slo_latency_ms: int = 3000
+    vendor_no_training_attestation: Optional[str] = None
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 7: on_call_target -----------------------------------------------
+class OnCallTarget(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    label: str
+    phone: str                                 # E.164
+    type: _Literal["on_call_vet", "er_partner", "overflow"] = "on_call_vet"
+    priority: int = 0                          # transfer attempt order
+    active_window: Dict[str, Any] = Field(default_factory=dict)
+    active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 8: triage_protocol ----------------------------------------------
+class TriageProtocol(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    version: str = "0.0.0"
+    config_yaml: str = ""
+    signed_by: Optional[str] = None            # licensed vet — gates live emergency
+    signed_at: Optional[str] = None
+    active: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     verbose_log: List[str] = Field(default_factory=list)
