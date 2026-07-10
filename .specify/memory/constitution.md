@@ -11,6 +11,8 @@ All scheduling decisions flow through the agent pipeline: Intake → Semantic Ma
 ### III. Data Simplicity
 SQLite for persistence. No ORMs. No external services in demo scope. All data must seed cleanly on fresh start. Mock data must be realistic enough to be convincing to a veterinary professional.
 
+**Platform-track exception (added v1.1.0):** Platform-track features — the VP-1 convergence platform and its dependents (including feature 010 and later platform-track specs) — target the pilot platform rather than the demo scaffold. For these specs only, **PostgreSQL + Row-Level Security (RLS)** persistence and **external LLM / realtime services** are permitted, provided the spec's plan **declares the departure explicitly** (target platform, which principle clauses are departed from, and why). The **demo track retains Principle III as written** — SQLite, no ORMs, no external services. This exception scopes the departure to platform-track work and does not relax the demo constitution for demo-track features.
+
 ### IV. Role-Aware UI
 Every UI element must have a clear role owner (Front Desk / Vet Tech / Vet). No feature ships without a defined role context. The interface adapts to the user's job, not the other way around.
 
@@ -35,4 +37,8 @@ Each feature (F001–F006) must be independently deployable and testable. No fea
 
 Constitution supersedes all other practices. Deviations require explicit justification in the plan's Complexity Tracking section.
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-06-19
+### Amendment History
+- **v1.1.0 (2026-07-09)** — Added the **Platform-track exception** to Principle III: platform-track features (VP-1 convergence and its dependents, including 010+) may use PostgreSQL+RLS and external LLM/realtime services when their plan declares the departure. The demo track retains Principle III unchanged. Rationale: the pilot/convergence platform (external realtime LLM + Postgres/RLS envelope plane) is architecturally required for platform-track work and cannot be served by the demo's SQLite/no-external-service constraint; scoping the exception keeps the demo constitution intact for demo-track features. (MINOR: additive, backward-compatible — new permission, no existing rule removed.)
+- **v1.0.0 (2026-06-19)** — Initial ratification.
+
+**Version**: 1.1.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-09
