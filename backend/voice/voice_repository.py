@@ -247,6 +247,15 @@ class VoiceRepository:
             r = conn.execute(stmt).mappings().first()
         return dict(r) if r else None
 
+    def list_call_sessions(self, clinic_id: str) -> list[dict]:
+        """All call sessions for a clinic (app-level ``clinic_id`` scope), ordered
+        by ``started_at``. The morning-briefing rollup (T034) windows these in
+        Python to stay agnostic of TIMESTAMPTZ/string binding."""
+        tbl = self.tables["call_session"]
+        stmt = select(tbl).where(tbl.c.clinic_id == clinic_id).order_by(tbl.c.started_at)
+        with self.engine.connect() as conn:
+            return [dict(r) for r in conn.execute(stmt).mappings().all()]
+
     def update_call_session(self, session_id: str, **fields) -> None:
         tbl = self.tables["call_session"]
         cols = {c.name for c in tbl.columns}

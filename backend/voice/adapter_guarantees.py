@@ -174,13 +174,30 @@ class TranscriptLogger:
     def finalize_transcript(self, session: CallSession, full_text: str,
                             vendor_attestation: Optional[str] = None,
                             protocol_flagged: bool = False,
-                            audio_ref: Optional[str] = None) -> dict:
+                            audio_ref: Optional[str] = None,
+                            disclosure_text: Optional[str] = None) -> dict:
+        """T033: persist consent + no-training attestation on ``call_transcript``.
+
+        The ``consent_record`` carries the exact disclosure **text served** plus
+        its timestamp (not just a flag), and the vendor no-training attestation
+        (DPA reference) is recorded. Protocol-flagged calls retain for ≥ 6 months
+        (FR-021/026)."""
         retain_days = 185 if protocol_flagged else 30      # >=6mo for flagged (FR-021)
         transcript = CallTranscript(
             call_session_id=session.id, full_text=full_text, audio_ref=audio_ref,
-            consent_record={"disclosure_at": session.consent_recorded_at,
-                            "posture": "all_party"},
+            consent_record={
+                "disclosure_text": disclosure_text or self._disclosure_text(),
+                "disclosure_at": session.consent_recorded_at,
+                "posture": "all_party",
+            },
             vendor_no_training_attestation=vendor_attestation,
             retained_until=(datetime.now(timezone.utc) + timedelta(days=retain_days)).isoformat(),
         )
         return self.repo.append_transcript(transcript)
+
+    @staticmethod
+    def _disclosure_text(locale: str = "en") -> str:
+        try:
+            return load_disclosure(locale)
+        except OSError:
+            return ""

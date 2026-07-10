@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
+from datetime import datetime, time as _time
 from typing import Any, Optional, Protocol
 
 from backend.models import RefillRequestDraft
@@ -274,3 +275,158 @@ class VoiceVerbs:
         if self.repo is not None:
             self.repo.create_refill_draft(draft)      # DB CHECK backs the guard
         return draft
+
+    # --- info_answer (T041) — grounded ONLY in clinic_voice_config ------
+    def info_answer(self, config: dict, topic: str,
+                    day: Optional[str] = None) -> "InfoAnswer":
+        """Answer an informational question (hours / prep / pricing) drawn
+        **only** from ``clinic_voice_config`` — never from model priors. When the
+        config has no value, Vera **declines rather than inventing** one and
+        offers to escalate to a person (FR-014)."""
+        return info_answer(config, topic, day=day)
+
+
+# --------------------------------------------------------------------------- #
+#  T041 — informational-answer grounding (FR-014)
+# --------------------------------------------------------------------------- #
+@dataclass
+class InfoAnswer:
+    answered: bool
+    text: str
+    grounded_in: Optional[str]        # the clinic_voice_config key path, or None
+    declined: bool = False
+    offer_escalation: bool = False
+    invented: bool = False            # INVARIANT: always False (never fabricated)
+
+
+_DECLINE_TEXT = (
+    "I don't have that information on hand, and I don't want to guess. I can have "
+    "a member of the team follow up with you on that — would you like me to do that?"
+)
+
+# Question-topic keyword groups → the config path they may ground on.
+_HOURS_WORDS = ("hour", "open", "close", "closing", "opening", "when are you")
+_PRICE_WORDS = ("price", "cost", "how much", "fee", "charge", "pricing")
+
+
+def _fmt_hours(hours: dict, day: Optional[str]) -> Optional[tuple[str, str]]:
+    """Return (text, grounded_in) for the requested day, or None if unknown.
+    A day present-but-null in config is a grounded 'closed' answer."""
+    if day is None:
+        parts = []
+        for d, v in hours.items():
+            if v:
+                parts.append(f"{d.capitalize()} {v['open']}–{v['close']}")
+            else:
+                parts.append(f"{d.capitalize()} closed")
+        return ("Our regular hours are: " + "; ".join(parts) + ".", "hours")
+    key = day.lower()
+    if key not in hours:
+        return None                                  # not in config → decline
+    v = hours[key]
+    if not v:
+        return (f"We're closed on {day.capitalize()}.", f"hours.{key}")
+    return (f"On {day.capitalize()} we're open {v['open']} to {v['close']}.",
+            f"hours.{key}")
+
+
+def info_answer(config: dict, topic: str, day: Optional[str] = None) -> InfoAnswer:
+    config = config or {}
+    t = (topic or "").lower().strip()
+
+    def decline(_probe: str) -> InfoAnswer:
+        return InfoAnswer(answered=False, text=_DECLINE_TEXT, grounded_in=None,
+                          declined=True, offer_escalation=True, invented=False)
+
+    # 1. Hours — ONLY from config['hours'].
+    if any(w in t for w in _HOURS_WORDS):
+        hours = config.get("hours") or {}
+        if not hours:
+            return decline(t)
+        got = _fmt_hours(hours, day)
+        if got is None:
+            return decline(t)
+        text, path = got
+        return InfoAnswer(True, text, grounded_in=path)
+
+    # 2. Pricing — ONLY if config actually carries it; NEVER invent a price.
+    if any(w in t for w in _PRICE_WORDS):
+        pricing = config.get("pricing") or (config.get("info") or {}).get("pricing")
+        if pricing:
+            return InfoAnswer(True, str(pricing), grounded_in="pricing")
+        return decline(t)                            # goldsmith omits pricing by design
+
+    # 3. Generic info keys (parking, prep, …) — ONLY from config['info'].
+    info = config.get("info") or {}
+    for key, val in info.items():
+        norm_key = key.lower().replace("_", " ")
+        if val and (key.lower() in t or norm_key in t
+                    or any(tok in t for tok in norm_key.split())):
+            return InfoAnswer(True, str(val), grounded_in=f"info.{key}")
+
+    # 4. Nothing in config grounds this → decline + offer to escalate.
+    return decline(t)
+
+
+# --------------------------------------------------------------------------- #
+#  T042 — after-hours boundary gate (FR-004)
+# --------------------------------------------------------------------------- #
+def _parse_hhmm(s: str) -> _time:
+    hh, mm = str(s).split(":")
+    return _time(int(hh), int(mm))
+
+
+def _in_wrapping_window(tod: _time, start: str, end: str) -> bool:
+    """Is ``tod`` inside [start, end)? A ``start > end`` window wraps past
+    midnight (e.g. 18:00→08:00 covers the whole night)."""
+    s, e = _parse_hhmm(start), _parse_hhmm(end)
+    if s <= e:
+        return s <= tod < e
+    return tod >= s or tod < e                       # wraps midnight
+
+
+# Mon..Sun index → the config sub-window key that applies to weekday evenings.
+_WEEKDAYS = range(0, 5)   # Mon–Fri
+_SATURDAY = 5
+_SUNDAY = 6
+
+
+def after_hours_admits(window: dict, at: datetime) -> bool:
+    """App-side gate (FR-004): does the after-hours voice line handle a call at
+    ``at``? The boundary is read entirely from ``clinic_voice_config.
+    after_hours_window`` — never hard-coded. Handles overnight windows that span
+    midnight and an all-day-Sunday flag.
+
+    Returns True when the call is OUTSIDE regular hours (Vera handles it),
+    False when it is within business hours (not routed to Vera)."""
+    window = window or {}
+    dow, tod = at.weekday(), at.time()
+
+    if dow == _SUNDAY and window.get("sunday_all_day"):
+        return True
+    if dow == _SATURDAY and "saturday" in window:
+        w = window["saturday"]
+        if _in_wrapping_window(tod, w["start"], w["end"]):
+            return True
+    if dow in _WEEKDAYS and "weekday_evening" in window:
+        w = window["weekday_evening"]
+        if _in_wrapping_window(tod, w["start"], w["end"]):
+            return True
+    return False
+
+
+class AfterHoursGate:
+    """Runtime admission gate around ``after_hours_admits`` (the gate MUST exist
+    and be tested even when the pilot line is after-hours-only at the telephony
+    layer — T042)."""
+
+    def __init__(self, after_hours_window: dict):
+        self.window = after_hours_window or {}
+
+    def admits(self, at: datetime) -> bool:
+        return after_hours_admits(self.window, at)
+
+    def route(self, at: datetime) -> str:
+        """``vera`` when the call is after-hours; ``passthrough`` (day office /
+        front desk) otherwise. Vera never handles a daytime call in 3a/3b."""
+        return "vera" if self.admits(at) else "passthrough"
