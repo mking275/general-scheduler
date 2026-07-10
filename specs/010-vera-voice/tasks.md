@@ -40,17 +40,17 @@
 
 ## Phase 3 — Phase A: Bridge + Model Port (US1 / US2 foundation)
 
-- [ ] T009 [US1] μ-law 8 kHz ↔ PCM 16/24 kHz transcode in `backend/voice/transcode.py`.
+- [X] T009 [US1] μ-law 8 kHz ↔ PCM 16/24 kHz transcode in `backend/voice/transcode.py`.
   - *Verify*: round-trip 8 kHz μ-law → 16 kHz PCM → 8 kHz μ-law stays within amplitude tolerance on a fixture tone.
-- [ ] T010 [US1] `RealtimeModelPort` protocol in `backend/voice/realtime_model_port.py` per contract B1 (`connect`/`send`/`on`/`interrupt`/`resume`). (deps: T001)
+- [X] T010 [US1] `RealtimeModelPort` protocol in `backend/voice/realtime_model_port.py` per contract B1 (`connect`/`send`/`on`/`interrupt`/`resume`). (deps: T001)
   - *Verify*: protocol imports; both adapter classes typecheck as satisfying it.
-- [ ] T011 [P] [US1] `GeminiLiveAdapter` (primary) in `backend/voice/gemini_live_adapter.py` — live + **sim** dual-mode; sim emits scripted `partial`/`final`/`tool_call`/`interrupted` events. (deps: T005, T010)
+- [X] T011 [P] [US1] `GeminiLiveAdapter` (primary) in `backend/voice/gemini_live_adapter.py` — live + **sim** dual-mode; sim emits scripted `partial`/`final`/`tool_call`/`interrupted` events. (deps: T005, T010)
   - *Verify*: sim mode drives a full turn with no live API call; `is_live()` gates real connect.
-- [ ] T012 [P] [US1] `OpenAIRealtimeAdapter` (fallback) in `backend/voice/openai_realtime_adapter.py` — same port, live + sim; selected by `model_provider_pref` config swap. (deps: T005, T010)
+- [X] T012 [P] [US1] `OpenAIRealtimeAdapter` (fallback) in `backend/voice/openai_realtime_adapter.py` — same port, live + sim; selected by `model_provider_pref` config swap. (deps: T005, T010)
   - *Verify*: setting `model_provider_pref=openai_realtime` selects it; sim drives an equivalent turn.
-- [ ] T013 [US1] Twilio Media Streams WS bridge in `backend/voice/media_stream_bridge.py` — WS ↔ `RealtimeModelPort`, μ-law framing; live + **sim** (sim uses T005 harness, no Twilio). (deps: T009, T010, T005)
+- [X] T013 [US1] Twilio Media Streams WS bridge in `backend/voice/media_stream_bridge.py` — WS ↔ `RealtimeModelPort`, μ-law framing; live + **sim** (sim uses T005 harness, no Twilio). (deps: T009, T010, T005)
   - *Verify*: sim bridge streams audio frames port↔caller both directions; dual-mode flag honored.
-- [ ] T014 [US1] Transparent session resumption (`contextWindowCompression`; 10-min WS / 15-min cap) via `resume()` in adapters + bridge. (deps: T013)
+- [X] T014 [US1] Transparent session resumption (`contextWindowCompression`; 10-min WS / 15-min cap) via `resume()` in adapters + bridge. (deps: T013)
   - *Verify*: an injected mid-call WS drop resumes without dropping the caller; `session_resume_count` increments and consent linkage is preserved (not re-disclosed).
 
 ---
