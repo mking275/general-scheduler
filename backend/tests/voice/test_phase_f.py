@@ -137,8 +137,10 @@ def test_t033_flagged_call_retained_at_least_6_months(repo):
 #  T034 — morning-briefing overnight rollup
 # =========================================================================== #
 def test_t034_overnight_rollup_projects_outcomes_and_follow_ups(repo):
+    from uuid import uuid4
+
     from backend.voice.morning_briefing import MorningBriefing
-    clinic = "goldsmith-brief-0001"
+    clinic = f"goldsmith-brief-{uuid4()}"                     # isolate on shared PG
     base = _now()
 
     # One session of each call_outcome, overnight.
