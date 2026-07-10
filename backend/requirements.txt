@@ -12,3 +12,12 @@ Pillow>=10.0.0
 httpx>=0.27.0
 beautifulsoup4>=4.12.0
 python-multipart>=0.0.9
+# Feature 010 — Vera Voice (L3 realtime streaming tier)
+websockets>=12.0
+openai>=1.40.0
+PyYAML>=6.0
+SQLAlchemy>=2.0.0
+psycopg2-binary>=2.9.0
+audioop-lts>=0.2.1; python_version >= "3.13"
+# google-genai already present above (Gemini Live primary); twilio already present
+

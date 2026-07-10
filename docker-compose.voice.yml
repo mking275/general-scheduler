@@ -1,0 +1,26 @@
+# Feature 010 — Vera Voice: local PostgreSQL for the 8 voice tables.
+# Per data-model.md: Postgres + RLS mandate (single-clinic build uses app-level
+# clinic_id/party_id scoping in place of full RLS). NOT SQLite.
+#
+# Port note (R8): host port 5433 (5434 is already taken by another agent on this
+# machine; 5432 left free). Override with VOICE_DB_PORT if 5433 is also busy.
+services:
+  voice-postgres:
+    image: postgres:16-alpine
+    container_name: vetagent-voice-pg
+    environment:
+      POSTGRES_USER: voice
+      POSTGRES_PASSWORD: voice
+      POSTGRES_DB: voice
+    ports:
+      - "${VOICE_DB_PORT:-5433}:5432"
+    volumes:
+      - vetagent-voice-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voice -d voice"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  vetagent-voice-pgdata:

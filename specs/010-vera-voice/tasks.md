@@ -14,26 +14,26 @@
 
 ## Phase 1 — Setup
 
-- [ ] T001 [P] Create `backend/voice/` package (`backend/voice/__init__.py`) + `backend/voice/shims/__init__.py` + repo-root `config/voice/` dir; add realtime deps (`websockets`, `google-genai`, `openai`, `audioop-lts`, `PyYAML`; `twilio` already present) to `backend/requirements.txt`.
+- [X] T001 [P] Create `backend/voice/` package (`backend/voice/__init__.py`) + `backend/voice/shims/__init__.py` + repo-root `config/voice/` dir; add realtime deps (`websockets`, `google-genai`, `openai`, `audioop-lts`, `PyYAML`; `twilio` already present) to `backend/requirements.txt`.
   - *Verify*: `python -c "import backend.voice"` succeeds and `pip install -r backend/requirements.txt` is clean.
-- [ ] T002 [P] Append the 8 voice entities + enums (`call_outcome` contained|booked|escalated|deflected + `containment_flag` boolean, `verification_state`, `gate_decision` advise|propose|do|reject, escalation `trigger`/`transfer_outcome`, `model_provider`) as Pydantic models to `backend/models.py` per `data-model.md`.
+- [X] T002 [P] Append the 8 voice entities + enums (`call_outcome` contained|booked|escalated|deflected + `containment_flag` boolean, `verification_state`, `gate_decision` advise|propose|do|reject, escalation `trigger`/`transfer_outcome`, `model_provider`) as Pydantic models to `backend/models.py` per `data-model.md`.
   - *Verify*: models import; the `RefillRequestDraft` status field type admits **only** `draft_vet_review`.
-- [ ] T003 [P] Create config fixtures: `config/voice/disclosure_script.en.txt` (FR-002 first utterance), `config/voice/clinic_voice_config.goldsmith.yaml` (hours, `after_hours_window`, on-call targets, ER directory, `max_hold_ms`, filler, `low_confidence_threshold: 0.6`, `slo_latency_ms: 3000`), `config/voice/triage_protocol.goldsmith.sample.yaml` (**unsigned** placeholder; VP-9 signs the real content), and `backend/voice/config/pricing.yml` (per-provider cost-rate fixture: `$/audio-min` in + out and `$/1k tokens` for `gemini_live` and `openai_realtime`; the cost-per-call source for T032/FR-030).
+- [X] T003 [P] Create config fixtures: `config/voice/disclosure_script.en.txt` (FR-002 first utterance), `config/voice/clinic_voice_config.goldsmith.yaml` (hours, `after_hours_window`, on-call targets, ER directory, `max_hold_ms`, filler, `low_confidence_threshold: 0.6`, `slo_latency_ms: 3000`), `config/voice/triage_protocol.goldsmith.sample.yaml` (**unsigned** placeholder; VP-9 signs the real content), and `backend/voice/config/pricing.yml` (per-provider cost-rate fixture: `$/audio-min` in + out and `$/1k tokens` for `gemini_live` and `openai_realtime`; the cost-per-call source for T032/FR-030).
   - *Verify*: all four parse; disclosure text contains "AI", "recorded"/"transcribed", and "emergency"; `clinic_voice_config` carries `after_hours_window`, `low_confidence_threshold`, and `slo_latency_ms`; `pricing.yml` has audio-in/out and token rates for both providers.
 
 ---
 
 ## Phase 2 — Foundational (blocking prerequisites for all phases)
 
-- [ ] T004 `VoiceRepository` in `backend/voice/voice_repository.py` — CRUD + append-only ops for all 8 tables + `init_db()` targeting **local PostgreSQL via `docker-compose`** (NOT SQLite; matches data-model). RLS-ready with app-level `clinic_id`/`party_id` scoping standing in for full RLS in the single-clinic build (plan's VP-1-slip degradation). Enforce `CHECK (status = 'draft_vet_review')` on `refill_request_draft`. (deps: T002)
+- [X] T004 `VoiceRepository` in `backend/voice/voice_repository.py` — CRUD + append-only ops for all 8 tables + `init_db()` targeting **local PostgreSQL via `docker-compose`** (NOT SQLite; matches data-model). RLS-ready with app-level `clinic_id`/`party_id` scoping standing in for full RLS in the single-clinic build (plan's VP-1-slip degradation). Enforce `CHECK (status = 'draft_vet_review')` on `refill_request_draft`. (deps: T002)
   - *Verify*: `init_db()` creates the 8 tables on the docker-compose Postgres instance; inserting a `refill_request_draft` with any non-`draft_vet_review` status raises the CHECK violation.
-- [ ] T005 Dual-mode env resolver + scripted **call simulator** in `backend/voice/sim.py`, mirroring `sms_gateway.py` auto-detect (`VOICE_LIVE` force flag + credential presence → `is_live()`); simulator feeds scripted caller audio/transcript + line events (silence, dtmf, hangup) into the bridge with zero live telephony.
+- [X] T005 Dual-mode env resolver + scripted **call simulator** in `backend/voice/sim.py`, mirroring `sms_gateway.py` auto-detect (`VOICE_LIVE` force flag + credential presence → `is_live()`); simulator feeds scripted caller audio/transcript + line events (silence, dtmf, hangup) into the bridge with zero live telephony.
   - *Verify*: `is_live()==False` with no creds; sim replays a scripted call and emits ordered turn events.
-- [ ] T006 [SHIM — extract post-pilot] `ChannelBinding` party-model shim in `backend/voice/shims/channel_binding_shim.py` per contract A1 (`candidate_parties` set + `verification_level` + `audience_scope`).
+- [X] T006 [SHIM — extract post-pilot] `ChannelBinding` party-model shim in `backend/voice/shims/channel_binding_shim.py` per contract A1 (`candidate_parties` set + `verification_level` + `audience_scope`).
   - *Verify*: a shared inbound number returns >1 `candidate_parties`; an unknown number yields an ephemeral party at `caller_unverified` scope; the identity-safe disambiguation dialog matches an open "name on the account" answer against the candidate set and soft-confirms exactly one **without enumerating candidate names aloud** (FR-005) — an unmatched answer stays unverified.
-- [ ] T007 [SHIM — extract post-pilot] L2 `bridge_inbound()` → `converse_turn()` + `TurnHooks` **pre-speak interposition** shim in `backend/voice/shims/l2_bridge_shim.py` per contract A3, registry-marked `prototype`; `pre_speak` carries override authority over model output before render. (deps: T006)
+- [X] T007 [SHIM — extract post-pilot] L2 `bridge_inbound()` → `converse_turn()` + `TurnHooks` **pre-speak interposition** shim in `backend/voice/shims/l2_bridge_shim.py` per contract A3, registry-marked `prototype`; `pre_speak` carries override authority over model output before render. (deps: T006)
   - *Verify*: a `pre_speak` returning `TurnDecision(action="replace", ...)` replaces the model's draft output before it is spoken (asserted in sim).
-- [ ] T008 [SHIM — extract post-pilot] `consent_check()` shim in `backend/voice/shims/consent_shim.py` per contract A2 (channel-scoped opt-out registry).
+- [X] T008 [SHIM — extract post-pilot] `consent_check()` shim in `backend/voice/shims/consent_shim.py` per contract A2 (channel-scoped opt-out registry).
   - *Verify*: an opted-out party returns a deny `ConsentDecision`; default party returns allow.
 
 ---
