@@ -72,11 +72,11 @@
 
 ## Phase 5 — Phase C: Triage protocol engine (US2)
 
-- [ ] T020 [US2] Deterministic keyword/urgency state-machine **engine** + versioned YAML loader in `backend/voice/triage_protocol.py` (keywords → urgency class → routing target; `slo: {escalation_on_flag: 1.0}`). (deps: T002)
+- [X] T020 [US2] Deterministic keyword/urgency state-machine **engine** + versioned YAML loader in `backend/voice/triage_protocol.py` (keywords → urgency class → routing target; `slo: {escalation_on_flag: 1.0}`). (deps: T002)
   - *Verify*: the sample protocol loads; "collapsed" and "not breathing" resolve to the emergency urgency class.
-- [ ] T021 [US2] Protocol **override authority** — engine `step()` output overrides model output inside `turn_loop` `pre_speak` (FR-011/FR-015/FR-016). (deps: T015, T020)
+- [X] T021 [US2] Protocol **override authority** — engine `step()` output overrides model output inside `turn_loop` `pre_speak` (FR-011/FR-015/FR-016). (deps: T015, T020)
   - *Verify*: a model proposing a booking during a protocol-flagged turn is overridden to `escalate`; no write committed.
-- [ ] T022 [US2] Protocol regression harness + **signature gate** — an active `triage_protocol` requires `signed_by`/`signed_at`; unsigned blocks live emergency handling. (deps: T004, T020)
+- [X] T022 [US2] Protocol regression harness + **signature gate** — an active `triage_protocol` requires `signed_by`/`signed_at`; unsigned blocks live emergency handling. (deps: T004, T020)
   - *Verify*: an unsigned protocol blocks live mode (allowed in sim only); the keyword regression set passes with zero misroutes.
 
 ---
