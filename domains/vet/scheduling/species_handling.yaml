@@ -1,0 +1,78 @@
+# =============================================================================
+# VetAgent Domain Pack — SCHEDULING / SPECIES HANDLING  (Tier-1 administrative)
+# =============================================================================
+# STATUS: DRAFT. Configures capabilities/scheduling/ species-handling hooks.
+#
+# ⚠ ADMINISTRATIVE HANDLING FLAGS ONLY. This file governs ROOM ASSIGNMENT,
+# SCHEDULING, and OPERATIONAL PREP. It contains NO medical content — no species
+# medicine, no dosing, no restraint technique, no clinical protocol. Anything
+# medical is Tier-2 (clinical/README.md).
+#
+# Fields per species:
+#   preferred_room     — operational room-assignment hint
+#   handling_flags     — operational prep flags (NOT medical instructions)
+#   role_requirement   — pointer to a role_requirement constraint id, if any
+#   scheduling_notes   — admin scheduling considerations
+# =============================================================================
+
+species:
+  - id: canine
+    label: "Canine (Dog)"
+    preferred_room: standard_exam
+    handling_flags:
+      - aggression_flag_honored     # if patient record carries an aggression flag,
+                                    # assign isolation_room + extra buffer (operational)
+    scheduling_notes: "Default handling. Aggression flag (F001) drives room + buffer only."
+
+  - id: feline
+    label: "Feline (Cat)"
+    preferred_room: feline_friendly_room   # quiet, dog-free room if the clinic has one
+    handling_flags:
+      - feline_friendly_room_preferred
+      - aggression_flag_honored
+    scheduling_notes: >
+      Prefer a feline-friendly room where available (reduces stress; operational
+      handling only). Falls back to standard_exam if none configured.
+
+  - id: exotic
+    label: "Exotic (reptile, small mammal, etc.)"
+    preferred_room: standard_exam
+    handling_flags:
+      - aggression_flag_honored
+    role_requirement: exotic_requires_qualified_dvm   # see workforce/constraints.yaml
+    scheduling_notes: >
+      Book only with a DVM flagged treats_exotics (soft constraint; clinics
+      without exotic capability refer out). This is a WHO-can-see-it scheduling
+      gate, not a medical statement.
+
+  - id: avian
+    label: "Avian (Bird)"
+    preferred_room: standard_exam
+    handling_flags:
+      - aggression_flag_honored
+    role_requirement: exotic_requires_qualified_dvm   # avian shares the exotic gate
+    scheduling_notes: "Same qualified-DVM scheduling gate as exotic. No medical content here."
+
+# Aggression flag handling (administrative): when a patient record carries an
+# aggression flag (F001 ALERT badge), scheduling SHOULD assign isolation_room
+# (resource_capacity) and apply an extra turnover buffer. This is room + timing
+# handling, not a behavioral-medicine protocol.
+aggression_handling:
+  on_flag:
+    assign_room: isolation_room
+    extra_buffer_min: 15
+  severity: soft
+  note: "Operational safety handling. Any behavioral-medicine content is Tier-2."
+
+provenance:
+  authored_by: VetAgent stream (Program #6 Cycle 6c)
+  authored_at: 2026-07-11
+  sources:
+    - path: VetPractice/feature_design.md
+      cite: "F001 species avatars (dog/cat/bird/exotic), ALERT flags incl. aggression"
+  confidence: medium        # handling flags are reasonable admin defaults; per-clinic rooms vary
+  review_status: DRAFT
+  tier: administrative
+  caveats:
+    - "No medical/behavioral content — flags govern room assignment and buffers only."
+signed_by: null

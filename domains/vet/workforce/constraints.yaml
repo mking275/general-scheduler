@@ -1,0 +1,230 @@
+# =============================================================================
+# VetAgent Domain Pack — WORKFORCE / CONSTRAINTS  (Tier-1 administrative)
+# =============================================================================
+# STATUS: DRAFT. These are YAML INSTANCES of the FOUR generic engine types the
+# constraint-validation hook exposes (interface board, "constraint-validation
+# hook shape"). Packs ship instances, NEVER Python. The capability module
+# executes; the pack configures.
+#
+#   resource_capacity  — a resource has a bounded count within a window
+#   procedure_gate     — a procedure class is gated by concurrency/buffer/role
+#   role_requirement   — an action requires a subject holding a role
+#   licensure_ratio    — a supervised:supervisor ratio ceiling
+#
+# Every instance: id · type · params · severity (hard|soft) · provenance.
+# `hard` constraints are DETERMINISTIC and never route through an LLM (010
+# protocol posture). `soft` may. Every denial must cite `evidence` (the source
+# path in provenance) — non-optional, per the hook contract requirement #4.
+#
+# CLINICAL BOUNDARY: these gate WHO / HOW MANY / WHICH ROOM. None encode a
+# medical judgment (no dosing, no protocol content). Anything clinical is Tier-2.
+# =============================================================================
+
+constraints:
+
+  # --- role_requirement --------------------------------------------------- #
+  - id: dvm_required_for_surgery
+    type: role_requirement
+    params:
+      action_class: surgery
+      requires_role: dvm
+    severity: hard
+    evidence: "Surgery is a licensed veterinary act; a DVM must be the responsible party."
+    provenance:
+      sources:
+        - path: VetPractice/feature_design.md
+          cite: "F006 SOAP procedure types incl. Surgery; vet is the responsible signer"
+      confidence: high
+      tier: administrative
+
+  - id: dvm_required_for_euthanasia
+    type: role_requirement
+    params:
+      action_class: euthanasia
+      requires_role: dvm
+    severity: hard
+    evidence: "Euthanasia is a DVM-performed act; also flagged comms-sensitive in appointment_types.yaml."
+    provenance:
+      sources:
+        - path: scheduling/appointment_types.yaml
+          cite: "euthanasia appointment type (comms-sensitive)"
+      confidence: high
+      tier: administrative
+
+  - id: controlled_substance_dispense_requires_dea_dvm
+    type: role_requirement
+    params:
+      action_class: controlled_substance_dispense
+      requires_role: dvm
+      requires_credential: dea_registration
+    severity: hard
+    evidence: "Controlled-substance dispensing requires a DEA-registered DVM (federal). This gates WHO, not the clinical Rx content (Tier-2)."
+    provenance:
+      sources:
+        - path: VetPractice/vpma_integrations.md
+          cite: "DEA / controlled substance reporting; PDMP query before controlled Rx (L117-123)"
+      confidence: high
+      tier: administrative
+
+  - id: exotic_requires_qualified_dvm
+    type: role_requirement
+    params:
+      action_class: exotic_or_avian_appointment
+      requires_role: dvm
+      requires_attribute: treats_exotics   # per-DVM flag set at clinic config
+    severity: soft            # soft: some clinics refer out rather than hard-block
+    evidence: "Exotic/avian handling requires a DVM comfortable with the taxon; pointer from species_handling.yaml."
+    provenance:
+      sources:
+        - path: scheduling/species_handling.yaml
+          cite: "exotic/avian handling flags; exotic-requires-specific-DVM pointer"
+      confidence: medium
+      tier: administrative
+
+  # --- procedure_gate ----------------------------------------------------- #
+  - id: anesthesia_limit
+    type: procedure_gate
+    params:
+      procedure_class: anesthesia
+      max_concurrent: 2               # per anesthetist/DVM; industry-default placeholder
+      recovery_buffer_min: 30         # recovery monitoring window before the slot frees
+      requires_role: dvm
+    severity: hard
+    evidence: "Concurrent anesthesia is bounded by monitored-recovery capacity; a DVM is the responsible role. Counts + buffer are industry-default placeholders — replace with Goldsmith distributions at pilot ingestion (~Aug)."
+    provenance:
+      sources:
+        - path: COS-platform/context/vera-vetagent-interface-board-2026-07-09.md
+          cite: "C1 proposal — anesthesia_limit as procedure_gate {procedure_class, max_concurrent, recovery_buffer_min, requires_role}"
+      confidence: medium         # shape high-confidence; numeric params are defaults pending real data
+      tier: administrative
+
+  - id: dental_under_anesthesia_gate
+    type: procedure_gate
+    params:
+      procedure_class: dental_anesthesia
+      max_concurrent: 1
+      recovery_buffer_min: 30
+      requires_role: dvm
+    severity: hard
+    evidence: "Dental procedures under anesthesia share the anesthesia-recovery constraint; single dental suite default."
+    provenance:
+      sources:
+        - path: VetPractice/feature_design.md
+          cite: "F006 procedure types incl. Dental"
+      confidence: medium
+      tier: administrative
+
+  # --- resource_capacity -------------------------------------------------- #
+  - id: exam_room_availability
+    type: resource_capacity
+    params:
+      resource: exam_room
+      capacity: 1                     # one appointment per room per window
+      window: appointment
+    severity: hard
+    evidence: "An exam room holds one appointment at a time; total room count is per-clinic config."
+    provenance:
+      sources:
+        - path: COS-platform/context/vera-vetagent-interface-board-2026-07-09.md
+          cite: "C1 proposal — room_availability as resource_capacity {resource: exam_room, capacity: 1, window: appointment}"
+        - path: VetPractice/feature_design.md
+          cite: "F005 room status board (available/prep/occupied/cleaning)"
+      confidence: high
+      tier: administrative
+
+  - id: surgery_suite_availability
+    type: resource_capacity
+    params:
+      resource: surgery_suite
+      capacity: 1
+      window: appointment
+    severity: hard
+    evidence: "Surgery suite holds one procedure at a time; suite count per-clinic config."
+    provenance:
+      sources:
+        - path: VetPractice/feature_design.md
+          cite: "F006 Surgery procedure type"
+      confidence: high
+      tier: administrative
+
+  - id: isolation_room_availability
+    type: resource_capacity
+    params:
+      resource: isolation_room
+      capacity: 1
+      window: appointment
+    severity: soft            # soft: overflow can be managed operationally
+    evidence: "Isolation room for contagious/aggressive cases; typically limited, per-clinic count."
+    provenance:
+      sources:
+        - path: scheduling/species_handling.yaml
+          cite: "aggression flag handling; feline-friendly / isolation room use"
+      confidence: low          # inferred operational default, not sourced from clinic data
+      tier: administrative
+
+  - id: boarding_kennel_capacity
+    type: resource_capacity
+    params:
+      resource: boarding_kennel
+      capacity: 20                    # placeholder total; per-clinic config
+      window: overnight
+    severity: soft
+    evidence: "Overnight boarding capacity; total is per-clinic. Default placeholder — replace with Goldsmith data at pilot ingestion (~Aug)."
+    provenance:
+      sources:
+        - path: VetPractice/feature_design.md
+          cite: "kennel_attendant role; boarding status"
+      confidence: low
+      tier: administrative
+
+  # --- licensure_ratio ---------------------------------------------------- #
+  - id: tech_supervision_ratio
+    type: licensure_ratio
+    params:
+      supervised_role: licensed_vet_tech
+      supervising_role: dvm
+      max_supervised_per_supervisor: 4   # industry-default placeholder; STATE-VARIABLE
+    severity: hard
+    evidence: "A DVM supervises a bounded number of technicians on shift. The ratio is STATE-REGULATED and varies — 4:1 is an industry-default placeholder pending per-state rules at Goldsmith ingestion (~Aug)."
+    provenance:
+      sources:
+        - path: VetPractice/vpma_addon_modules.md
+          cite: "Staff Scheduling — DVM supervision, licensure tracking (L369-410)"
+      confidence: low           # ratio is a placeholder; state rules TBD
+      tier: administrative
+      caveats:
+        - "Technician supervision ratios are set by state veterinary practice acts; do not treat 4:1 as legal until per-state config lands."
+
+  - id: assistant_supervision_ratio
+    type: licensure_ratio
+    params:
+      supervised_role: vet_assistant
+      supervising_role: dvm
+      max_supervised_per_supervisor: 6
+    severity: soft
+    evidence: "Non-credentialed assistants supervised by a DVM; operational default, not a hard legal ceiling."
+    provenance:
+      sources:
+        - path: VetPractice/vpma_addon_modules.md
+          cite: "role supervision relationships"
+      confidence: low
+      tier: administrative
+
+# Only the four generic types appear above. Adding a NEW type is a core (L2)
+# change, not a pack change — packs never introduce constraint types.
+constraint_types_used:
+  - resource_capacity
+  - procedure_gate
+  - role_requirement
+  - licensure_ratio
+
+provenance:
+  authored_by: VetAgent stream (Program #6 Cycle 6c)
+  authored_at: 2026-07-11
+  sources:
+    - path: COS-platform/context/vera-vetagent-interface-board-2026-07-09.md
+      cite: "constraint-validation hook shape; the four generic engine types; DVM-for-surgery=role_requirement, anesthesia buffer=procedure_gate, exam-room=resource_capacity, tech-ratio=licensure_ratio"
+  confidence: medium     # instance shapes high-confidence; numeric params are defaults pending Aug data + per-state rules
+  review_status: DRAFT
+  tier: administrative
+signed_by: null

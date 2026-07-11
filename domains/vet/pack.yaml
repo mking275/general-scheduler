@@ -1,0 +1,89 @@
+# =============================================================================
+# VetAgent Domain Pack — MANIFEST
+# =============================================================================
+# STATUS: DRAFT — Tier-1 (administrative) content only. NOT signed for live
+# client-facing or clinical use. See clinical/README.md for the Tier-2 gate.
+#
+# Program #6 Cycle 6c. Ships via the C1 Domain Pack schema (three-layer:
+# structured schema + RAG corpus + KG). This file is the L3 (vertical) manifest;
+# it *configures* the shared L2 capability modules via hook interfaces. See
+# README.md for the hook mapping.
+# =============================================================================
+
+pack: vetagent/vet
+id: vet
+version: 0.1.0          # semver; clinic overrides are bounded (see versioning)
+status: DRAFT
+locale: en-US
+currency: USD
+timezone_policy: per_clinic   # each clinic carries its own tz (F007 multi-clinic)
+
+# Which shared L2 capability modules this pack activates + configures.
+# The module executes generic logic; the pack supplies YAML instances/config.
+capability_modules:
+  workforce:
+    active: true
+    configures:
+      - workforce/roles.yaml
+      - workforce/constraints.yaml
+  scheduling:
+    active: true
+    configures:
+      - scheduling/appointment_types.yaml
+      - scheduling/species_handling.yaml
+      - workforce/constraints.yaml    # scheduling reads the same constraint set
+  compliance:
+    active: true
+    configures:
+      - compliance/regulations.yaml
+  comms:
+    active: true
+    configures:
+      - comms/references.yaml          # include-by-reference to live 010/011 configs
+
+# Knowledge + metrics layers (not capability modules; consumed by prompt
+# composition + telemetry respectively).
+knowledge:
+  glossary: knowledge/glossary.yaml
+metrics:
+  kpis: kpis.yaml
+
+# Tier-2 (clinical) surface — declared, GATED, empty of content in v0.1.0.
+clinical:
+  status: gated
+  readme: clinical/README.md
+  gate: licensed_vet_review + signed_by (010 engine refuses unsigned protocols live)
+  content_present: false
+
+# entity_ref namespace this pack owns (confirmed on the interface board,
+# 2026-07-10; convention is {type}:{stable_id}, UUIDs not names, migration 059).
+entity_ref_namespace:
+  - household:*     # party grouping — the moat noun
+  - client:*        # human account holders
+  - patient:*       # animals
+  - staff:*
+  - clinic:*        # multi-clinic
+
+versioning:
+  semver: true
+  clinic_overrides: bounded       # per-clinic override allowed within declared bounds
+  regression_suite: pending       # 50+ scenario suite per core eval pattern (VP-9 seed)
+
+# --- Provenance + signing (this pack's NON-NEGOTIABLE, on the manifest AND
+# --- on every file below). ----------------------------------------------------
+provenance:
+  authored_by: VetAgent stream (Program #6 Cycle 6c)
+  authored_at: 2026-07-11
+  sources:
+    - path: COS-platform/context/vera-vetagent-interface-board-2026-07-09.md
+      cite: "C1 shape proposal; Program #6 expanded; constraint-validation hook shape"
+    - path: FarmAgent2-Workspace/context/agent-commo.md
+      cite: "sibling agave pack 9-bucket structure (extraction manifest)"
+    - path: VetPractice/design/v02-uberspeckit-programs.md
+      cite: "VP-9 Vet Domain Pack JTBD + seed"
+    - path: VetPractice/research_report.md
+      cite: "VPMS niche research; feature modules; pricing"
+  confidence: high              # manifest structure is contract-grounded
+  review_status: DRAFT
+  tier: administrative
+signed_by: null                 # unsigned; no live client-facing/clinical activation

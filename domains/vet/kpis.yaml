@@ -1,0 +1,138 @@
+# =============================================================================
+# VetAgent Domain Pack — KPIs  (Tier-1 administrative)
+# =============================================================================
+# STATUS: DRAFT. Practice-KPI definitions (VP-6/VP-9). Consumed by telemetry +
+# briefing composition. Every claim traces to verified-claims.md or a spec.
+#
+# Definitions are the CONTRACT; targets/baselines are provisional until the
+# Goldsmith pilot sets ground truth (~Aug onward). Claim discipline (Working
+# Rule 1): concrete + numeric, never hype.
+# =============================================================================
+
+kpis:
+
+  # --- Revenue / economics ------------------------------------------------ #
+  - id: revenue_per_dvm
+    label: "Revenue per DVM"
+    definition: "Practice revenue attributable per full-time-equivalent veterinarian over a period."
+    unit: usd_per_dvm_per_period
+    direction: higher_is_better
+    source_cite: "VetPractice/vpma_addon_modules.md — practice-analytics revenue metrics"
+    confidence: medium
+
+  - id: arpp
+    label: "Average Revenue Per Patient (ARPP)"
+    definition: "Mean revenue per active patient over a period. Also read as revenue per pet."
+    unit: usd_per_patient_per_period
+    direction: higher_is_better
+    source_cite: "VetPractice/vpma_addon_modules.md — revenue-per-patient analytics"
+    confidence: medium
+
+  # --- No-shows ----------------------------------------------------------- #
+  - id: no_show_rate
+    label: "No-Show Rate"
+    definition: "Fraction of scheduled appointments the client fails to attend without cancelling."
+    unit: ratio
+    direction: lower_is_better
+    reference_baseline: 0.15     # ~15% cited illustratively in F004; NOT a Goldsmith figure
+    source_cite: "VetPractice/feature_design.md F004 — '15% no-show rate ... losing 4-5 slots daily' (illustrative)"
+    confidence: low
+    data_note: "15% is an illustrative example, not measured. Replace with Goldsmith baseline (~Aug)."
+
+  - id: no_show_cost
+    label: "No-Show Cost"
+    definition: "Revenue lost to unattended slots = no_show_count x avg_slot_value over a period."
+    unit: usd_per_period
+    direction: lower_is_better
+    depends_on: [no_show_rate, arpp]
+    confidence: low
+
+  # --- Slot recovery / waitlist ------------------------------------------- #
+  - id: slot_recovery
+    label: "Slot Recovery (Waitlist Fill)"
+    definition: "Cancelled/no-show slots refilled from the waitlist within a target window."
+    unit: ratio_of_recoverable_slots_filled
+    direction: higher_is_better
+    target_time_to_fill_min: 4     # 'fills a cancelled slot from the waitlist (typically <4 min)'
+    source_cite: "marketing/engine-inputs/verified-claims.md VC-8 (PRODUCT-CLAIM — must be product-truth-validated); specs/010-vera-voice/discover.md — slot-recovery verb"
+    confidence: medium
+    claim_status: product_claim    # VC-8 is a PRODUCT-CLAIM; validate before external assertion
+
+  # --- Voice containment (per spec 010) ----------------------------------- #
+  - id: after_hours_containment
+    label: "After-Hours Containment Rate"
+    definition: >
+      count(containment_flag = true) / non_emergency_calls. containment_flag is
+      TRUE whenever a non-emergency call is resolved without a human, INCLUDING
+      bookings — i.e. booked ⊆ contained. Single source is the boolean
+      containment_flag on the call record, independent of the call_outcome label.
+    unit: ratio
+    direction: higher_is_better
+    target_provisional: [0.50, 0.60]   # SC-004, PROVISIONAL until Goldsmith week-1 call-log pull
+    firm_slos:
+      escalation: 1.0            # 100% of emergency-flagged calls escalated, zero silent drops
+      booking_accuracy: 0.99     # >=99% audited
+      disclosure: 1.0            # AI + recording disclosure on 100% of calls
+    source_cite: "specs/010-vera-voice/spec.md FR-027, SC-004; data-model.md L21-22 (booked ⊆ contained, F2 resolution)"
+    confidence: high             # definition is contract-locked; the target is provisional
+
+  # --- Staff time returned ------------------------------------------------ #
+  - id: staff_hours_returned
+    label: "Staff Hours Returned"
+    definition: "Staff labor hours freed from tasks Vera now handles (phones, documentation bridging, discharge drafting)."
+    unit: hours_per_week
+    direction: higher_is_better
+    reference_signals:
+      - "staff spend 6+ hours/week manually bridging systems (VC-6)"
+      - "SOAP-draft turns a ~20-min charting session into ~3-min review (F006)"
+    source_cite: "verified-claims.md VC-5/VC-6; feature_design.md F006; specs/010-vera-voice/spec.md guidance note (staff off the phones)"
+    confidence: medium
+
+  # --- Staff-pull signals (INVISIBLE-ADOPTION DOCTRINE — Working Rule 0) --- #
+  # These are FIRST-CLASS pilot metrics. Success condition is literal: staff beg
+  # for it. Instrument unprompted staff->Vera engagement + scope-expansion asks.
+  - id: staff_pull_unprompted_requests
+    label: "Unprompted Staff -> Vera Requests"
+    definition: "Count of staff-initiated interactions with Vera that were NOT prompted by owner/manager directive or training. The core invisible-adoption signal."
+    unit: count_per_period
+    direction: higher_is_better
+    source_cite: "context/README.md Working Rule 0 (Invisible Adoption Doctrine, Matt/Jay 2026-07-11)"
+    confidence: high
+    doctrine: invisible_adoption
+
+  - id: staff_pull_scope_expansion
+    label: "Scope-Expansion Asks"
+    definition: "Count of staff requests for Vera to take on NEW tasks/verbs beyond her current scope ('can Vera also...'). Demand-pull evidence for verb promotion."
+    unit: count_per_period
+    direction: higher_is_better
+    source_cite: "context/README.md Working Rule 0; interface board C4 verb-promotion (audited)"
+    confidence: high
+    doctrine: invisible_adoption
+
+  - id: diagnostics_utilization
+    label: "Diagnostics Utilization (IDEXX Shield)"
+    definition: "In-house/lab diagnostics volume routed through native VetConnect — the strategic shield number kept intact (never a Vera order-path)."
+    unit: count_per_period
+    direction: monitor_only        # tracked as evidence, not optimized by Vera
+    source_cite: "context/README.md Working Rule 3 (no diagnostics-order-path); VP-9 cross-program action #4 (diagnostics-utilization = the IDEXX shield number)"
+    confidence: medium
+
+provenance:
+  authored_by: VetAgent stream (Program #6 Cycle 6c)
+  authored_at: 2026-07-11
+  sources:
+    - path: marketing/engine-inputs/verified-claims.md
+      cite: "VC-5/VC-6/VC-8 KPI-adjacent claims + PRODUCT-CLAIM flags"
+    - path: specs/010-vera-voice/spec.md
+      cite: "FR-027 + SC-004 containment definition (booked ⊆ contained); firm SLOs"
+    - path: VetPractice/feature_design.md
+      cite: "F004 no-show; F006 SOAP time savings"
+    - path: context/README.md
+      cite: "Working Rule 0 — invisible-adoption doctrine, staff-pull metrics"
+  confidence: medium
+  review_status: DRAFT
+  tier: administrative
+  caveats:
+    - "Definitions are the contract; targets/baselines are provisional until Goldsmith ground truth (~Aug)."
+    - "PRODUCT-CLAIM KPIs (slot_recovery per VC-8) must be product-truth-validated before external assertion."
+signed_by: null
