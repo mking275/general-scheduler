@@ -39,8 +39,15 @@ class HouseholdSummary:
     verification_level: Optional[str] = None
 
 
-# A VP-4a provider is ``Callable[[str], Optional[HouseholdSummary]]``. Until
-# VP-4a lands the provider is absent and the stub returns None (whole object).
+# A VP-4a provider is ``Callable[[str], Optional[HouseholdSummary]]``.
+#
+# **T028 upgrade:** VP-4a (011) has landed. The real provider is built via
+# ``real_household_provider`` below — an audience-scoped projection over the
+# household read path + the ``ScopedRecall`` rail — and populates the frozen A4
+# fields per audience/tier. The field shape is unchanged. When no provider is
+# supplied (e.g. a clinic without 4a hydrated) the seam still degrades to
+# ``None`` (unverified, no greeting-name leak) — the safe default is retained,
+# not the only path.
 HouseholdProvider = Callable[[str], Optional[HouseholdSummary]]
 
 
@@ -48,11 +55,23 @@ def fetch_household_summary(
     party_id: Optional[str],
     provider: Optional[HouseholdProvider] = None,
 ) -> Optional[HouseholdSummary]:
-    """Return the VP-4a household summary, or ``None`` when VP-4a is absent
-    (parallel dependency) — the caller then proceeds in unverified scope."""
+    """Return the VP-4a household summary, or ``None`` when no provider is wired
+    — the caller then proceeds in unverified scope (no greeting-name leak)."""
     if provider is None or not party_id:
         return None
     return provider(party_id)
+
+
+def real_household_provider(repo, scoped_recall, clinic_id: str, *,
+                            audience: str, verification_level: str = "none",
+                            summary_kind: str = "last_visit") -> HouseholdProvider:
+    """Build the real 011-backed A4 provider (T028). Lazily imports the
+    relationship builder so voice→relationship stays a one-way runtime seam with
+    no import-time coupling."""
+    from backend.relationship.household_summary_provider import build_household_provider
+    return build_household_provider(
+        repo, scoped_recall, clinic_id, audience=audience,
+        verification_level=verification_level, summary_kind=summary_kind)
 
 
 # --------------------------------------------------------------------------- #

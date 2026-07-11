@@ -18,6 +18,12 @@ nothing to the caller (withheld facts never reach the response). The core-rail
 extraction (contract A) resolves this by pushing ``audience``/``entity_scope``
 INTO recall so a withheld fact is never touched (withheld ≠ accessed).
 
+**Thread continuity (T029):** ``ThreadManager`` binds a channel-qualified
+``thread_id`` and ``recall``/``recall_by_kind`` accept an optional ``thread_id``
+for **single-channel voice continuity only** — recalling prior same-channel
+context. There is no cross-channel (SMS↔portal↔voice) switching path (4b scope
+guard); a thread bound for one channel never carries to another.
+
 Registry status: ``prototype`` — deleted when core lands the mandatory-audience
 API; the policy data (contract C) is unchanged and moves with the vertical.
 """
@@ -36,13 +42,45 @@ Audience = Literal["owner", "manager", "staff", "client_verified", "caller_unver
 class Fact:
     """A recalled fact. ``fact_kind`` is the raw Thoth kind; the evaluator
     bridges it to a fact class. ``subject_household`` / ``subject_clinic`` drive
-    the row-level scope predicates (``own_household_only`` / ``own_clinic_only``)."""
+    the row-level scope predicates (``own_household_only`` / ``own_clinic_only``).
+
+    ``thread_id`` (T029) tags a fact to a single-channel voice thread for
+    same-channel continuity; ``None`` = not thread-scoped (visible to any recall).
+    """
     fact_kind: str
     content: Any = None
     entity_ref: Optional[str] = None
     subject_household: Optional[str] = None
     subject_clinic: Optional[str] = None
     access_count: int = 0
+    thread_id: Optional[str] = None
+
+
+class ThreadManager:
+    """T029 — single-channel voice continuity ONLY (4b scope guard).
+
+    Binds a ``thread_id`` per ``(channel, party)`` so a voice interaction can
+    recall its own prior same-channel context through ``ScopedRecall``. The
+    thread key is **channel-qualified**: a voice thread and an SMS thread for the
+    same party are distinct ids and there is deliberately NO method that carries
+    a thread across channels — the 4b cross-channel (SMS↔portal↔voice) switching
+    surface is not built here.
+    """
+
+    def __init__(self):
+        self._threads: dict[tuple[str, str], str] = {}
+        self._seq = 0
+
+    def bind_thread(self, *, channel: str, party_id: str) -> str:
+        """Return the stable ``thread_id`` for this (channel, party), minting one
+        on first use. Single-channel: the key includes ``channel``."""
+        key = (channel, party_id)
+        tid = self._threads.get(key)
+        if tid is None:
+            self._seq += 1
+            tid = f"thread:{channel}:{party_id}:{self._seq}"
+            self._threads[key] = tid
+        return tid
 
 
 class ThothStub:
@@ -59,11 +97,22 @@ class ThothStub:
             f.access_count += 1        # over-counts; see M3 caveat
         return facts
 
-    async def recall(self, query: str) -> list[Fact]:
-        return self._touch(list(self._facts))
+    @staticmethod
+    def _thread_ok(f: Fact, thread_id: Optional[str]) -> bool:
+        """Thread scope (T029): with no ``thread_id`` every fact is in scope;
+        with one, only facts tagged to that thread (or untagged) match — a fact
+        bound to a DIFFERENT thread (e.g. another channel's) is out of scope."""
+        if thread_id is None:
+            return True
+        return f.thread_id in (None, thread_id)
 
-    async def recall_by_kind(self, kind: str) -> list[Fact]:
-        return self._touch([f for f in self._facts if f.fact_kind == kind])
+    async def recall(self, query: str, thread_id: Optional[str] = None) -> list[Fact]:
+        return self._touch([f for f in self._facts if self._thread_ok(f, thread_id)])
+
+    async def recall_by_kind(self, kind: str,
+                             thread_id: Optional[str] = None) -> list[Fact]:
+        return self._touch([f for f in self._facts
+                            if f.fact_kind == kind and self._thread_ok(f, thread_id)])
 
 
 class ScopedRecall:
@@ -78,13 +127,16 @@ class ScopedRecall:
         self.__reveal_log = reveal_log
 
     async def recall(self, query: str, *, audience: Audience,
-                     entity_scope: list[str]) -> list[Fact]:
-        raw = await self.__thoth.recall(query)               # core engine (unscoped)
+                     entity_scope: list[str],
+                     thread_id: Optional[str] = None) -> list[Fact]:
+        # ``thread_id`` (T029): optional single-channel voice continuity scope.
+        raw = await self.__thoth.recall(query, thread_id)    # core engine (unscoped)
         return self._apply_policy(raw, audience, entity_scope)
 
     async def recall_by_kind(self, kind: str, *, audience: Audience,
-                             entity_scope: list[str]) -> list[Fact]:
-        raw = await self.__thoth.recall_by_kind(kind)
+                             entity_scope: list[str],
+                             thread_id: Optional[str] = None) -> list[Fact]:
+        raw = await self.__thoth.recall_by_kind(kind, thread_id)
         return self._apply_policy(raw, audience, entity_scope)
 
     # ------------------------------------------------------------------ #

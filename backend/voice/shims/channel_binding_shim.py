@@ -1,10 +1,18 @@
-"""[SHIM — extract post-pilot] Feature 010 — T006 ChannelBinding party-model
-shim (contract A1).
+"""[SHIM upgrade] Feature 010 — T006 ChannelBinding party-model shim
+(contract A1), backed by the real 011 identity resolver (T026).
 
 One phone <-> many household members is a live privacy case, so a binding
 resolves to a **candidate-party set + verification level + audience scope** —
 NOT ``verified: bool`` + ``user_id``. An unknown number yields an ephemeral
 party at ``caller_unverified`` scope.
+
+**T026 upgrade (API unchanged):** ``resolve_binding`` now accepts an optional
+011 ``IdentityResolver`` + ``clinic_id``; when supplied it resolves against the
+real ``contact_identifier`` candidate sets (``IdentityResolver.resolve``), and
+``is_shared_line`` becomes the ``LIMIT 1``-kill primitive (>1 candidate on a
+shared number). With no resolver bound the fixture ``_REGISTRY`` default is used
+unchanged, so 010's isolated shim tests bind exactly as before — no duplicate
+module.
 
 Identity-safe disambiguation (FR-005): the dialog matches an open "name on the
 account" answer against the candidate set and soft-confirms exactly one party
@@ -62,9 +70,27 @@ def _ephemeral_party() -> PartyRef:
                     display_name="", ephemeral=True)
 
 
-def resolve_binding(channel_address: str, channel: str = "voice") -> ChannelBinding:
+def resolve_binding(channel_address: str, channel: str = "voice", *,
+                    resolver: Optional[object] = None,
+                    clinic_id: Optional[str] = None) -> ChannelBinding:
     """Resolve an inbound number to a candidate-party set. Unknown numbers get
-    an ephemeral party at ``caller_unverified`` scope."""
+    an ephemeral party at ``caller_unverified`` scope.
+
+    T026: when ``resolver`` (an 011 ``IdentityResolver``) and ``clinic_id`` are
+    supplied, the candidate set comes from the real ``contact_identifier`` index
+    — never ``LIMIT 1``; a shared number yields >1 candidate and
+    ``is_shared_line`` is True. With no resolver the fixture ``_REGISTRY`` path
+    (010's default) runs unchanged. Caller-ID alone never grants a verified
+    scope: a fresh binding is always ``none`` / ``caller_unverified`` (R5).
+    """
+    if resolver is not None and clinic_id is not None:
+        candidates = _resolver_candidates(resolver, clinic_id, channel_address, channel)
+        return ChannelBinding(
+            channel=channel, channel_address=channel_address,
+            candidate_parties=candidates or [_ephemeral_party()],
+            verification_level="none", audience_scope="caller_unverified",
+        )
+
     candidates = _REGISTRY.get(channel_address)
     if not candidates:
         return ChannelBinding(
@@ -81,6 +107,16 @@ def resolve_binding(channel_address: str, channel: str = "voice") -> ChannelBind
         verification_level="none",
         audience_scope="caller_unverified",
     )
+
+
+def _resolver_candidates(resolver: object, clinic_id: str, channel_address: str,
+                         channel: str) -> list[PartyRef]:
+    """Map the real resolver's full candidate set onto shim ``PartyRef``s. The
+    resolver never reduces a multi-match, so the shim's ``is_shared_line`` is
+    exactly the resolver's ``is_shared_line`` (the ``LIMIT 1`` kill)."""
+    result = resolver.resolve(clinic_id, channel_address, "phone", channel=channel)
+    return [PartyRef(party_id=c.party_id, display_name=c.display_name)
+            for c in result.candidates]
 
 
 def _normalize(name: str) -> str:
