@@ -1,0 +1,25 @@
+# Feature 011 — inbound keyword table (TCPA), locale=en (contract I1/I3).
+# Matched (case-insensitive, trimmed) against inbound message bodies by
+# inbound_gateway.handle_inbound(). A non-keyword message is routed to staff,
+# never auto-actioned.
+
+# keyword -> action. action in {opt_out, opt_in, help}
+keywords:
+  STOP: opt_out
+  STOPALL: opt_out
+  UNSUBSCRIBE: opt_out
+  END: opt_out
+  QUIT: opt_out
+  CANCEL: opt_out
+  START: opt_in
+  UNSTOP: opt_in
+  YES: opt_in
+  HELP: help
+  INFO: help
+
+# Confirmation copy sent back on a matched keyword (sim-mode; live copy is
+# counsel-reviewed at Pilot-Activation).
+responses:
+  opt_out: "You have been unsubscribed and will receive no further automated messages. Reply START to resubscribe."
+  opt_in: "You are resubscribed to automated messages. Reply STOP to unsubscribe."
+  help: "This is an automated veterinary assistant line. Reply STOP to unsubscribe. Msg&data rates may apply."
