@@ -339,17 +339,64 @@ class HouseholdRepository:
     def get_patients_for_household(self, household_id: str) -> list[dict]:
         return self._select_where("patient_household_link", household_id=household_id)
 
-    def count_patient_links(self) -> int:
+    def count_patient_links(self, clinic_id: Optional[str] = None) -> int:
         tbl = self.tables["patient_household_link"]
+        stmt = select(text("count(*)")).select_from(tbl)
+        if clinic_id is not None:
+            stmt = stmt.where(tbl.c.clinic_id == clinic_id)
         with self.engine.connect() as conn:
-            return conn.execute(select(text("count(*)")).select_from(tbl)).scalar() or 0
+            return conn.execute(stmt).scalar() or 0
 
-    def count_distinct_linked_patients(self) -> int:
+    def count_distinct_linked_patients(self, clinic_id: Optional[str] = None) -> int:
         tbl = self.tables["patient_household_link"]
+        stmt = select(text("count(distinct patient_id)")).select_from(tbl)
+        if clinic_id is not None:
+            stmt = stmt.where(tbl.c.clinic_id == clinic_id)
         with self.engine.connect() as conn:
-            return conn.execute(
-                select(text("count(distinct patient_id)")).select_from(tbl)
-            ).scalar() or 0
+            return conn.execute(stmt).scalar() or 0
+
+    # ------------------------------------------------------------------ #
+    #  T009 — Household read path (identity structure only; NO medical)
+    # ------------------------------------------------------------------ #
+    def resolve_household_by_identifier(
+        self, clinic_id: str, id_type: str, value_normalized: str,
+    ) -> list[dict]:
+        """Resolve ANY contact identifier to its household(s) + full patient
+        roster. Returns one entry per distinct household the identifier reaches
+        (a shared line reaches >1 — never collapsed). Exposes identity structure
+        ONLY: household ref, contacts, patient roster (name/species/status) — no
+        clinical / financial / medical field. (US1)"""
+        ids = self.find_identifiers(clinic_id, id_type, value_normalized)
+        household_ids: list[str] = []
+        for row in ids:
+            contact = self.get_contact(row["party_id"])
+            if contact and contact["household_id"] not in household_ids:
+                household_ids.append(contact["household_id"])
+        return [self.household_projection(hid) for hid in household_ids]
+
+    def household_projection(self, household_id: str) -> dict:
+        """Identity-structure-only view of a household: its contacts and pet
+        roster. Deliberately returns NO clinical/medical/financial detail — the
+        resolution step exposes structure, not records (US1)."""
+        hh = self.get_household(household_id) or {}
+        contacts = [
+            {"party_id": c["id"], "entity_ref": c["entity_ref"],
+             "display_name": c["display_name"], "household_role": c["household_role"],
+             "active": c["active"]}
+            for c in self.get_contacts_for_household(household_id)
+        ]
+        patients = [
+            {"patient_id": p["patient_id"], "entity_ref": p["entity_ref"],
+             "name": p["display_name"], "status": p["status"]}
+            for p in self.get_patients_for_household(household_id)
+        ]
+        return {
+            "household_id": household_id,
+            "household_ref": hh.get("entity_ref"),
+            "display_name": hh.get("display_name"),
+            "contacts": contacts,
+            "patients": patients,
+        }
 
     # ------------------------------------------------------------------ #
     #  Append-only audit writes

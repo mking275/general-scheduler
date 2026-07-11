@@ -140,11 +140,25 @@ class Corpus:
     #  migration test (T008/T034). One owner row per contact.
     # ---------------------------------------------------------------- #
     def to_flat_owners(self) -> list[dict]:
+        # Pre-household flat model: one owner row per contact, and each patient
+        # belongs to exactly ONE owner (the first contact of its household) —
+        # co-ownership is precisely what the flat model cannot express (the
+        # migration's reason to exist). This keeps owner->patient a clean 1:many
+        # so link-preservation (SC-007) is exactly count == count.
+        assigned: set[str] = set()
+        first_of_household: dict[str, str] = {}
+        for c in self.contacts:
+            first_of_household.setdefault(c.household_key, c.party_id)
         owners = []
         for c in self.contacts:
             phone = next((i.value_normalized for i in c.identifiers if i.id_type == "phone"), "")
             email = next((i.value_normalized for i in c.identifiers if i.id_type == "email"), "")
-            patient_ids = [p.patient_id for p in self.patients if p.household_key == c.household_key]
+            if first_of_household[c.household_key] == c.party_id:
+                patient_ids = [p.patient_id for p in self.patients
+                               if p.household_key == c.household_key and p.patient_id not in assigned]
+                assigned.update(patient_ids)
+            else:
+                patient_ids = []
             owners.append({
                 "owner_id": c.pims_client_id,
                 "name": c.display_name,
