@@ -1,0 +1,79 @@
+# =============================================================================
+# VetAgent Domain Pack — COMMS (references)  (Tier-1 administrative)
+# =============================================================================
+# STATUS: DRAFT. Configures capabilities/comms/ hooks.
+#
+# INCLUDE-BY-REFERENCE, NOT A FORK. The canonical comms/relationship config is
+# the LIVE, test-covered backend config authored for features 010 (voice) and
+# 011 (relationship memory). This pack does NOT duplicate that content — it
+# points at it with a path + a checksum note so drift is detectable.
+#
+# MIGRATION NOTE: pack v0.2 will CANONICALIZE these into the pack (the backend
+# configs are live-tested today, so v0.1.0 references them in place). When v0.2
+# canonicalizes, the backend loaders switch to reading from domains/vet/comms/.
+#
+# Checksums are sha256, first 16 hex chars, computed 2026-07-11. If a checksum
+# no longer matches, the referenced config has changed — re-review before ship.
+# =============================================================================
+
+references:
+
+  - id: memory_scoping
+    role: "Per-audience reveal policy (C1 memory_scoping; the vertical half of relationship memory)"
+    path: config/relationship/memory_scoping.goldsmith.yaml
+    checksum_sha256_16: b6057609ee6f409f
+    shape: three_field           # H1 REVISION: allow_classes / scope_predicates / kind_to_class
+    fields: [allow_classes, scope_predicates, kind_to_class]
+    enforcement: core            # core holds the default-deny rail (scoped_recall); pack supplies policy data
+    audiences: [owner, manager, staff, client_verified, caller_unverified]
+    fact_classes: [schedule, client_summary, patient_clinical, financial, contact_info, staff_notes]
+    note: "UNSIGNED placeholder in the referenced file; VP-9 signs before any live client-facing reveal (Pilot-Activation gate)."
+
+  - id: verification_policy
+    role: "Tiered knowledge-factor verification bar (contract R4)"
+    path: config/relationship/verification_policy.goldsmith.yaml
+    checksum_sha256_16: dc673a5331921d36
+    note: "action -> sensitivity tier -> factors_required; soft-confirm (phone_match) authorizes NO change."
+
+  - id: inbound_keywords
+    role: "TCPA inbound keyword table (opt_out/opt_in/help), locale en"
+    path: config/relationship/inbound_keywords.en.yaml
+    checksum_sha256_16: dea5081cf6d4b06b
+    note: "Confirmation copy is sim-mode; live copy is counsel-reviewed at Pilot-Activation."
+
+  - id: clinic_voice_config
+    role: "Per-clinic voice config: hours, after-hours window, on-call targets, disclosure grounding, ER directory ref"
+    path: config/voice/clinic_voice_config.goldsmith.yaml
+    checksum_sha256_16: b7a587a805f6f929
+    note: "ER directory content (er_directory_ref) is VP-9-owned; disclosure script is the adapter first-utterance guarantee."
+
+# --- Disclosure / consent scripts (pointers) ---------------------------------
+# The AI + recording disclosure is an ADAPTER GUARANTEE (first utterance, plays
+# before the model engages) — enforced in backend/voice/adapter_guarantees.py,
+# grounded per-clinic in clinic_voice_config disclosure fields. The pack points
+# at the mechanism; it does not author a competing script.
+disclosure:
+  mechanism: adapter_first_utterance     # NON-NEGOTIABLE per C3 RealtimeVoiceSession guarantees
+  grounding: config/voice/clinic_voice_config.goldsmith.yaml
+  consent_registry: config/relationship/inbound_keywords.en.yaml   # opt-out honored across channels
+  note: "Disclosure copy + consent behavior are counsel-reviewed at Pilot-Activation."
+
+provenance:
+  authored_by: VetAgent stream (Program #6 Cycle 6c)
+  authored_at: 2026-07-11
+  sources:
+    - path: config/relationship/memory_scoping.goldsmith.yaml
+      cite: "canonical live config (feature 011, H1 three-field shape)"
+    - path: config/relationship/verification_policy.goldsmith.yaml
+      cite: "canonical live config (feature 011, R4)"
+    - path: config/relationship/inbound_keywords.en.yaml
+      cite: "canonical live config (feature 011, TCPA I1/I3)"
+    - path: config/voice/clinic_voice_config.goldsmith.yaml
+      cite: "canonical live config (feature 010)"
+  confidence: high        # these point at live, test-covered configs
+  review_status: DRAFT
+  tier: administrative
+  caveats:
+    - "Include-by-reference, not a fork. v0.2 canonicalizes into the pack (migration note above)."
+    - "Referenced memory_scoping + triage configs are UNSIGNED; signature is the Pilot-Activation gate."
+signed_by: null

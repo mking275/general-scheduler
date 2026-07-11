@@ -1,0 +1,127 @@
+# =============================================================================
+# VetAgent Domain Pack — WORKFORCE / ROLES  (Tier-1 administrative)
+# =============================================================================
+# STATUS: DRAFT. Configures capabilities/workforce/ role hooks.
+# AAVSB taxonomy line: only ADMINISTRATIVE-class actions are enumerated here.
+# Clinical-adjacent verbs (anything touching diagnosis/dosing/treatment) are
+# NOT listed — those are Tier-2, gated behind licensed review (clinical/README).
+#
+# NOTE ON SCOPE OF PRACTICE: veterinary scope-of-practice and technician
+# credentialing are STATE-REGULATED and vary. The `licensure` fields below are
+# structural placeholders (what to TRACK), not a legal determination of what a
+# given role may do in a given state. Real per-state rules land at Goldsmith
+# ingestion (~Aug) and pass the compliance module. See compliance/regulations.yaml.
+# =============================================================================
+
+roles:
+  - id: dvm
+    label: "Veterinarian (DVM/VMD)"
+    aavsb_class: clinical           # role is clinically licensed; admin verbs below only
+    licensure:
+      required:
+        - state_veterinary_license  # tracked; expiry-monitored (compliance module)
+        - dea_registration          # required to prescribe controlled substances
+      tracked_credentials: [ce_hours_ytd, rabies_vaccination_status]
+    supervises: [licensed_vet_tech, vet_assistant, kennel_attendant]
+    supervised_by: []
+    # ADMINISTRATIVE actions only — clinical acts (diagnose/prescribe/perform
+    # surgery) are the role's licensed function but are NOT verb-enabled here.
+    permitted_admin_actions:
+      - approve_schedule
+      - approve_discharge_draft        # approves; does not author clinical content
+      - sign_off_protocol              # the Tier-2 signature authority (see clinical/README)
+      - view_practice_financials
+
+  - id: licensed_vet_tech
+    label: "Licensed / Credentialed Veterinary Technician (LVT/RVT/CVT)"
+    aavsb_class: clinical_adjacent
+    licensure:
+      required:
+        - state_vet_tech_credential   # title varies by state: LVT/RVT/CVT
+      tracked_credentials: [ce_hours_ytd, rabies_vaccination_status]
+    supervises: [vet_assistant, kennel_attendant]
+    supervised_by: [dvm]              # DVM supervision (ratio in constraints.yaml)
+    permitted_admin_actions:
+      - update_room_status
+      - log_prep_notes                 # operational prep, not clinical assessment
+      - schedule_view
+
+  - id: vet_assistant
+    label: "Veterinary Assistant (non-credentialed)"
+    aavsb_class: administrative
+    licensure:
+      required: []
+      tracked_credentials: [rabies_vaccination_status]
+    supervises: []
+    supervised_by: [dvm, licensed_vet_tech]
+    permitted_admin_actions:
+      - update_room_status
+      - schedule_view
+
+  - id: csr_front_desk
+    label: "Client Service Representative / Front Desk"
+    aavsb_class: administrative
+    licensure:
+      required: []
+      tracked_credentials: []
+    supervises: []
+    supervised_by: [practice_manager]
+    permitted_admin_actions:
+      - book_appointment
+      - reschedule_appointment
+      - cancel_appointment
+      - send_intake_request
+      - approve_followup_draft         # comms approval, not clinical authorship
+      - client_contact_edit            # high-sensitivity; see verification_policy
+
+  - id: practice_manager
+    label: "Practice Manager"
+    aavsb_class: administrative
+    licensure:
+      required: []
+      tracked_credentials: []
+    supervises: [csr_front_desk, vet_assistant, kennel_attendant]
+    supervised_by: []                  # reports to owner (owner audience in memory_scoping)
+    permitted_admin_actions:
+      - approve_schedule
+      - manage_staff_roster
+      - view_practice_financials
+      - view_compliance_dashboard
+
+  - id: kennel_attendant
+    label: "Kennel Attendant / Animal Caretaker"
+    aavsb_class: administrative
+    licensure:
+      required: []
+      tracked_credentials: [rabies_vaccination_status]
+    supervises: []
+    supervised_by: [dvm, licensed_vet_tech, practice_manager]
+    permitted_admin_actions:
+      - update_room_status             # boarding/kennel status only
+
+# Roles map onto the memory_scoping audiences (comms/references.yaml). The
+# audience set (owner/manager/staff/client_verified/caller_unverified) is the
+# privacy-scoping vocabulary; roles are the org-chart vocabulary. Mapping:
+audience_map:
+  owner: [dvm, practice_manager]       # owner-vets typically hold both
+  manager: [practice_manager]
+  staff: [licensed_vet_tech, vet_assistant, csr_front_desk, kennel_attendant]
+  # client_verified / caller_unverified are external, not roles.
+
+provenance:
+  authored_by: VetAgent stream (Program #6 Cycle 6c)
+  authored_at: 2026-07-11
+  sources:
+    - path: VetPractice/feature_design.md
+      cite: "F005 role-split UI — Front Desk / Vet Tech / Veterinarian role definitions"
+    - path: VetPractice/vpma_addon_modules.md
+      cite: "Staff Scheduling + License/Compliance Tracker — DEA, state license, CE, rabies; StaffMember/License entities (L369-410)"
+    - path: config/relationship/memory_scoping.goldsmith.yaml
+      cite: "audience vocabulary owner/manager/staff/client_verified/caller_unverified"
+  confidence: medium            # role list solid; per-state licensure requirements are placeholders pending Aug ingestion
+  review_status: DRAFT
+  tier: administrative
+  caveats:
+    - "Scope-of-practice and technician credential titles are state-regulated and vary; fields are what-to-track, not a legal ruling."
+    - "AAVSB administrative/clinical line encoded per role; clinical verbs deliberately absent."
+signed_by: null

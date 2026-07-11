@@ -1,0 +1,123 @@
+# =============================================================================
+# VetAgent Domain Pack — COMPLIANCE / REGULATIONS  (Tier-1 administrative)
+# =============================================================================
+# STATUS: DRAFT. Configures capabilities/compliance/ hooks.
+#
+# ⚠ ADMINISTRATIVE TIER ONLY. This file encodes TRACKING SHAPES and DUTY-EXISTENCE
+# POINTERS — what to monitor and when things expire/are-due. It is NOT legal
+# advice and NOT the procedure content. The actual per-controlled-substance PDMP
+# reporting workflow, DEA log chain-of-custody procedure, and clinical records
+# content are Tier-2 (clinical/README.md). Vera is architecturally not a lawyer.
+#
+# PER-STATE VARIANCE IS THE RULE. Records-retention periods, technician scope,
+# PDMP mandates, and license cadences vary by state. Values below are TRACKING
+# SCAFFOLDS with per-state override slots, not authoritative legal periods.
+# Real per-state rules land at Goldsmith ingestion (~Aug) via the compliance module.
+# =============================================================================
+
+license_tracking:
+  # Renewal-tracking SHAPES: what credentials to monitor + warning cadence.
+  # The compliance module fires expiry warnings; the pack says what to watch.
+  tracked_credentials:
+    - id: state_veterinary_license
+      holder_role: dvm
+      renewal_cadence: per_state         # varies (commonly 1-2 yr); state config overrides
+      warn_days: [30, 7, 1]
+    - id: dea_registration
+      holder_role: dvm
+      renewal_cadence: "3_years"         # DEA registration is federally 3-year
+      warn_days: [60, 30, 7]
+      source_cite: "DEA registration renewal — federal, 3-year cycle"
+    - id: state_vet_tech_credential
+      holder_role: licensed_vet_tech
+      renewal_cadence: per_state
+      warn_days: [30, 7, 1]
+    - id: rabies_vaccination_status
+      holder_role: [dvm, licensed_vet_tech, vet_assistant, kennel_attendant]
+      renewal_cadence: per_titer_or_schedule
+      warn_days: [30, 7]
+    - id: ce_hours_ytd
+      holder_role: [dvm, licensed_vet_tech]
+      cadence: per_state                 # CE-hour requirements are state-set
+      warn: on_shortfall_vs_state_requirement
+
+records_retention:
+  # SHAPE only. Retention periods are STATE-VARIABLE; do not treat the default
+  # as legal. Common range is ~3-7 years after last visit; some states longer
+  # for controlled-substance records.
+  policy: per_state
+  default_years: 5            # PLACEHOLDER default; state config overrides
+  controlled_substance_records:
+    default_years: 5          # PLACEHOLDER; some states require longer
+    note: "Retention for controlled-substance records may exceed general records; per-state."
+  cite: "Veterinary medical records retention is set by each state veterinary board; periods vary (~3-7+ yr). Verify per clinic state at ingestion."
+  confidence: low
+
+osha_basics:
+  # Existence pointers to workplace-safety duties a vet practice carries.
+  # TRACKING shapes only — not the safety program content.
+  duties:
+    - id: hazard_communication
+      note: "Chemical/pharmaceutical hazard communication + SDS availability."
+    - id: incident_log
+      note: "Workplace incident logging; export shape exists (OSHA format)."
+      source_cite: "VetPractice/vpma_integrations.md — OSHA Reporting export (L271)"
+    - id: radiation_safety
+      note: "Radiography/X-ray safety practices (dosimetry, shielding) where imaging is on-site."
+    - id: sharps_biohazard
+      note: "Sharps and biohazard handling/disposal."
+  cite: "OSHA general-industry duties apply to veterinary workplaces. This is a duty-existence pointer, not the safety-program content."
+  confidence: medium
+
+pdmp_reporting:
+  # PDMP = Prescription Drug Monitoring Program. DUTY-EXISTENCE POINTER ONLY.
+  # ~18 states impose PDMP query/report duties on veterinarians for controlled
+  # substances (the exact count and rules vary and change — verify per state).
+  # The QUERY/REPORT PROCEDURE itself is Tier-2 (clinical-adjacent, gated).
+  duty_exists: true
+  applies_to: dvm
+  approximate_state_count: 18
+  scope: controlled_substance_prescribing
+  content_tier: 2            # the actual query-before-Rx workflow is Tier-2, GATED
+  cite: "Roughly 18 U.S. states impose PDMP obligations on veterinarians; count and rules vary by state and change over time — verify per clinic state at ingestion. Procedure content is Tier-2."
+  source_cite: "VetPractice/vpma_integrations.md — PDMP/AWARxE query before controlled Rx, varies by state (L117-123, L268)"
+  confidence: low            # the ~18 figure is approximate and time-sensitive
+
+dea_controlled_substances:
+  # Existence + reporting-shape pointer. Chain-of-custody PROCEDURE is Tier-2.
+  duty_exists: true
+  applies_to: dvm
+  schedules: "II-V"
+  reporting:
+    - id: arcos
+      cadence: monthly
+      note: "Federal ARCOS-format controlled-substance reporting (export shape)."
+      source_cite: "VetPractice/vpma_integrations.md — DEA ARCOS monthly export (L121, L267)"
+  content_tier_for_logging_procedure: 2   # the log/chain-of-custody workflow is Tier-2
+  confidence: medium
+
+vcpr:
+  # Veterinarian-Client-Patient Relationship — existence pointer. Governs when
+  # telemedicine/prescribing is permissible; rules are STATE-VARIABLE.
+  duty_exists: true
+  note: "A valid VCPR is required for prescribing and (in most states) telemedicine. Rules vary by state; affects the telemedicine appointment type."
+  content_tier: administrative   # the existence + scheduling gate is admin; clinical judgment is Tier-2
+  confidence: medium
+
+provenance:
+  authored_by: VetAgent stream (Program #6 Cycle 6c)
+  authored_at: 2026-07-11
+  sources:
+    - path: VetPractice/vpma_integrations.md
+      cite: "DEA ARCOS, PDMP/AWARxE, OSHA reporting integrations (L117-123, L267-271)"
+    - path: VetPractice/research_report.md
+      cite: "compliance requirements — state PMP for controlled substances, PII/records handling (L23-25)"
+    - path: VetPractice/vpma_addon_modules.md
+      cite: "License/Compliance Tracker — DEA registration, state vet license, rabies, CE (L369-410)"
+  confidence: low        # everything here is state-variable and time-sensitive; TRACKING SHAPES not legal periods
+  review_status: DRAFT
+  tier: administrative
+  caveats:
+    - "Not legal advice. Per-state variance is the rule; defaults are placeholders pending per-clinic-state config at ingestion."
+    - "PDMP query/report and DEA chain-of-custody PROCEDURES are Tier-2 (gated) — only duty-existence pointers appear here."
+signed_by: null

@@ -1,0 +1,76 @@
+# =============================================================================
+# VetAgent Domain Pack — KNOWLEDGE / GLOSSARY  (Tier-1 administrative)
+# =============================================================================
+# STATUS: DRAFT. Admin/operational vet-practice terminology from the research
+# corpus. Consumed by prompt composition (grounds Vera's vocabulary).
+#
+# ⚠ ADMIN/OPERATIONAL TERMS ONLY. Definitions describe practice OPERATIONS and
+# BUSINESS, not medicine. SOAP appears as a documentation structure, not as
+# clinical content. No dosing, no drug names, no clinical protocol.
+# =============================================================================
+
+terms:
+  # --- People / roles ---
+  DVM: "Doctor of Veterinary Medicine — the veterinarian. (Also VMD at UPenn.) The licensed decision-maker; Vera advises, the DVM decides."
+  LVT_RVT_CVT: "Licensed / Registered / Certified Veterinary Technician — credentialed technician; title varies by state."
+  vet_assistant: "Non-credentialed veterinary assistant supporting techs and DVMs."
+  CSR: "Client Service Representative — front-desk staff handling booking and client comms."
+  practice_manager: "Runs practice operations; owner/manager audience in memory scoping."
+
+  # --- Software / market ---
+  PIMS: "Practice Information Management System — the vet-clinic operating system (scheduling, records, billing). Incumbents: Cornerstone, ezyVet, Avimark."
+  VPMS: "Veterinary Practice Management Software — the market category (same as PIMS)."
+  Cornerstone: "IDEXX's legacy on-prem PIMS (~14,000 installs; no cloud roadmap). VC-1."
+  ezyVet: "IDEXX's cloud-native PIMS; the Goldsmith pilot estate. Per-user pricing."
+  Avimark: "Legacy PIMS in active sunset (Covetrus migrating users to Pulse). ~11,000 installs. VC-1."
+  SOAP: "Subjective / Objective / Assessment / Plan — the standard veterinary medical-record DOCUMENTATION STRUCTURE. Here it is a note format, not clinical content."
+  ambient_scribing: "AI that drafts the SOAP note from the exam-room conversation; the highest-value agentic feature per research."
+
+  # --- Operations / scheduling ---
+  no_show: "A client who fails to attend a scheduled appointment without cancelling. A top financial pain point (F004)."
+  waitlist_fill: "Refilling a cancelled/no-show slot from the waitlist — the slot-recovery verb (target <4 min, VC-8, product-claim)."
+  drop_off: "Day-admit appointment: patient left for the day, seen between scheduled slots."
+  recheck: "A follow-up/progress appointment to reassess a prior issue."
+  exam_room: "A room holding one appointment at a time (resource_capacity constraint)."
+  surgery_suite: "Operating room; one procedure at a time."
+  isolation_room: "Room for contagious or aggressive patients; assigned on the aggression handling flag."
+  comfort_room: "Quiet/private room preferred for euthanasia / end-of-life visits (comms-sensitive)."
+  turnover_buffer: "Cleanup/documentation time after a slot before the room frees."
+
+  # --- Compliance / regulatory (admin pointers) ---
+  DEA_registration: "Federal Drug Enforcement Administration registration required for a DVM to handle/prescribe controlled substances; 3-year renewal."
+  PDMP: "Prescription Drug Monitoring Program — state controlled-substance database; ~18 states impose duties on vets (duty-existence pointer; procedure is Tier-2)."
+  ARCOS: "Automation of Reports and Consolidated Orders System — federal controlled-substance reporting format (monthly export)."
+  VCPR: "Veterinarian-Client-Patient Relationship — the relationship required (state-variable) before prescribing or telemedicine."
+  records_retention: "State-set period medical records must be kept after last visit (varies ~3-7+ yr)."
+  CE_hours: "Continuing Education hours — state-required ongoing training tracked per DVM/tech."
+
+  # --- Party / memory (the moat vocabulary) ---
+  household: "The party grouping — one client account and its people + pets. The moat noun. entity_ref household:*."
+  client: "A human account holder. entity_ref client:*."
+  patient: "An animal under care. entity_ref patient:*."
+  floating_vet: "A DVM credentialed to work at more than one clinic (F007 multi-clinic)."
+  containment: "An after-hours call resolved without a human, including bookings (booked ⊆ contained). The headline voice metric (spec 010)."
+
+  # --- Persona ---
+  Vera: "The practice's AI Chief of Staff persona. KNOWs the practice, ADVISEs with cited evidence; the veterinarian always DECIDEs. Not a vet, not a lawyer — architecturally (Expert Firewall)."
+  Expert_Firewall: "The architectural guarantee that Vera does not practice medicine or law — clinical/legal content is gated (Tier-2) and rails are core-enforced."
+
+provenance:
+  authored_by: VetAgent stream (Program #6 Cycle 6c)
+  authored_at: 2026-07-11
+  sources:
+    - path: VetPractice/research_report.md
+      cite: "PIMS/VPMS market, incumbents, SOAP, ambient scribing, pain points"
+    - path: marketing/engine-inputs/verified-claims.md
+      cite: "Cornerstone/Avimark install figures (VC-1), waitlist-fill (VC-8)"
+    - path: context/README.md
+      cite: "Vera persona, Expert Firewall, KNOW/ADVISE/DECIDE"
+    - path: VetPractice/f007_multi_clinic_design.md
+      cite: "floating vet, clinic/household portability"
+  confidence: high         # terminology is well-sourced from the research corpus
+  review_status: DRAFT
+  tier: administrative
+  caveats:
+    - "Operational/business terms only. SOAP is a documentation structure here, not clinical content."
+signed_by: null

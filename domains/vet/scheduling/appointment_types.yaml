@@ -1,0 +1,128 @@
+# =============================================================================
+# VetAgent Domain Pack — SCHEDULING / APPOINTMENT TYPES  (Tier-1 administrative)
+# =============================================================================
+# STATUS: DRAFT. Configures capabilities/scheduling/ appointment-type hooks.
+#
+# ⚠ DURATIONS ARE INDUSTRY-STANDARD DEFAULTS, NOT MEASURED. Provenance on this
+# file is "industry default — replace with Goldsmith distributions at pilot
+# ingestion (~Aug)". Do not publish these as clinic facts.
+#
+# Fields:
+#   duration_min      — default appointment length (minutes)
+#   buffer_after_min  — cleanup/turnover/documentation buffer after the slot
+#   room_requirement  — resource_capacity resource id (see workforce/constraints.yaml)
+#   requires_role     — role_requirement pointer (constraint id), if any
+#   procedure_gate    — procedure_gate constraint id, if the type is gated
+#   sensitivity       — comms-sensitivity flag for client-facing tone/handling
+# =============================================================================
+
+appointment_types:
+  - id: wellness
+    label: "Wellness / Annual Exam"
+    duration_min: 30
+    buffer_after_min: 10
+    room_requirement: exam_room
+    sensitivity: routine
+
+  - id: sick
+    label: "Sick Visit"
+    duration_min: 30
+    buffer_after_min: 10
+    room_requirement: exam_room
+    sensitivity: routine
+
+  - id: recheck
+    label: "Recheck / Progress Exam"
+    duration_min: 20
+    buffer_after_min: 5
+    room_requirement: exam_room
+    sensitivity: routine
+
+  - id: vaccine_only
+    label: "Vaccine-Only / Tech Appointment"
+    duration_min: 15
+    buffer_after_min: 5
+    room_requirement: exam_room
+    sensitivity: routine
+    notes: "Often tech-run under DVM oversight; no standalone DVM slot required."
+
+  - id: new_client
+    label: "New Client / New Patient"
+    duration_min: 45          # longer: history intake + record creation
+    buffer_after_min: 10
+    room_requirement: exam_room
+    sensitivity: routine
+    notes: "Longer for intake; F001 creates the stub patient record."
+
+  - id: surgery
+    label: "Surgery"
+    duration_min: 90          # highly procedure-dependent; default only
+    buffer_after_min: 30      # recovery monitoring; aligns with anesthesia recovery buffer
+    room_requirement: surgery_suite
+    requires_role: dvm_required_for_surgery
+    procedure_gate: anesthesia_limit
+    sensitivity: elevated
+    notes: "Duration varies widely by procedure; this is a scheduling placeholder."
+
+  - id: dental
+    label: "Dental (Cleaning / Extraction under anesthesia)"
+    duration_min: 75
+    buffer_after_min: 30      # anesthesia recovery
+    room_requirement: surgery_suite
+    requires_role: dvm_required_for_surgery
+    procedure_gate: dental_under_anesthesia_gate
+    sensitivity: elevated
+
+  - id: drop_off
+    label: "Drop-Off (Day Admit)"
+    duration_min: 0           # not a fixed slot; occupies a day-admit queue, not a room-window
+    buffer_after_min: 0
+    room_requirement: null
+    sensitivity: routine
+    notes: "Patient admitted for the day; DVM sees between scheduled appointments."
+
+  - id: euthanasia
+    label: "Euthanasia / End-of-Life"
+    duration_min: 45
+    buffer_after_min: 30      # room buffer: do not immediately turn the room over
+    room_requirement: exam_room
+    preferred_room: comfort_room     # quiet/private room if the clinic has one
+    requires_role: dvm_required_for_euthanasia
+    sensitivity: comms_sensitive     # HIGHEST care in client-facing comms; no automated upsell/reminder cross-sell
+    notes: >
+      Comms-sensitivity flag + extended room buffer are intentional. Vera must
+      never send automated wellness/marketing follow-ups against a euthanasia
+      visit. Client-facing tone follows the empathetic-comms guidance.
+
+  - id: urgent_walk_in
+    label: "Urgent / Walk-In (during hours)"
+    duration_min: 30
+    buffer_after_min: 10
+    room_requirement: exam_room
+    sensitivity: elevated
+    notes: "In-hours urgent care. After-hours emergencies route through the voice triage protocol (Tier-2, gated)."
+
+  - id: telemedicine
+    label: "Telemedicine / Virtual Recheck"
+    duration_min: 20
+    buffer_after_min: 5
+    room_requirement: null            # no physical room
+    sensitivity: routine
+    notes: "Subject to state VCPR rules (compliance/regulations.yaml). Availability is per-clinic policy."
+
+# Turnover buffers double as the exam_room resource_capacity release delay:
+# room frees at slot_end + buffer_after_min.
+
+provenance:
+  authored_by: VetAgent stream (Program #6 Cycle 6c)
+  authored_at: 2026-07-11
+  sources:
+    - path: VetPractice/feature_design.md
+      cite: "F001/F006 procedure types (Surgery, Dental, Wellness, Vaccination, Grooming); F004 wellness/elective vs emergency; F005 room status"
+    - path: VetPractice/research_report.md
+      cite: "appointment scheduling module; no-show reduction context"
+  confidence: low          # durations/buffers are INDUSTRY DEFAULTS, not measured
+  review_status: DRAFT
+  tier: administrative
+  data_note: "industry default — replace with Goldsmith distributions at pilot ingestion (~Aug)"
+signed_by: null
