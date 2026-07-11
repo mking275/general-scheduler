@@ -58,6 +58,16 @@ core: see `COS-platform/context/vera-vetagent-interface-board-2026-07-09.md`.
 
 ## Working Rules (deltas from COS-platform habits)
 
+0. **INVISIBLE ADOPTION DOCTRINE (Matt, 2026-07-11 — from Jay directly).** Jay's staff must never
+   experience VetAgent as "new software." They just upgraded to **ezyVet Enterprise** (fresh sunk
+   cost + political capital); a migration announcement is radioactive. Vera arrives through
+   channels staff already use (the phone line, texts, email briefings) doing useful things — no
+   new logins, no training sessions, no dashboards pushed at staff, no "we're evaluating a
+   system" framing. Staff-facing UI is owner/manager-only until staff ASK for more. The success
+   condition is literal: **staff beg for it.** Instrument staff-pull signals (unprompted staff→Vera
+   requests, scope-expansion asks) as first-class pilot metrics. Cutover/Phase-D language is
+   internal-only and LOW priority for this account — indispensability first, everything else follows.
+
 1. **Claim discipline extends to runtime**: any factual claim in marketing OR in Vera's output
    traces to `verified-claims.md` or the practice record. VC-3 (the $16,860 replacement math)
    does **not** apply to envelope clinics — their budget line is the companion-tool stack.

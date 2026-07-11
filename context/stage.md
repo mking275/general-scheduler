@@ -15,7 +15,7 @@
 
 | Item | Status |
 |---|---|
-| Goldsmith pilot (proposal + data-request letter) | Delivered; kickoff target first week of Aug |
+| Goldsmith pilot (proposal + letter delivered; Jay engaged — partnership track is Matt-only) | Kickoff target first week of Aug; **invisible-adoption doctrine governs all staff-facing design**; clinics run ezyVet **Enterprise** (recent upgrade) |
 | Spec 009 — envelope onboarding (Vera's First Day) | discover.md done → next: `speckit-specify` |
 | Spec 010 — Vera voice (after-hours first) | seeded in phase-4 brief → next: `speckit-discover` |
 | Phase-4 design brief (F1–F6, R1–R9) | done — core halves handed to Vera Program via interface board |
