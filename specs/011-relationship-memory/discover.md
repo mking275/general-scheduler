@@ -105,7 +105,7 @@ Medium confirmed for 4a; **gate the resolver on a real-data identity audit** bef
 |---|---|---|
 | I Demo-First, Value-Visible | yes | compliant — scoping decisions + opt-out state visible in Verbose Log |
 | II Agentic Pipeline Integrity | yes | compliant — reveals gate through policy; no bypass path |
-| III Data Simplicity (SQLite/no-ORM) | yes | **tension** — scoping + threads need VP-1 PG plane + Thoth; demo SQLite superseded (sanctioned by VP-1) |
+| III Data Simplicity (SQLite/no-ORM) | yes | **tension** — scoping + threads need VP-1 PG plane + Thoth; demo SQLite superseded (sanctioned by VP-1). *(Formalized post-discover as the GS v1.1.0 Platform-track exception, which the plan's Constitution Check now cites — the supersession is a sanctioned departure, not a violation.)* |
 | IV Role-Aware UI | yes | compliant — per-audience scoping *is* role-awareness generalized to clients |
 | V Incremental Buildability | yes | compliant — 4a ships independently; 4b/4c layer on |
 

@@ -1,0 +1,83 @@
+# Feature 011 — memory_scoping policy (C1 policy data, contract C / H1).
+#
+# UNSIGNED placeholder — VP-9 signs the real content before any live client-facing
+# reveal (Pilot-Activation gate). The SHAPE here is the rail spec: exactly THREE
+# fields, and the boundary is STRUCTURAL DEFAULT-DENY BY ABSENCE —
+#   * an audience absent from `allow_classes`      -> denies ALL classes
+#   * a class not listed for an audience           -> denied (default_deny_no_rule)
+#   * a fact_kind absent from `kind_to_class`      -> denied (unmapped_kind)
+#
+# Closed fact-class vocabulary (the ONLY classes the evaluator recognises):
+#   schedule | client_summary | patient_clinical | financial | contact_info | staff_notes
+
+# (1) allow_classes: {audience: [fact_class, ...]} — POSITIVE content classes only.
+allow_classes:
+  owner:
+    - schedule
+    - client_summary
+    - patient_clinical
+    - financial
+    - contact_info
+    - staff_notes
+  manager:
+    - schedule
+    - client_summary
+    - patient_clinical
+    - financial
+    - contact_info
+    # staff_notes intentionally OMITTED -> default-deny exercisable
+  staff:
+    - schedule
+    - client_summary
+    - patient_clinical
+    - contact_info
+    # financial + staff_notes intentionally OMITTED
+  client_verified:
+    - schedule
+    - client_summary
+    - patient_clinical
+    - contact_info
+    # financial + staff_notes intentionally OMITTED (own household only, no $ detail)
+  caller_unverified:
+    - schedule
+    # only general schedule availability
+
+# (2) scope_predicates: {audience: [predicate, ...]} — ROW filters.
+#     own_household_only -> reason=wrong_household on a foreign-household row
+#     own_clinic_only    -> tenant scope
+scope_predicates:
+  owner:
+    - own_clinic_only
+  manager:
+    - own_clinic_only
+  staff:
+    - own_clinic_only
+  client_verified:
+    - own_clinic_only
+    - own_household_only
+  caller_unverified:
+    - own_clinic_only
+
+# (3) kind_to_class: {fact_kind: fact_class} — recall-kind -> class BRIDGE.
+#     Intentionally NON-EXHAUSTIVE: any recall kind not listed here is DENIED
+#     with reason=unmapped_kind (never revealed by omission). e.g. an inbound
+#     `insurance_claim` / `experimental_unmapped` kind has no mapping -> deny.
+kind_to_class:
+  appointment: schedule
+  schedule_availability: schedule
+  next_available: schedule
+  visit_summary: client_summary
+  last_visit: client_summary
+  greeting_summary: client_summary
+  diagnosis: patient_clinical
+  medication: patient_clinical
+  vaccination: patient_clinical
+  lab_result: patient_clinical
+  invoice: financial
+  balance: financial
+  payment_history: financial
+  phone: contact_info
+  email: contact_info
+  address: contact_info
+  internal_note: staff_notes
+  staff_memo: staff_notes

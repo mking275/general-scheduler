@@ -975,3 +975,227 @@ class TriageProtocol(BaseModel):
     active: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     verbose_log: List[str] = Field(default_factory=list)
+
+
+# ===========================================================================
+# Feature 011 — Relationship Memory & Consent (VP-4a): 13 net-new entities +
+# enums (data-model.md). Party-scoped tables key on ``party_id`` (M4). All
+# ``entity_ref`` values are STABLE-ID keys ``{type}:{stable_id}`` — never names
+# (research D2). Resolution / verification / reveal / consent-event / inbound
+# tables are the append-only audit spine (Constitution I).
+# ===========================================================================
+
+
+class HouseholdRole(str, Enum):
+    CO_OWNER = "co_owner"
+    AUTHORIZED_CALLER = "authorized_caller"
+    EMERGENCY_CONTACT = "emergency_contact"
+
+
+class ResolutionOutcome(str, Enum):
+    """Resolver return outcome (R1). Admits ONLY these three — a multi-match can
+    never collapse to a single record. ``soft_confirmed`` is a downstream
+    *event-log* state after neutral disambiguation, not a resolver outcome."""
+    RESOLVED_SINGLE = "resolved_single"
+    AMBIGUOUS_MULTI = "ambiguous_multi"
+    UNMATCHED = "unmatched"
+
+
+class SensitivityTier(str, Enum):
+    LOW = "low"
+    HIGH = "high"
+
+
+class RevealDecision(str, Enum):
+    REVEALED = "revealed"
+    WITHHELD = "withheld"
+
+
+class ConsentAction(str, Enum):
+    OPT_OUT = "opt_out"
+    OPT_IN = "opt_in"
+
+
+class InboundAction(str, Enum):
+    OPT_OUT_RECORDED = "opt_out_recorded"
+    OPT_IN_RECORDED = "opt_in_recorded"
+    ROUTED_TO_STAFF = "routed_to_staff"
+    NONE = "none"
+
+
+class StaffRole(str, Enum):
+    """Source of the owner/manager/staff reveal audience (M5, FR-012)."""
+    OWNER = "owner"
+    MANAGER = "manager"
+    STAFF = "staff"
+
+
+# --- Table 1: household ----------------------------------------------------
+class Household(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    entity_ref: str                                # synthesized household:vah_*
+    display_name: str = ""                         # payload, never a key
+    review_status: _Literal["confirmed", "proposed"] = "confirmed"
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 2: household_contact (Party) ------------------------------------
+class HouseholdContact(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    household_id: str
+    pims_client_id: Optional[str] = None           # ezyVet stable id
+    entity_ref: str                                # client:ezyvet_c*
+    display_name: str = ""                         # matching/greeting only
+    household_role: HouseholdRole = HouseholdRole.CO_OWNER
+    active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 3: contact_identifier -------------------------------------------
+class ContactIdentifier(BaseModel):
+    """The lookup index. A lookup returns ALL matching rows (candidate set),
+    never LIMIT 1 — this table removes the single-phone-per-owner assumption
+    the LIMIT 1 bug lived on."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    party_id: str
+    clinic_id: str
+    id_type: _Literal["phone", "email"]
+    value_normalized: str                          # 10-digit phone / lowercased email
+    value_raw: str = ""
+    is_primary: bool = False
+    source: _Literal["pims", "inbound"] = "pims"
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 4: patient_household_link ---------------------------------------
+class PatientHouseholdLink(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    patient_id: str
+    household_id: str
+    clinic_id: str
+    pims_patient_id: Optional[str] = None
+    entity_ref: str                                # patient:ezyvet_p*
+    status: _Literal["active", "deceased", "rehomed"] = "active"
+    display_name: str = ""                         # pet name — payload, for factor match
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 5: identity_resolution_event (append-only) ----------------------
+class IdentityResolutionEvent(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    channel: str = "voice"
+    inbound_identifier_normalized: str
+    identifier_type: _Literal["phone", "email", "name"]
+    candidate_set_json: List[Dict[str, Any]] = Field(default_factory=list)  # FULL set
+    match_count: int = 0
+    # Stored value may also be "soft_confirmed" after neutral disambiguation;
+    # the resolver itself only ever emits a ResolutionOutcome value.
+    outcome: str = ResolutionOutcome.UNMATCHED.value
+    confirmed_party_id: Optional[str] = None
+    resolved_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 6: household_review_queue ---------------------------------------
+class HouseholdReviewQueue(BaseModel):
+    """Never-auto-merge staff queue for probable duplicates / collisions."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    proposal_type: _Literal["probable_duplicate", "collision", "merge_candidate"]
+    subject_refs_json: List[Any] = Field(default_factory=list)
+    evidence_json: Dict[str, Any] = Field(default_factory=dict)
+    status: _Literal["pending", "approved", "rejected", "deferred"] = "pending"
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 7: verification_challenge (append-only) -------------------------
+class VerificationChallenge(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    call_session_id: Optional[str] = None          # -> 010 call_session
+    party_id: Optional[str] = None
+    action_requested: _Literal["reschedule", "cancel", "contact_edit", "refill_request"]
+    sensitivity_tier: SensitivityTier
+    factors_required: int = 1
+    factors_presented_json: List[Dict[str, Any]] = Field(default_factory=list)  # no raw secrets
+    outcome: _Literal["passed", "failed", "deferred_staff_callback"]
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 8: memory_scoping_policy ----------------------------------------
+class MemoryScopingPolicy(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    version: str = "0.0.0"
+    policy_yaml: str = ""                           # three-field shape (contract C, H1)
+    signed_by: Optional[str] = None                 # VP-9 policy owner (unsigned in 4a)
+    active: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 9: reveal_decision_log (append-only) ----------------------------
+class RevealDecisionLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    interaction_ref: str = ""                        # call_session:* / thread:*
+    audience: _Literal["owner", "manager", "staff", "client_verified", "caller_unverified"]
+    fact_kind: str                                   # raw Thoth kind requested
+    fact_class: Optional[str] = None                 # NULL when kind unmapped (H1)
+    entity_ref: Optional[str] = None
+    decision: RevealDecision
+    rule_matched: Optional[str] = None
+    reason: _Literal["explicit_allow", "default_deny_no_rule", "wrong_household", "unmapped_kind"]
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 10: contact_consent ---------------------------------------------
+class ContactConsent(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    party_id: str
+    channel: _Literal["voice", "sms", "email", "portal"]
+    ai_contact_allowed: bool = True                  # current state (default true)
+    source: _Literal["inbound_stop", "staff", "portal"] = "staff"
+    changed_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    changed_by: str = "system"
+
+
+# --- Table 11: consent_event (append-only) ---------------------------------
+class ConsentEvent(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    party_id: str
+    clinic_id: str
+    channel: _Literal["voice", "sms", "email", "portal"]
+    action: ConsentAction
+    keyword: Optional[str] = None                    # STOP / START / ...
+    inbound_message_id: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- Table 12: inbound_message (append-only) -------------------------------
+class InboundMessage(BaseModel):
+    """The net-new inbound intake path (sms_gateway.py is outbound-only)."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    channel: _Literal["sms", "voice_dtmf", "voice", "portal"] = "sms"
+    from_identifier_normalized: str
+    body: str = ""
+    matched_keyword: Optional[str] = None            # STOP | START | HELP | None
+    action_taken: InboundAction = InboundAction.NONE
+    received_at: str = Field(default_factory=lambda: datetime.now().isoformat())  # SC-006 clock start
+
+
+# --- Table 13: clinic_staff_role -------------------------------------------
+class ClinicStaffRole(BaseModel):
+    """Per-user staff role — source of owner/manager/staff audience (M5)."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    staff_user_id: str                               # -> staff:* entity_ref
+    role: StaffRole
+    active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())

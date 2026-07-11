@@ -119,7 +119,7 @@ A client can opt out of AI contact per channel (voice / SMS / email / portal); t
 ### Caller Identification
 - **FR-006**: On an inbound contact, the system MUST attempt identity resolution before Vera's first substantive turn.
 - **FR-007**: Vera MUST auto-identify and soft-confirm by name **only** on an exact normalized-phone match to a single household contact; on any ambiguity (multiple candidates, partial/fuzzy match) or no match she MUST NOT speak a guessed name and MUST fall back to a neutral "May I get the name on the account?".
-- **FR-008**: Soft-confirmation MUST be treated as identification only, never authentication, and MUST NOT by itself authorize any change or any reveal beyond the unverified-caller scope.
+- **FR-008**: Soft-confirmation MUST be treated as identification only, never authentication, and MUST NOT by itself authorize any reveal beyond the unverified-caller scope. (The change-authorization gate is FR-017.)
 - **FR-009**: A rejected soft-confirm MUST cause Vera to drop the assumed identity and reveal nothing tied to it.
 
 ### Shared-Phone Disambiguation
@@ -127,7 +127,7 @@ A client can opt out of AI contact per channel (voice / SMS / email / portal); t
 - **FR-011**: When more than one candidate exists, Vera MUST disambiguate via a neutral question and withhold all household-specific detail until exactly one candidate is confirmed.
 
 ### Per-Audience Scoping (KNOW ≠ REVEAL)
-- **FR-012**: The system MUST classify every interaction into one audience of: owner, manager, staff, verified client, unverified caller.
+- **FR-012**: The system MUST classify every interaction into one audience of: owner, manager, staff, verified client, unverified caller. The staff-side audiences (owner/manager/staff) MUST be derived from a per-user staff role held in `clinic_staff_role` (role → audience 1:1), not from a shared login identity; **voice callers are always classified into the client tier (verified client / unverified caller) in 4a**.
 - **FR-013**: Reveal decisions MUST be governed by explicit per-audience policy data (the C1 `memory_scoping` shape), separating what Vera knows from what she may reveal.
 - **FR-014**: Scoping MUST be **default-deny**: any fact not explicitly permitted for the current audience MUST be withheld.
 - **FR-015**: The unverified-caller audience MUST be limited to general schedule availability; verified clients MUST be limited to their own household and MUST NOT receive financial detail.
@@ -135,7 +135,7 @@ A client can opt out of AI contact per channel (voice / SMS / email / portal); t
 
 ### Verification Bar for Changes
 - **FR-017**: No voice-initiated change (reschedule, cancel, refill request, contact-info edit) MUST proceed on caller-ID or soft-confirm alone.
-- **FR-018**: The verification bar MUST be tiered by action sensitivity: low-sensitivity changes (reschedule/cancel) require **one** knowledge factor beyond caller-ID (e.g., pet's name + appointment day); high-sensitivity actions (contact-info edit, refill request) require **two** factors or deferral to a staff callback.
+- **FR-018**: The verification bar MUST be tiered by action sensitivity: low-sensitivity changes (reschedule/cancel) require **one** knowledge factor beyond caller-ID (e.g., pet's name + appointment day); high-sensitivity actions (contact-info edit, refill request) require **two** factors or deferral to a staff callback. Each knowledge factor MUST be validated against an authoritative source, and a factor passes **only** on a match: the **pet's name** validates against the caller's household roster (`patient_household_link`) using a normalized **exact-or-first-token** match; the **appointment day** validates against the 010 booking/schedule store. An answer that does not match the source MUST fail the factor (an unvalidated or always-passing bar does not satisfy this requirement).
 - **FR-019**: A failed verification MUST block the change, leave state unchanged, offer a staff callback, and log the attempt.
 
 ### Consent / Opt-Out Registry
@@ -153,6 +153,7 @@ A client can opt out of AI contact per channel (voice / SMS / email / portal); t
 - **Identity Resolution**: A match event from an inbound identifier to a candidate set → resolved / soft-confirmed / ambiguous / unmatched.
 - **Verification Challenge**: A knowledge-factor challenge for a voice-initiated change; sensitivity tier, factors required, outcome.
 - **Memory-Scoping Policy**: Per-audience reveal rules (default-deny) expressed as C1 policy data — the vertical half of relationship memory.
+- *Audience prose↔enum correspondence (used throughout data-model/contracts/tasks)*: the prose audiences "verified client" and "unverified caller" are the enum values `client_verified` and `caller_unverified`; "owner"/"manager"/"staff" map to the enum `owner`/`manager`/`staff`. Same five audiences, two surface forms.
 - **Consent Record**: Per-contact, channel-aware AI-contact preference with revocation/reversal audit trail.
 - **Inbound Message / Opt-Out Event**: A received inbound message and the STOP/keyword handling that records a consent change.
 
@@ -161,7 +162,7 @@ A client can opt out of AI contact per channel (voice / SMS / email / portal); t
 - **SC-001**: Scoping-violation rate (a reveal outside the audience's policy) is **0** across a red-team test suite.
 - **SC-002**: Recorded opt-outs are honored on **100%** of Vera-initiated outbound attempts across every covered channel.
 - **SC-003**: **0** instances of a multi-match lookup resolving to a single silently-chosen record (the `LIMIT 1` leak is eliminated).
-- **SC-004**: For inbound contacts from a matched single-contact number, Vera auto-identifies and soft-confirms in **≥90%** of cases (audited pilot data).
+- **SC-004**: *Build-time proxy* — across the synthetic fixture corpus, **every** inbound contact from an exact single-contact-match number auto-identifies and soft-confirms, and every non-single-match falls back to neutral with no name spoken (the mechanism is proven at build time; the corpus's single-match numbers ID by construction, so this is a correctness proxy, not the field rate). The **≥90% auto-ID + soft-confirm rate on audited real pilot data** is a named **Pilot-Activation gate** (measured against real ezyVet-export/pilot data, alongside the ezyVet identity audit — not the synthetic corpus).
 - **SC-005**: **0** voice-initiated changes execute without clearing the applicable verification bar.
 - **SC-006**: A STOP received on any inbound-enabled channel is recorded and reflected to staff within **60 seconds** in **≥99%** of cases.
 - **SC-007**: Existing owner→patient links migrate into households with **100%** preservation (no orphaned pets, no lost contacts).
@@ -194,8 +195,8 @@ A client can opt out of AI contact per channel (voice / SMS / email / portal); t
 **Consumer-Friendly Feature Name**: The Vera Who Knows Your Family
 
 **Key Benefits** (in customer language):
-1. Be recognized the moment you call — no re-explaining who you are or which pet you're calling about, on any channel.
+1. Be recognized the moment you call — no re-explaining who you are or which pet you're calling about. It's the after-hours line that remembers your family. *(4a is single-channel voice recognition; cross-channel continuity is a 4b announcement.)*
 2. Trust that your information stays yours — Vera knows a lot, but only ever shares what she's allowed to, with the right person.
 3. Set your contact preferences once and have them respected everywhere — opt out on any channel and it just works.
 
-**One-Line Description** (≤25 words): It's the same Vera every time — she remembers your family across every channel and knows exactly what she can and can't share with whom.
+**One-Line Description** (≤25 words): It's the same Vera every time — the voice line that remembers your family and knows exactly what she can and can't share with whom.

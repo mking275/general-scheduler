@@ -1,0 +1,30 @@
+# Feature 011 — verification_policy (contract R4). Tiered, config-driven
+# knowledge-factor bar. Soft-confirm (phone_match) is IDENTIFICATION ONLY and
+# never appears here — it authorizes no change (FR-008/017).
+
+# action -> sensitivity tier
+sensitivity:
+  reschedule: low
+  cancel: low
+  contact_edit: high
+  refill_request: high
+
+# tier -> knowledge factors required beyond caller-ID
+factors_required:
+  low: 1
+  high: 2
+
+# High-sensitivity actions may defer to a staff callback instead of clearing the
+# 2-factor bar (FR-018). Low-sensitivity actions cannot defer.
+staff_callback_deferral:
+  low: false
+  high: true
+
+# Which knowledge factors are accepted, and the authoritative source each is
+# validated against (H3/FR-018). A factor passes ONLY on a match; a wrong value
+# can never clear the bar.
+factors:
+  pet_name:
+    source: patient_household_link          # active pets only, exact-or-first-token
+  appointment_day:
+    source: booking_schedule_store          # 010 schedule store
