@@ -333,6 +333,14 @@ class HouseholdRepository:
     def get_identifiers_for_party(self, party_id: str) -> list[dict]:
         return self._select_where("contact_identifier", party_id=party_id)
 
+    def list_identifiers(self, clinic_id: str, id_type: Optional[str] = None) -> list[dict]:
+        if id_type is None:
+            return self._select_where("contact_identifier", clinic_id=clinic_id)
+        return self._select_where("contact_identifier", clinic_id=clinic_id, id_type=id_type)
+
+    def list_contacts(self, clinic_id: str) -> list[dict]:
+        return self._select_where("household_contact", clinic_id=clinic_id)
+
     def create_patient_link(self, m: Any) -> dict:
         return self._insert("patient_household_link", self._dump(m))
 
