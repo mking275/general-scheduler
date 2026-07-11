@@ -1,5 +1,12 @@
 # Feature 011 — Relationship Memory & Consent ("Vera Knows the Family"): Task List
 
+> **Final status: 37/37 tasks complete (100%).** All phases (Setup → Foundational
+> → A–G) implemented in sim/dual-mode. Cumulative backend suite green:
+> **267 passed** = 151 relationship + 116 voice (0 voice regressions after the
+> Phase-F shim upgrades). Red-team gates all zero-tolerance-clean (wrong-person
+> reveal = 0; silent single-picks = 0; changes on caller-ID/soft-confirm = 0).
+> Live-mode flips + real-data SC-004 gate remain in Pilot-Activation (below).
+
 **Branch**: `011-relationship-memory` · **Scope**: VP-4a cycle 4a only (household/identity substrate, caller ID + tiered verification, per-audience KNOW≠REVEAL scoping, consent/opt-out registry + inbound seam, shared-phone fix). 4b cross-channel threads / 4c relationship signals are out of scope. Per the implementation-reality binding, **everything external runs in sim/dual-mode** — the net-new inbound webhook + STOP processing get a simulator mirroring `backend/sms_gateway.py`'s outbound auto-detect pattern, and the resolver's ezyVet-export identity audit runs against a **synthetic dirty-data fixture corpus** (built as T007). The entire list is completable and testable with **zero live telephony / SMS / Thoth calls**. Live-mode is a config swap, deferred to the Pilot-Activation section.
 
 **Datastore for this build**: the 13 net-new 011 tables run on a **local PostgreSQL via `docker-compose`** (matching the data-model's "Postgres + RLS, not SQLite" mandate), app-level `clinic_id`/`party_id` scoping standing in for full RLS in the single-clinic build (per the plan's VP-1-slip degradation, same posture as 010). Core Thoth is **consumed, never forked** — read via the `ScopedRecall` wrapper; a Thoth stub (`recall`/`recall_by_kind`) backs the sim so no live substrate call is made.
@@ -116,17 +123,17 @@
 
 ## Phase 9 — Phase G: Test + red-team + verification (gates go-live; security boundary)
 
-- [ ] T031 [US3] [MARKETING] Scoping **red-team** harness in `backend/tests/relationship/test_scoping_red_team.py` — for each audience (owner/manager/staff/client_verified/caller_unverified) request schedule availability, own-household pet detail, **another household's detail**, and financial detail, plus explicit wrong-person reveal attempts against the collision fixture. (deps: T020, T021, T007)
+- [X] T031 [US3] [MARKETING] Scoping **red-team** harness in `backend/tests/relationship/test_scoping_red_team.py` — for each audience (owner/manager/staff/client_verified/caller_unverified) request schedule availability, own-household pet detail, **another household's detail**, and financial detail, plus explicit wrong-person reveal attempts against the collision fixture. (deps: T020, T021, T007)
   - *Verify*: **wrong-person reveal = 0** across the entire collision fixture (SC-001); every fact with no explicit allow rule is refused (deny-on-missing-rule); every reveal/withhold decision is present in `reveal_decision_log`.
-- [ ] T032 [US4] Shared-line collision red-team in `backend/tests/relationship/test_shared_line.py` — two households sharing one number; drives resolve → disambiguate → reveal. (deps: T010, T011, T028)
+- [X] T032 [US4] Shared-line collision red-team in `backend/tests/relationship/test_shared_line.py` — two households sharing one number; drives resolve → disambiguate → reveal. (deps: T010, T011, T028)
   - *Verify*: the full candidate set is returned (**0** silent single-picks, SC-003); Vera disambiguates neutrally; **no candidate name is ever spoken on a multi-candidate result**; zero household-specific detail is revealed until exactly one candidate is confirmed.
-- [ ] T033 [US5] Spoofed-caller-ID / soft-confirm-as-auth red-team in `backend/tests/relationship/test_verification_red_team.py` — a matched (or spoofed-matching) number requests changes with no / insufficient knowledge factors. (deps: T015, T016, T017)
+- [X] T033 [US5] Spoofed-caller-ID / soft-confirm-as-auth red-team in `backend/tests/relationship/test_verification_red_team.py` — a matched (or spoofed-matching) number requests changes with no / insufficient knowledge factors. (deps: T015, T016, T017)
   - *Verify*: a spoofed caller-ID authorizes **0** changes; soft-confirm alone authorizes **0** changes; a high-sensitivity action always requires 2 factors or a staff callback; **an INCORRECT knowledge-factor value is rejected** — a wrong pet name (no match in `patient_household_link`) and a wrong appointment day (no match in the 010 schedule store) each fail the factor and block the change (red-team case proving the bar validates, not merely prompts — H3/FR-018); every attempt writes a `verification_challenge` row (SC-005 = 0).
-- [ ] T034 Migration verification harness in `backend/tests/relationship/test_migration.py` — runs T008 against a fixture flat-owner set derived from the T007 corpus and asserts link preservation. (deps: T008, T007)
+- [X] T034 Migration verification harness in `backend/tests/relationship/test_migration.py` — runs T008 against a fixture flat-owner set derived from the T007 corpus and asserts link preservation. (deps: T008, T007)
   - *Verify*: **100%** link preservation (SC-007) — zero orphaned pets, zero lost contacts; a seeded broken-link case makes the migration abort loudly rather than drop silently.
-- [ ] T035 [US6] Consent timing + honor harness in `backend/tests/relationship/test_consent.py` — inbound STOP timing, outbound suppression, inbound-still-served, opt-back-in. (deps: T024, T025)
+- [X] T035 [US6] Consent timing + honor harness in `backend/tests/relationship/test_consent.py` — inbound STOP timing, outbound suppression, inbound-still-served, opt-back-in. (deps: T024, T025)
   - *Verify*: STOP recorded + staff-visible **≤60 s in ≥99%** of sim cases (SC-006); **100%** outbound suppression on covered channels (SC-002); an opted-out inbound call is still served **and persists a `consent_record` disclosure via the 010 T033 path** (asserting the disclosure record exists, not just that service continued — M6/FR-023); opt-back-in is audited.
-- [ ] T036 [US2] Auto-ID + soft-confirm **rate** audit in `backend/tests/relationship/test_auto_id_rate.py` — the **build-time proxy** for SC-004: measures the auto-identify+soft-confirm rate on matched single-contact numbers across the synthetic fixture (the ≥90% figure on *real* audited pilot data is a Pilot-Activation gate, not this build — M2). (deps: T013, T014)
+- [X] T036 [US2] Auto-ID + soft-confirm **rate** audit in `backend/tests/relationship/test_auto_id_rate.py` — the **build-time proxy** for SC-004: measures the auto-identify+soft-confirm rate on matched single-contact numbers across the synthetic fixture (the ≥90% figure on *real* audited pilot data is a Pilot-Activation gate, not this build — M2). (deps: T013, T014)
   - *Verify*: **every** exact single-contact-match inbound number in the fixture auto-identifies + soft-confirms (build-time proxy passes; single-match IDs by construction), and every non-single-match correctly falls back to neutral with no name spoken (SC-004 build-time proxy; real-data ≥90% deferred to Pilot-Activation).
 
 ---
