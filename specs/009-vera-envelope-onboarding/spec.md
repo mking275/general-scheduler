@@ -30,7 +30,10 @@ The competitive bar is explicit: Digitail markets a "Test Playground" sandbox on
 - Q: Must completeness verification include financials/AR/inventory, or only clinical/scheduling? → A: **Financials are in scope and load-bearing.** Verification and the reconciliation report cover financial, AR, and inventory history explicitly — this is Digitail's published gap and the owner-trust differentiator.
 - Q: What is the unit of onboarding — the group or the practice? → A: The **practice** is the independent ingest, verification, reconciliation, and activation unit; the 23 practices are processed as a **batch** with a group-level rollup. A blocked practice never holds the batch, and practice N inherits group-level mappings/priors.
 
-*Open product questions are marked `[NEEDS CLARIFICATION]` inline in the requirements below.*
+- Q: What completeness/quality floor gates shadow-readiness? → A (Matt, 2026-07-18): **The board kill-criterion stands: >20% of sampled records unusable → the practice is held** out of shadow-mode with the gap itemized.
+- Q: What financial-reconciliation variance blocks a practice? → A (Matt, 2026-07-18): **Zero tolerance on AR balances** — any unexplained AR variance is blocking. Invoice/payment totals: every variance is itemized and must be attributed to an identified cause; unexplained variances block.
+- Q: Reconciliation sign-off granularity? → A (Matt, 2026-07-18): **Group-level acknowledgment activates, with drill-down to each individual practice's reconciliation** available from the group report.
+- Q: Which second PIMS adapter, when? → A (Matt, 2026-07-18): **Not known yet** — the target group's PIMS mix is undetermined. The port stays pluggable; only ezyVet is built this cycle; adapter selection deferred until the mix is known.
 
 ---
 
@@ -97,7 +100,7 @@ Before a practice is called ready, the pipeline verifies the ingested data is **
 1. **Given** a normalized practice, **When** verification runs, **Then** it confirms presence and counts for every requested category — clinical, scheduling, client communications, **and financial/AR/inventory** — and flags any missing or short category.
 2. **Given** ingested financial data, **When** verification runs, **Then** AR balances, invoice counts, and payment totals are computed for reconciliation against the source's own reported figures (User Story 5).
 3. **Given** dirty-data signals (shared phones, duplicate owners, deceased pets, orphaned references), **When** verification runs, **Then** they are quantified into a per-practice quality assessment.
-4. **Given** a practice whose usable-record share is below the data-quality floor `[NEEDS CLARIFICATION: the completeness/quality floor that gates shadow-readiness — board kill-criterion suggests >20% of sampled records unusable = stop; confirm the per-practice activation threshold]`, **When** activation is evaluated, **Then** the practice is held out of shadow-mode with the gap itemized.
+4. **Given** a practice where **more than 20% of sampled records are unusable** (the confirmed quality floor), **When** activation is evaluated, **Then** the practice is held out of shadow-mode with the gap itemized.
 
 ---
 
@@ -112,8 +115,8 @@ For each practice, the pipeline produces an **owner/manager-facing reconciliatio
 **Acceptance Scenarios**:
 
 1. **Given** a verified practice, **When** the report is generated, **Then** it presents per-category requested-vs-delivered-vs-ingested counts and a financial reconciliation (AR balances, invoice totals, payment totals) against the source's reported figures.
-2. **Given** a financial variance, **When** it exceeds the acceptable tolerance `[NEEDS CLARIFICATION: acceptable financial-reconciliation variance/tolerance before a practice is blocked vs merely flagged]`, **Then** it is surfaced as a blocking discrepancy, not buried.
-3. **Given** the report, **When** it is delivered, **Then** it reaches only owner/manager surfaces — never staff — and requires owner acknowledgment before the practice is activated `[NEEDS CLARIFICATION: is reconciliation sign-off per-practice or a single group-level approval across all 23+ practices?]`.
+2. **Given** any AR-balance variance, or an invoice/payment-total variance without an attributed cause, **When** reconciliation runs, **Then** it is surfaced as a blocking discrepancy, not buried (zero AR tolerance; all other variances itemized-and-explained or blocking).
+3. **Given** the report, **When** it is delivered, **Then** it reaches only owner/manager surfaces — never staff — and activation requires a **group-level acknowledgment**, with drill-down from the group report to each individual practice's reconciliation.
 
 ---
 
@@ -145,7 +148,7 @@ The 23 practices are processed as a batch of independent units, each with its ow
 
 1. **Given** a batch of practice databases, **When** the pipeline runs, **Then** each practice progresses independently and a group-level rollup shows every practice's stage/status.
 2. **Given** one practice blocked (partial delivery or quality-floor failure), **When** the batch proceeds, **Then** unblocked practices still reach shadow-ready — the batch is not held to its slowest member.
-3. **Given** the normalization core, **When** a new PIMS is targeted, **Then** support is a new adapter behind the stable port — no fork of the orchestration/verification core. `[NEEDS CLARIFICATION: which second PIMS adapter is built first, and on what timeline, to prove the port for the mixed-PIMS ICP — discovery's cycle no-go was "design the port, build one adapter"; the ICP shift may bring a second adapter forward.]`
+3. **Given** the normalization core, **When** a new PIMS is targeted, **Then** support is a new adapter behind the stable port — no fork of the orchestration/verification core. (Second-adapter selection deferred: the target group's PIMS mix is not yet known; only ezyVet is built this cycle.)
 
 ---
 
@@ -202,12 +205,12 @@ ezyVet partial exports (e.g., missing attachments/imaging) are a known risk. Whe
 - **FR-012**: The system MUST verify **completeness** per practice — category coverage and record counts vs the format profile, and referential integrity — and flag any missing or short category.
 - **FR-013**: Completeness verification MUST explicitly cover **financial, AR, and inventory** history, computing AR balance totals, invoice counts, and payment totals for reconciliation.
 - **FR-014**: The system MUST assess **data quality** per practice, quantifying dirty-data signals (shared phones, duplicate owners, deceased pets, malformed/orphaned records) into a quality result.
-- **FR-015**: A practice below the data-quality floor MUST NOT be marked shadow-ready `[NEEDS CLARIFICATION: the exact completeness/quality floor gating shadow-readiness]`.
+- **FR-015**: A practice where **more than 20% of sampled records are unusable** MUST NOT be marked shadow-ready (confirmed quality floor, per the strategy-board kill-criterion).
 
 **Reconciliation Reporting (owner-facing)**
 - **FR-016**: The system MUST produce a per-practice **reconciliation report** showing requested-vs-delivered-vs-ingested counts by category and a **financial reconciliation** (AR balances, invoice totals, payment totals) against the source system's own reported figures, with variances itemized.
-- **FR-017**: A financial variance exceeding tolerance MUST be surfaced as a **blocking discrepancy** `[NEEDS CLARIFICATION: acceptable financial-reconciliation tolerance]`.
-- **FR-018**: The reconciliation report MUST reach **owner/manager surfaces only** and MUST require owner acknowledgment before a practice is activated `[NEEDS CLARIFICATION: per-practice vs group-level sign-off granularity]`.
+- **FR-017**: Financial reconciliation MUST apply **zero tolerance to AR balances** — any unexplained AR variance is a blocking discrepancy. All other financial variances (invoice/payment totals) MUST be itemized with an attributed cause; an unexplained variance blocks.
+- **FR-018**: The reconciliation report MUST reach **owner/manager surfaces only**. Activation requires a **group-level owner acknowledgment**; the group report MUST support drill-down to each individual practice's reconciliation.
 
 **Identity / entity_ref Bootstrapping (handoff to 011)**
 - **FR-019**: The system MUST seed `entity_ref`/`source_id` identity lineage and produce initial **household/party grouping proposals** over the real export.
@@ -222,7 +225,7 @@ ezyVet partial exports (e.g., missing attachments/imaging) are a known risk. Whe
 - **FR-024**: Each practice MUST be an **independent** unit through every stage, with a **group-level rollup** of per-practice status.
 - **FR-025**: A blocked practice MUST NOT stall the batch — unblocked practices MUST still reach shadow-ready.
 - **FR-026**: Practice N MUST be able to **inherit group-level mappings/priors** so marginal onboarding cost trends to config reuse.
-- **FR-027**: Ingest MUST be structured as a **pluggable per-PIMS adapter behind a stable port**; ezyVet is the first adapter and the core MUST NOT be forked per PIMS `[NEEDS CLARIFICATION: first non-ezyVet adapter + timeline]`.
+- **FR-027**: Ingest MUST be structured as a **pluggable per-PIMS adapter behind a stable port**; ezyVet is the first adapter and the core MUST NOT be forked per PIMS. (Second-adapter selection deferred until the target group's PIMS mix is known; only ezyVet is built this cycle.)
 
 **Invisible Adoption Constraint**
 - **FR-028**: Onboarding MUST produce **zero staff-facing artifacts** — no staff logins, training, dashboards, or notifications. It MUST provision no staff identities even when clinicians appear in the export.
