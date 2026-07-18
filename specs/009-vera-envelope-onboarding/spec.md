@@ -214,7 +214,7 @@ ezyVet partial exports (e.g., missing attachments/imaging) are a known risk. Whe
 
 **Identity / entity_ref Bootstrapping (handoff to 011)**
 - **FR-019**: The system MUST seed `entity_ref`/`source_id` identity lineage and produce initial **household/party grouping proposals** over the real export.
-- **FR-020**: The system MUST produce the **real-export identity audit corpus** in the shape spec 011's resolver and verification tiers consume; this spec MUST NOT implement runtime auto-ID, soft-confirm, or the verification bar (011).
+- **FR-020**: The system MUST produce the **real-export identity audit corpus** and MUST **define its shape** in `contracts/identity-handoff.md` as the proposed input gate for spec 011's resolver and verification tiers to adopt (011 specifies the audit as a gating *activity*, not yet a consumed *schema* — 009 owns the seam definition; coordinate, don't fork). This spec MUST NOT implement runtime auto-ID, soft-confirm, or the verification bar (011).
 - **FR-021**: Colliding or probable-duplicate records MUST be routed to a **review queue** and MUST NEVER be silently merged. During onboarding the queue MUST surface to owner/manager only (or defer to 011's runtime resolution through existing channels) — creating a staff-facing queue would violate FR-028.
 
 **Shadow-Mode Activation**

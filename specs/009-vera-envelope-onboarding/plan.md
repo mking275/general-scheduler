@@ -110,7 +110,7 @@ backend/envelope/                            # 009-owned envelope-onboarding tie
 │   ├── port.py                              # the stable PimsAdapterPort (profile/normalize) + adapter registry
 │   └── ezyvet_adapter.py                    # first adapter: ezyVet complete-export → canonical map + lineage (migration_agent field-map precedent)
 ├── normalizer.py                            # canonical load into the platform practice model; source_id/entity_ref lineage; deterministic + idempotent upsert
-├── canonical_model.py                       # canonical entity definitions + the net-new financial/AR/ledger/payment + inventory tables (where absent)
+│                                            #   (canonical entity + net-new financial/AR/ledger/payment + inventory MODELS live in backend/models.py per T002 — 010/011 single-file precedent, NOT a separate canonical_model.py)
 ├── completeness.py                          # category coverage + counts vs profile + referential integrity; financial/AR/inventory explicit (FR-012/013)
 ├── quality.py                               # dirty-data signals (shared phones, dup owners, deceased pets, orphans) → QualityAssessment; >20% floor (FR-014/015)
 ├── reconciliation.py                        # ReconciliationReport: requested/delivered/ingested by category + financial recon; zero-AR-tolerance; owner acknowledgment (FR-016–018)
@@ -133,9 +133,8 @@ backend/tests/envelope/
 └── test_*.py                                # per-phase + red-team suites
 
 specs/009-vera-envelope-onboarding/
-├── plan.md                                  # this file
-├── research.md                              # Phase 0 — decisions + rationale
-├── data-model.md                            # net-new onboarding-control tables + canonical-model extensions
+├── plan.md                                  # this file — also carries the Phase-0 decisions/rationale (Technical Context, Conflicts, Top-3 Risks); no separate research.md
+├── data-model.md                            # net-new onboarding-control tables + canonical-model extensions (authored; T002 entity source of truth)
 └── contracts/
     ├── pims-adapter-port.md                 # the stable profile/normalize port (second-adapter seam)
     ├── identity-handoff.md                  # entity_ref + identity-audit-corpus shape to 011 (the agreed seam)
@@ -171,7 +170,7 @@ Total **~15–19 ew**. Calendar shorter with parallelism (the adapter/discovery 
 - **§5 delivery (~Aug 3) — the real data. Format unknown until it lands.** *Fallback (this entire build):* the synthetic ezyVet-shaped fixture is the substrate; format discovery re-profiles the real export as a **config swap** (Pilot-Activation) with no core change. A delivered variant the ezyVet adapter cannot fully map **flags for adapter work** rather than forcing a wrong mapping (edge case).
 - **Counsel sign-off on the clinic-owned-data structure — HARD gate, whole-spec.** *Fallback:* none on normalization — the state machine cannot advance past `received` into `profiled/normalized` without the `counsel_signoff` row. Vault receipt proceeds (§6.3). This is the one gate with no engineering bypass by design.
 - **Live extraction subprocessor DPA (Gemini no-retention) — pending.** *Fallback:* sim extraction over fixtures; the live flip is counsel-gated Pilot-Activation.
-- **011 identity resolver/verification tiers — the corpus consumer.** *Coordinate, don't fork:* 009 **produces** the real-export identity audit corpus that is 011's explicit hard input gate (011 Phase A). The handoff is the `entity_ref` + audit-corpus/`review_queue` shape (contract `identity-handoff.md`); 009 does **not** implement runtime auto-ID / soft-confirm / the verification bar (011). 011's flat-owners migration reads the `owners` table 009 hydrates (011 data-model M1) — the seam is agreed.
+- **011 identity resolver/verification tiers — the corpus consumer.** *Coordinate, don't fork:* 011's spec references a real-export identity audit as the **gating activity** that must precede trusted auto-ID (011 spec: resolver "gated on a real-export identity audit"), and its concrete shared artifacts are the `entity_ref` keys and the `HouseholdReviewQueue` (candidate-set/FR-010) — but 011 does **not** yet specify an `IdentityAuditCorpus` *schema* as a consumed input. So 009 **defines** that seam: it produces the real-export audit corpus and **freezes its shape in `contracts/identity-handoff.md` (T030) as the proposed 011 input gate, for 011 to adopt** — not "the shape 011 already consumes." 009 reuses `entity_ref.py` + `review_queue.py` verbatim and does **not** implement runtime auto-ID / soft-confirm / the verification bar (011). 011's flat-owners migration reads the `owners` table 009 hydrates — coordinate at the seam, don't fork.
 - **Canonical-model shape read by the shadow/advise engine (010/011/envelope-MVP) — the downstream consumer.** *Coordinate:* the canonical practice model + lineage shape must be agreed at the seam so the advise engine reads what 009 writes; 009 ends at *shadow-ready* and does not build the shadow operation.
 - **VP-1 Postgres + RLS** — same posture as 010/011: single-clinic app-scoped Postgres degradation if RLS slips (pilot-only); do **not** regress to SQLite (chain-of-custody + reconciliation + identity-audit need the envelope plane).
 - **Second PIMS adapter — deferred** (the target group's PIMS mix is undetermined, spec clarification). The port stays pluggable; only ezyVet is built this cycle. Not a blocker.
@@ -180,6 +179,7 @@ Total **~15–19 ew**. Calendar shorter with parallelism (the adapter/discovery 
 
 ## Test Strategy (summary; detail in Phase H)
 
+0. **Counsel-gate-before-normalize (FR-004, the whole-spec legal gate)** — assert that across a full batch **no** database is reachable at `profiled`/`normalized` without a recorded `counsel_signoff` row; the guard has no engineering bypass. (The one gate previously lacking a dedicated harness — now asserted at the T045 go-live checkpoint alongside the other three.)
 1. **Chain-of-custody-before-parse (SC-001)** — assert every received database has a vault object + checksum + scope-vs-request record written **before** any parser runs; no parse is reachable pre-receipt.
 2. **Profile-gate (SC-002)** — assert normalization is unreachable for a database with no `FormatProfile`; **0** databases normalized without a profile.
 3. **Idempotency + lineage (SC-003)** — normalize the fixture twice; assert **0** duplicate canonical records, stable identifiers, and **100%** of records resolve back to a source record via `entity_ref`/`source_id`.
