@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: 216mm 5000mm; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'DejaVu Sans', sans-serif;
+    color: #1f2a2e;
+    background: #f6f5f1;
+    width: 216mm;
+  }
+  .page { padding: 0 16mm; }
+
+  /* ---------- header ---------- */
+  .hero {
+    background: #12343b;
+    color: #f6f5f1;
+    padding: 22mm 16mm 16mm 16mm;
+  }
+  .hero .kicker {
+    font-size: 8.5pt; letter-spacing: 2.5px; text-transform: uppercase;
+    color: #7fb6a4; margin-bottom: 7mm;
+  }
+  .hero h1 {
+    font-family: 'DejaVu Serif', serif;
+    font-size: 30pt; font-weight: bold; line-height: 1.15; margin-bottom: 5mm;
+  }
+  .hero .sub { font-size: 12pt; color: #c8d6d2; line-height: 1.5; max-width: 160mm; }
+  .hero .meta {
+    margin-top: 9mm; padding-top: 4mm; border-top: 1px solid #2e5a55;
+    font-size: 8.5pt; color: #9fb8b0; display: flex; justify-content: space-between;
+  }
+
+  /* ---------- section scaffolding ---------- */
+  .section { padding: 11mm 16mm 3mm 16mm; }
+  .section-num {
+    font-size: 8.5pt; letter-spacing: 2px; text-transform: uppercase;
+    color: #2e7d6b; font-weight: bold; margin-bottom: 2.5mm;
+  }
+  h2 {
+    font-family: 'DejaVu Serif', serif;
+    font-size: 17pt; color: #12343b; margin-bottom: 4.5mm; line-height: 1.2;
+  }
+  p { font-size: 10pt; line-height: 1.62; margin-bottom: 3.5mm; }
+  .lede { font-size: 11pt; line-height: 1.6; color: #1f2a2e; }
+  strong { color: #12343b; }
+
+  .rule { border: none; border-top: 1px solid #d8d4c8; margin: 8mm 16mm 0 16mm; }
+
+  /* ---------- components ---------- */
+  .verdict {
+    background: #12343b; color: #edf3f1; border-radius: 3mm;
+    padding: 7mm 8mm; margin: 4mm 0 5mm 0;
+  }
+  .verdict .v-label { font-size: 8pt; letter-spacing: 2px; text-transform: uppercase; color: #7fb6a4; margin-bottom: 2.5mm; }
+  .verdict p { font-size: 11.5pt; line-height: 1.55; margin: 0; color: #edf3f1; }
+
+  .callout {
+    background: #eaf2ee; border-left: 1.6mm solid #2e7d6b; border-radius: 0 2mm 2mm 0;
+    padding: 5mm 6mm; margin: 4.5mm 0;
+  }
+  .callout p { margin: 0; font-size: 10pt; }
+  .callout .c-label { font-size: 8pt; letter-spacing: 1.5px; text-transform: uppercase; color: #2e7d6b; font-weight: bold; margin-bottom: 1.8mm; }
+
+  .warn { background: #f4ece2; border-left-color: #b5773a; }
+  .warn .c-label { color: #9a6229; }
+
+  table { width: 100%; border-collapse: collapse; margin: 4mm 0 5mm 0; font-size: 9.3pt; }
+  th {
+    background: #12343b; color: #edf3f1; text-align: left;
+    padding: 2.8mm 3.5mm; font-size: 8.6pt; letter-spacing: 0.5px;
+  }
+  td { padding: 2.8mm 3.5mm; border-bottom: 1px solid #ddd8cc; vertical-align: top; line-height: 1.45; }
+  tr:nth-child(even) td { background: #efede7; }
+  td.axis { font-weight: bold; color: #12343b; white-space: nowrap; }
+
+  .statgrid { display: flex; gap: 4mm; margin: 4.5mm 0; }
+  .stat {
+    flex: 1; background: #ffffff; border: 1px solid #ddd8cc; border-radius: 2.5mm;
+    padding: 4.5mm 4mm; text-align: center;
+  }
+  .stat .n { font-family: 'DejaVu Serif', serif; font-size: 17pt; font-weight: bold; color: #12343b; }
+  .stat .d { font-size: 8pt; color: #5b6b66; margin-top: 1.5mm; line-height: 1.4; }
+
+  ul.tight { margin: 2mm 0 4mm 6mm; }
+  ul.tight li { font-size: 10pt; line-height: 1.55; margin-bottom: 2.2mm; }
+
+  .quote {
+    font-family: 'DejaVu Serif', serif; font-style: italic; font-size: 10.5pt;
+    color: #40534e; border-left: 1mm solid #b5b0a2; padding: 1mm 0 1mm 5mm; margin: 4mm 0 4mm 2mm;
+    line-height: 1.55;
+  }
+  .quote .attr { display: block; font-style: normal; font-family: 'DejaVu Sans', sans-serif; font-size: 8pt; color: #7a877f; margin-top: 1.8mm; }
+
+  .footer {
+    margin-top: 10mm; background: #12343b; color: #9fb8b0;
+    padding: 8mm 16mm; font-size: 8.5pt; line-height: 1.6;
+  }
+  .footer strong { color: #edf3f1; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="kicker">Competitive Intelligence Briefing &nbsp;·&nbsp; Prepared for Dr. Jay Goldsmith, Synergy Vet</div>
+  <h1>Digitail: Strategic Analysis</h1>
+  <div class="sub">You flagged Digitail as the farthest along in veterinary AI. We ran a four-lane teardown — product, company &amp; strategy, field evidence, and technical AI depth — against primary sources. This is what we found, and what it means for Synergy Vet.</div>
+  <div class="meta">
+    <span>July 2026 &nbsp;·&nbsp; VetAgent / Vera</span>
+    <span>All figures verified against primary sources, July 16–18, 2026</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">01 · The Verdict</div>
+  <h2>Right about one axis. It's not the axis that decides this.</h2>
+  <p class="lede">Digitail genuinely is the farthest along at <strong>shipping AI features inside a practice-management system</strong>. We verified roughly 23 live AI workflows across their three "Tails" assistants — documented, generally available, and actually used. No other PIMS is close; the incumbents are still at dictation.</p>
+  <div class="verdict">
+    <div class="v-label">The finding that frames everything else</div>
+    <p>Digitail's breadth is real — but nearly every workflow is <strong>draft-for-human-review</strong>, their phone capability is <strong>outsourced to third-party vendors</strong>, their largest customer ever is a <strong>22-hospital group</strong>, and getting any of it requires <strong>replacing your PIMS</strong>. On autonomy, voice, enterprise scale, and invisibility — the four things that matter to a 23-clinic group on ezyVet — they are structurally behind.</p>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">02 · Company Snapshot</div>
+  <h2>Who they are, in verified numbers</h2>
+  <div class="statgrid">
+    <div class="stat"><div class="n">$37M+</div><div class="d">total raised; $23M Series B led by Five Elms Capital, Nov 2025</div></div>
+    <div class="stat"><div class="n">~99</div><div class="d">employees (May 2026), founded 2018 in Iași, Romania; now Delaware-HQ</div></div>
+    <div class="stat"><div class="n">10,000+</div><div class="d">veterinarians claimed; customer base roughly doubled in the last year</div></div>
+    <div class="stat"><div class="n">3M</div><div class="d">pet parents on their consumer app — rated 4.9★ across ~3,200 reviews</div></div>
+  </div>
+  <p>The money tells the strategy: their Series A was led by a European venture firm (Atomico); their Series B lead is a <strong>US growth-equity firm</strong>. Combined with a Delaware HQ, new US/Canada sales hires for both small-practice and enterprise motions, and heavy customer-success hiring, the picture is unambiguous: <strong>a North American land-grab of independent clinics, plus a first attempt to climb up-market</strong> — run on a growth-equity playbook that typically ends in a strategic exit.</p>
+</div>
+
+<hr class="rule">
+
+<div class="section">
+  <div class="section-num">03 · Product Reality</div>
+  <h2>What's actually under the hood</h2>
+  <p>Digitail's own engineering FAQ states their AI is built on rented foundation models — OpenAI, Anthropic, AWS, Meta, Mistral — assembled as "a chain of AIs&hellip; tuned using prompt engineering." They currently advertise <strong>zero AI/ML engineering roles</strong>; their one open technical position is a backend engineer. There is no proprietary model, no published accuracy data, no SOC 2 certification, and no public developer API.</p>
+  <p>That doesn't make the product fake — the workflows exist and users like them. It means the moat is <strong>distribution and PIMS lock-in, not technology</strong>. Anyone can rent the same models. What can't be copied quickly is what they haven't built:</p>
+  <table>
+    <tr><th style="width:22%">Axis</th><th style="width:44%">Digitail today (their own documentation)</th><th>Why it matters to Synergy Vet</th></tr>
+    <tr>
+      <td class="axis">Autonomy</td>
+      <td>Draft-for-review almost everywhere. Their docs: client messages "will not be sent unless you click the send button." True autonomy limited to reminders, intake summaries, commission math.</td>
+      <td>An assistant that drafts still consumes staff attention on every action. The labor math only changes when work completes without a human in the middle.</td>
+    </tr>
+    <tr>
+      <td class="axis">Voice</td>
+      <td><strong>No autonomous phone answering.</strong> Their VoIP is a human-answered softphone with AI post-call summaries. For actual AI answering, their integrations page resells two third-party vendors.</td>
+      <td>The phone is where after-hours revenue and staff burnout live. The "farthest along" AI PIMS outsources it.</td>
+    </tr>
+    <tr>
+      <td class="axis">Enterprise scale</td>
+      <td>Largest publicly known customer: Veterinary United, 22 hospitals (their own case study). Enterprise reporting is a paid add-on. No documented org hierarchy, multi-entity finance, or SOC 2.</td>
+      <td>Synergy Vet at 23 clinics would be at or past the largest deployment they have ever done.</td>
+    </tr>
+    <tr>
+      <td class="axis">Adoption path</td>
+      <td>Rip-and-replace by design: Tails requires becoming a Digitail PIMS customer. Their migration promises clinical and scheduling data — financial/AR history is not explicitly included.</td>
+      <td>A 23-site migration off just-upgraded ezyVet Enterprise is precisely the disruption you've ruled out for your teams.</td>
+    </tr>
+  </table>
+  <div class="callout">
+    <div class="c-label">The detail worth remembering</div>
+    <p>Digitail also ships a standalone dictation app for vets who <em>can't</em> switch PIMS, syncing notes back to their platform. Read that closely: <strong>they know rip-and-replace is their ceiling</strong>, and their own workaround is a miniature version of the wrap-around approach we're building for you — one workflow wide.</p>
+  </div>
+</div>
+
+<hr class="rule">
+
+<div class="section">
+  <div class="section-num">04 · Field Evidence</div>
+  <h2>What practices your size actually experience</h2>
+  <p>Their headline rating is 4.7★ — but it's a single 99-review pool syndicated across three Gartner-owned sites, heavily weighted to reviews written within six months of onboarding. The pattern underneath is the strategic signal:</p>
+  <ul class="tight">
+    <li><strong>Praise clusters at the solo/mobile end</strong> — modern design, the pet-owner app, and real time savings from the AI scribe. These strengths are genuine.</li>
+    <li><strong>Complaints cluster at exactly your scale.</strong> The 1–2★ reviews come disproportionately from 11–50-employee and multi-location organizations: per-location employee setup broken, billing accuracy issues, inventory rated 3.6/5, and one migration where <strong>open client balances failed to transfer — thousands in lost revenue</strong>.</li>
+    <li><strong>Support is a coin flip.</strong> Small practices report 15-minute resolutions. Larger groups report the opposite:</li>
+  </ul>
+  <div class="quote">
+    "We were lied to when we signed and unless you copy the CEO on every email, no one answers."
+    <span class="attr">— multi-location practice administrator, verified review, 2026. Another: "Rolled into the US market way too soon."</span>
+  </div>
+  <p>One more absence worth noting: across Reddit and the open practitioner forums, there is <strong>essentially zero organic discussion of Digitail</strong> — the narrative lives on review sites and their own case studies. For a claimed category leader, independent validation is thin. Practices migrating <em>to</em> Digitail come overwhelmingly from legacy on-premise systems; they win "escape old software," not head-to-head contests against modern platforms like the one you just deployed.</p>
+</div>
+
+<hr class="rule">
+
+<div class="section">
+  <div class="section-num">05 · Strategy Read</div>
+  <h2>The game they're playing — and the collision it creates</h2>
+  <p>Twelve-to-twenty-four-month trajectory, reasoned from the evidence: continue the AI-branded land-grab of independents on all-in-one pricing; shift the center of gravity to North America; begin selling to multi-location groups (the sales hires are already posted); and position for a strategic exit. Their "independent, not corporate-owned" marketing is precisely the scarcity that makes them <strong>a prized acquisition target for the incumbents they campaign against</strong> — with IDEXX the most logical buyer, acquiring a modern cloud PIMS and an AI story in one purchase.</p>
+  <div class="callout warn">
+    <div class="c-label">The implication for the consolidation endgame</div>
+    <p>If the eventual industry question is "who supplies the AI operating layer for consolidated veterinary medicine," Digitail is auditioning for that role from inside their own PIMS — and a buyer could take them off the board. The counter-position is to be <strong>provably best at the layer they didn't build</strong>: genuine autonomous execution, working across existing PIMS installations, at multi-group enterprise scale, with measured results from a real operator. That evidence is exactly what the Synergy Vet pilot produces — and nobody in the category, Digitail included, publishes real containment or outcome numbers today. The first measured group-scale results in this industry will be quoted for years.</p>
+  </div>
+  <p>Two honest cautions, because you should hear our risks too: <strong>(1) their voice gap is closable</strong> — they own the telephony and the records, and $23M buys a voice layer within a year if they prioritize it; <strong>(2) distribution asymmetry is real</strong> — 10,000 vets and a loved consumer app is a serious base. Our answer to both is speed: the pilot's autonomy and voice capabilities are built and in simulation testing now, not on a roadmap.</p>
+</div>
+
+<hr class="rule">
+
+<div class="section">
+  <div class="section-num">06 · What This Means for Synergy Vet</div>
+  <h2>Bottom line</h2>
+  <p class="lede">Digitail validates the thesis — AI in veterinary practice is real, valuable, and adopted when it saves genuine time. And they set a pace worth respecting. But for Synergy Vet specifically, they fail the entry condition before the conversation starts: <strong>they cannot arrive without your staff living through a software migration</strong>, and their own field record says groups your size is where their seams show.</p>
+  <p>The lane they can't drive in is the one we picked together: <strong>arrive inside your existing ezyVet environment invisibly, act autonomously under enforced guardrails, prove it with your numbers</strong> — and let your staff's own demand, not a cutover date, set the pace of everything that follows.</p>
+  <table>
+    <tr><th style="width:34%">What we watch quarterly</th><th>Why</th></tr>
+    <tr><td class="axis" style="white-space:normal">Digitail ships autonomous voice</td><td>Their worst gap closing; do their third-party answering partners disappear from the integrations page?</td></tr>
+    <tr><td class="axis" style="white-space:normal">In-house AI/ML hiring appears</td><td>Signals a shift from renting AI to building it</td></tr>
+    <tr><td class="axis" style="white-space:normal">A named consolidator logo lands</td><td>Their up-market motion becoming real</td></tr>
+    <tr><td class="axis" style="white-space:normal">Acquisition chatter</td><td>Re-shapes the endgame for everyone in the category</td></tr>
+  </table>
+</div>
+
+<div class="footer">
+  <strong>Prepared by Vera for Dr. Jay Goldsmith / Synergy Vet · July 2026.</strong><br>
+  Four research lanes, primary sources throughout: Digitail's product documentation, help center, and release notes; funding filings and press; verified review platforms; hiring boards. Question raised Tuesday — full teardown delivered inside 48 hours. Every claim in this briefing traces to a cited source in the underlying research corpus, available on request.
+</div>
+
+</body>
+</html>
