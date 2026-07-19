@@ -1,6 +1,6 @@
 # Data Copy Request — ezyVet Customer Data
 
-*Print on [Goldsmith Group entity] letterhead. Bracketed items to be completed before sending. Send via a trackable channel (email to your ezyVet account manager and support, with delivery receipt), and keep a copy.*
+*Print on Synergy Vet letterhead. Bracketed items to be completed before sending. Send via a trackable channel (email to your ezyVet account manager and support, with delivery receipt), and keep a copy.*
 
 ---
 
@@ -10,7 +10,7 @@
 IDEXX Laboratories, Inc. — ezyVet
 [Support email / portal reference]
 
-**From:** [Legal entity name of the Goldsmith veterinary group]
+**From:** Synergy Vet [exact legal entity name, if different — e.g. "Synergy Vet, LLC"]
 [Address]
 [Group account identifier(s), if known]
 
@@ -44,7 +44,7 @@ Sincerely,
 
 _______________________________
 **Dr. Jay Goldsmith**
-[Title], [Legal entity name]
+[Title], Synergy Vet
 [Email] · [Phone]
 
 ---
