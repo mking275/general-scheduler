@@ -59,6 +59,7 @@ ONBOARDING_CONTROL_TABLES = (
 )
 
 CANONICAL_TABLES = (
+    "canonical_record",
     "ledger_entry",
     "invoice_record",
     "payment_record",
@@ -279,6 +280,28 @@ class OnboardingRepository:
             Column("delivery_id", String, nullable=True),
             Column("per_practice", J()),
             Column("created_at", String),
+        )
+
+        # ---- generic canonical spine (all categories) ---------------- #
+        # Every normalized record (clinical/scheduling/comms/financial/…) lands
+        # here with its entity_ref/source_id lineage — the store the idempotency
+        # + 100%-lineage gate (T019/T038) diffs, and the hydration store for the
+        # canonical clinical/scheduling categories that have no typed net-new
+        # table in this build. Financial/inventory categories ALSO land in their
+        # typed tables below (the reconciliation/completeness read models).
+        self.tables["canonical_record"] = Table(
+            "canonical_record", md,
+            Column("id", String, primary_key=True),
+            Column("clinic_id", String, nullable=False, index=True),
+            Column("practice_id", String, nullable=False, index=True),
+            Column("category", String, nullable=False, index=True),
+            Column("entity_ref", String, nullable=False),
+            Column("source_id", String, nullable=False),
+            Column("payload", J()),
+            Column("unmapped_fields", J()),
+            Column("created_at", String),
+            Index("ix_canonical_record_ref", "practice_id", "entity_ref", unique=True),
+            Index("ix_canonical_record_cat", "practice_id", "category"),
         )
 
         # ---- net-new canonical financial / inventory ----------------- #
@@ -624,6 +647,14 @@ class OnboardingRepository:
 
     def count_canonical(self, table_name: str, practice_id: str) -> int:
         return self._count(table_name, practice_id=practice_id)
+
+    def list_canonical_records(self, practice_id: str,
+                               category: Optional[str] = None) -> list[dict]:
+        """Read the generic canonical spine, optionally filtered to one category."""
+        if category is None:
+            return self._select_where("canonical_record", practice_id=practice_id)
+        return self._select_where("canonical_record", practice_id=practice_id,
+                                  category=category)
 
 
 class _ReceiptWriter:
