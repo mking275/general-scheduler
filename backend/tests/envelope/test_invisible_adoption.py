@@ -14,8 +14,6 @@ import pytest
 from backend.envelope import readiness
 from backend.envelope.batch import BatchOrchestrator
 from backend.envelope.readiness import ReadinessEvaluator, scan_source_for_staff_verbs
-from backend.relationship.household_repository import HouseholdRepository
-from backend.relationship.review_queue import ReviewQueue
 from backend.tests.envelope.fixtures.ezyvet_synthetic_export import generate_batch
 
 
@@ -31,11 +29,11 @@ def batch_run(request):
         repo.init_db()
     except Exception as exc:  # pragma: no cover
         pytest.skip(f"envelope Postgres unavailable: {exc}")
-    hr = HouseholdRepository(db_url)
-    hr.init_db()
+    from backend.tests.envelope import _pipeline as P
+    rq, _hr = P.review_queue(db_url)
     clinic = f"redteam-{uuid.uuid4().hex[:6]}"
     exports = generate_batch(seed=20260803, n=23, clinic_id=clinic)
-    result = BatchOrchestrator(repo, ReviewQueue(hr)).run(clinic, exports)
+    result = BatchOrchestrator(repo, rq).run(clinic, exports)
     return repo, clinic, exports, result
 
 
@@ -108,8 +106,6 @@ def test_readiness_gate_rejects_staff_facing_run(repo, monkeypatch):
     from backend.envelope.reconciliation import Reconciler
     from backend.envelope.owner_surface import OwnerSurface
     from backend.envelope.identity_bootstrap import IdentityBootstrap
-    from backend.relationship.household_repository import HouseholdRepository
-    from backend.relationship.review_queue import ReviewQueue
     from backend.models import PracticeState
 
     pid = f"p-reject-{uuid.uuid4().hex[:6]}"
@@ -117,8 +113,8 @@ def test_readiness_gate_rejects_staff_facing_run(repo, monkeypatch):
     Reconciler(repo).reconcile(P.CLINIC, pid, exp.reported_figures)
     OwnerSurface(repo).acknowledge_group(P.CLINIC, [pid], acknowledged_by="owner")
     sm.advance(pid, PracticeState.RECONCILED)
-    hr = HouseholdRepository(repo.db_url); hr.init_db()
-    boot = IdentityBootstrap(repo, ReviewQueue(hr))
+    rq, _hr = P.review_queue(repo.db_url)
+    boot = IdentityBootstrap(repo, rq)
     boot.build_corpus(P.CLINIC, pid, boot.bootstrap(P.CLINIC, pid),
                       answer_key=exp.answer_key)
     sm.advance(pid, PracticeState.IDENTITY_BOOTSTRAPPED)

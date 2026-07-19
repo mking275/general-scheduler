@@ -394,11 +394,30 @@ class OnboardingRepository:
     #  init_db (idempotent-additive)
     # ------------------------------------------------------------------ #
     def init_db(self) -> None:
-        """Create all tables + FORCE-RLS + append-only triggers (idempotent)."""
+        """Create all tables + FORCE-RLS + append-only triggers (idempotent).
+
+        The RLS/policy/trigger DDL is installed **once** and then skipped on
+        repeated calls: re-issuing ``ALTER TABLE … FORCE RLS`` / ``DROP+CREATE
+        POLICY`` / ``CREATE OR REPLACE FUNCTION`` / ``DROP+CREATE TRIGGER`` on
+        every ``init_db()`` churns the shared system catalogs and races
+        autovacuum ("tuple concurrently updated") when many tests each re-init.
+        The sentinel (the append-only function's presence) makes the reinstall a
+        no-op once the tier is provisioned."""
         self.metadata.create_all(self.engine)
-        if self.engine.dialect.name == "postgresql":
+        if self.engine.dialect.name == "postgresql" and not self._security_installed():
             self._install_force_rls()
             self._install_append_only_triggers()
+
+    def _security_installed(self) -> bool:
+        """True iff the RLS policies + append-only triggers are already present
+        (the append-only function is the sentinel)."""
+        try:
+            with self.engine.connect() as conn:
+                return bool(conn.execute(text(
+                    "SELECT 1 FROM pg_proc WHERE proname = 'envelope_reject_mutation'"
+                )).first())
+        except Exception:  # pragma: no cover - treat as not-installed, install below
+            return False
 
     def _install_force_rls(self) -> None:
         """Enable + FORCE row-level security on every 009-owned table (SEC-20),
@@ -475,11 +494,14 @@ class OnboardingRepository:
                 c.execute(insert(tbl).values(**payload))
         return payload
 
-    def _select_where(self, table_name: str, **eq) -> list[dict]:
+    def _select_where(self, table_name: str, _order_by: Optional[str] = None,
+                      **eq) -> list[dict]:
         tbl = self.tables[table_name]
         stmt = select(tbl)
         for k, v in eq.items():
             stmt = stmt.where(tbl.c[k] == v)
+        if _order_by is not None:
+            stmt = stmt.order_by(tbl.c[_order_by])
         with self.engine.connect() as conn:
             return [dict(r) for r in conn.execute(stmt).mappings().all()]
 
@@ -520,7 +542,12 @@ class OnboardingRepository:
         return rows[0] if rows else None
 
     def get_practice_database_by_practice(self, practice_id: str) -> Optional[dict]:
-        rows = self._select_where("practice_database", practice_id=practice_id)
+        # deterministic order: on a superseded practice two rows share the
+        # practice_id (the superseded predecessor + the fresh receipt). Order by
+        # created_at so ``rows[0]`` is always the earliest — a stable read that
+        # does not depend on Postgres's unordered row-return order.
+        rows = self._select_where("practice_database", _order_by="created_at",
+                                  practice_id=practice_id)
         return rows[0] if rows else None
 
     def list_practice_databases(self, clinic_id: str) -> list[dict]:
@@ -565,14 +592,14 @@ class OnboardingRepository:
         return self._insert("scope_check", self._dump(m))
 
     def get_scope_check(self, practice_id: str) -> Optional[dict]:
-        rows = self._select_where("scope_check", practice_id=practice_id)
+        rows = self._select_where("scope_check", _order_by="created_at", practice_id=practice_id)
         return rows[-1] if rows else None
 
     def create_format_profile(self, m: Any) -> dict:
         return self._insert("format_profile", self._dump(m))
 
     def get_format_profile(self, practice_id: str) -> Optional[dict]:
-        rows = self._select_where("format_profile", practice_id=practice_id)
+        rows = self._select_where("format_profile", _order_by="created_at", practice_id=practice_id)
         return rows[-1] if rows else None
 
     def has_format_profile(self, practice_id: str) -> bool:
@@ -588,27 +615,27 @@ class OnboardingRepository:
         return self._insert("completeness_result", self._dump(m))
 
     def get_completeness_result(self, practice_id: str) -> Optional[dict]:
-        rows = self._select_where("completeness_result", practice_id=practice_id)
+        rows = self._select_where("completeness_result", _order_by="created_at", practice_id=practice_id)
         return rows[-1] if rows else None
 
     def create_quality_assessment(self, m: Any) -> dict:
         return self._insert("quality_assessment", self._dump(m))
 
     def get_quality_assessment(self, practice_id: str) -> Optional[dict]:
-        rows = self._select_where("quality_assessment", practice_id=practice_id)
+        rows = self._select_where("quality_assessment", _order_by="created_at", practice_id=practice_id)
         return rows[-1] if rows else None
 
     def append_reconciliation_report(self, m: Any) -> dict:
         return self._insert("reconciliation_report", self._dump(m))
 
     def get_reconciliation_reports(self, practice_id: str) -> list[dict]:
-        return self._select_where("reconciliation_report", practice_id=practice_id)
+        return self._select_where("reconciliation_report", _order_by="created_at", practice_id=practice_id)
 
     def append_identity_audit_corpus(self, m: Any) -> dict:
         return self._insert("identity_audit_corpus", self._dump(m))
 
     def get_identity_audit_corpus(self, practice_id: str) -> Optional[dict]:
-        rows = self._select_where("identity_audit_corpus", practice_id=practice_id)
+        rows = self._select_where("identity_audit_corpus", _order_by="created_at", practice_id=practice_id)
         return rows[-1] if rows else None
 
     def append_gap_notice(self, m: Any) -> dict:
@@ -621,7 +648,7 @@ class OnboardingRepository:
         return self._insert("practice_readiness", self._dump(m))
 
     def get_practice_readiness(self, practice_id: str) -> Optional[dict]:
-        rows = self._select_where("practice_readiness", practice_id=practice_id)
+        rows = self._select_where("practice_readiness", _order_by="created_at", practice_id=practice_id)
         return rows[-1] if rows else None
 
     def create_batch_rollup(self, m: Any) -> dict:
@@ -631,7 +658,7 @@ class OnboardingRepository:
         return self._select_where("batch_rollup", clinic_id=clinic_id)
 
     def latest_batch_rollup(self, clinic_id: str) -> Optional[dict]:
-        rows = self._select_where("batch_rollup", clinic_id=clinic_id)
+        rows = self._select_where("batch_rollup", _order_by="created_at", clinic_id=clinic_id)
         return rows[-1] if rows else None
 
     # ---- canonical financial / inventory ----------------------------- #

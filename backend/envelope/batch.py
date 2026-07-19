@@ -121,10 +121,14 @@ class BatchOrchestrator:
             outcome.disposition = disp.get(exp.practice_id, "received")
             result.outcomes[exp.practice_id] = outcome
 
-        # 3) group acknowledgment (owner surface) — acks non-blocking reconciled
-        #    practices, skips blocking ones (never stalls the batch).
+        # 3) group acknowledgment (owner surface) — over the finalizable
+        #    (`verified`) practices only: acks the non-blocking ones and skips the
+        #    blocking ones. Off-path practices (`held`/`partial`) are excluded, so
+        #    an incomplete delivery is never acknowledged as complete.
+        ackable = [pid for pid in order
+                   if result.outcomes[pid].state == PracticeState.VERIFIED.value]
         OwnerSurface(self.repo, self.sms).acknowledge_group(
-            clinic_id, order, acknowledged_by="owner")
+            clinic_id, ackable, acknowledged_by="owner")
 
         # 4) Pass B — per practice, INDEPENDENT: reconciled → identity → shadow.
         for exp in exports:
@@ -195,15 +199,20 @@ class BatchOrchestrator:
             report = Reconciler(self.repo).reconcile(
                 clinic_id, pid, getattr(exp, "reported_figures", {}) or {})
 
-            # partial delivery → owner-facing gap notice + PARTIAL hold (proceeds
-            # on delivered data, not marked complete).
-            gap = GapNoticeService(self.repo).detect_and_notice(
-                clinic_id, pid, state_machine=self.sm)
-
+            # zero-AR-tolerance FIRST: an unexplained AR variance is a blocking
+            # discrepancy — it must NOT be demoted to a mere `partial` delivery
+            # (a blocked practice stays `verified`, held out of reconciled by the
+            # state-machine guard; it is never delta-mergeable).
             if report.blocking:
                 outcome.state = self.sm.current_state(pid)   # stays `verified`
                 outcome.blocked_reason = "unexplained AR variance (zero-tolerance)"
                 return outcome
+
+            # partial delivery → owner-facing gap notice + PARTIAL hold (proceeds
+            # on delivered data, not marked complete). Only reached for a
+            # non-blocking practice.
+            gap = GapNoticeService(self.repo).detect_and_notice(
+                clinic_id, pid, state_machine=self.sm)
             if gap is not None:
                 outcome.state = self.sm.current_state(pid)   # `partial`
                 outcome.blocked_reason = (

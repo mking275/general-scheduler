@@ -9,17 +9,13 @@ import ast
 import uuid
 
 from backend.envelope.identity_bootstrap import IdentityBootstrap
-from backend.relationship.household_repository import HouseholdRepository
-from backend.relationship.review_queue import ReviewQueue
 from backend.tests.envelope import _pipeline as P
 
 CLINIC = "goldsmith"
 
 
 def _review_queue(db_url):
-    hr = HouseholdRepository(db_url)
-    hr.init_db()
-    return ReviewQueue(hr), hr
+    return P.review_queue(db_url)
 
 
 def _bootstrap(repo, db_url, seed=81):

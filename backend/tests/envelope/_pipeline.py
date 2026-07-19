@@ -24,6 +24,27 @@ from backend.tests.envelope.fixtures.ezyvet_synthetic_export import (
 
 CLINIC = "goldsmith"
 
+# The reused 011 HouseholdRepository.init_db() re-issues its append-only DDL
+# (CREATE OR REPLACE FUNCTION + DROP/CREATE TRIGGER) on every call, which churns
+# the shared Postgres system catalogs and races autovacuum ("tuple concurrently
+# updated") when many tests each re-init. The tables persist for the whole
+# session, so we init ONCE per process and reuse — cutting the harness's
+# contribution to the shared catalog churn without forking the 011 module.
+_HH_INITED: set[str] = set()
+
+
+def review_queue(db_url: str):
+    """A ``(ReviewQueue, HouseholdRepository)`` pair; the household schema is
+    initialized at most once per process per db_url (see note above)."""
+    from backend.relationship.household_repository import HouseholdRepository
+    from backend.relationship.review_queue import ReviewQueue
+
+    hr = HouseholdRepository(db_url)
+    if db_url not in _HH_INITED:
+        hr.init_db()
+        _HH_INITED.add(db_url)
+    return ReviewQueue(hr), hr
+
 
 def new_pid(prefix: str = "p") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"

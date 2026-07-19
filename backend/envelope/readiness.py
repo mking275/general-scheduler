@@ -77,10 +77,20 @@ def _tier_python_files(root: Optional[str] = None) -> list[str]:
     return sorted(out)
 
 
+# Memo for the default whole-tier scan — it is constant across a run, so the
+# per-practice ReadinessEvaluator constructions in a batch reuse one result
+# instead of re-walking + re-parsing the tree N times.
+_STAFF_SCAN_MEMO: Optional[list[str]] = None
+
+
 def scan_source_for_staff_verbs(paths: Optional[Iterable[str]] = None) -> list[str]:
     """AST-scan the envelope tier for any staff-facing provisioning/auth/
     notification verb. Returns ``[]`` when clean — the structural proof that the
-    provisioning verbs simply do not exist in this tier (FR-028)."""
+    provisioning verbs simply do not exist in this tier (FR-028). The default
+    whole-tier scan is memoized (constant across a run)."""
+    global _STAFF_SCAN_MEMO
+    if paths is None and _STAFF_SCAN_MEMO is not None:
+        return list(_STAFF_SCAN_MEMO)
     findings: list[str] = []
     for path in (paths if paths is not None else _tier_python_files()):
         with open(path) as f:
@@ -93,7 +103,10 @@ def scan_source_for_staff_verbs(paths: Optional[Iterable[str]] = None) -> list[s
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
                     and _is_staff_verb(node.name):
                 findings.append(f"{path}:{node.name} (staff-facing verb)")
-    return sorted(set(findings))
+    result = sorted(set(findings))
+    if paths is None:
+        _STAFF_SCAN_MEMO = result
+    return result
 
 
 class ReadinessEvaluator:

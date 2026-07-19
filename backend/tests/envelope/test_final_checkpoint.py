@@ -24,8 +24,6 @@ from backend.envelope.onboarding_repository import OnboardingRepository
 from backend.envelope.readiness import (
     scan_source_for_scope_leak, scan_source_for_staff_verbs,
 )
-from backend.relationship.household_repository import HouseholdRepository
-from backend.relationship.review_queue import ReviewQueue
 from backend.tests.envelope import _pipeline as P
 from backend.tests.envelope.fixtures.ezyvet_synthetic_export import generate_batch
 
@@ -37,11 +35,10 @@ _PROFILED_PLUS = _NORMALIZED_PLUS | {"profiled"}
 def _batch(db_url, *, counsel_signed, n=6, seed=999):
     repo = OnboardingRepository(db_url)
     repo.init_db()
-    hr = HouseholdRepository(db_url)
-    hr.init_db()
+    rq, _hr = P.review_queue(db_url)
     clinic = f"gate-{uuid.uuid4().hex[:6]}"
     exports = generate_batch(seed=seed, n=n, clinic_id=clinic)
-    result = BatchOrchestrator(repo, ReviewQueue(hr)).run(
+    result = BatchOrchestrator(repo, rq).run(
         clinic, exports, counsel_signed=counsel_signed)
     return repo, clinic, exports, result
 

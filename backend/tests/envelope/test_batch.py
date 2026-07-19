@@ -12,19 +12,17 @@ import pytest
 
 from backend.envelope.batch import BatchOrchestrator
 from backend.envelope.onboarding_repository import OnboardingRepository
-from backend.relationship.household_repository import HouseholdRepository
-from backend.relationship.review_queue import ReviewQueue
+from backend.tests.envelope import _pipeline as P
 from backend.tests.envelope.fixtures.ezyvet_synthetic_export import generate_batch
 
 
 def _run_batch(db_url, n=8, seed=555):
     repo = OnboardingRepository(db_url)
     repo.init_db()
-    hr = HouseholdRepository(db_url)
-    hr.init_db()
+    rq, _hr = P.review_queue(db_url)
     clinic = f"batch-{uuid.uuid4().hex[:6]}"
     exports = generate_batch(seed=seed, n=n, clinic_id=clinic)
-    result = BatchOrchestrator(repo, ReviewQueue(hr)).run(clinic, exports)
+    result = BatchOrchestrator(repo, rq).run(clinic, exports)
     return repo, clinic, exports, result
 
 
@@ -60,6 +58,30 @@ def test_marginal_mapping_steps_trend_down(db_url):
     assert steps[-1] == 0
     # a strict downtrend from the first practice to the last.
     assert steps[0] > steps[-1]
+
+
+def test_ar_block_not_demoted_to_partial(db_url):
+    """A practice with BOTH an unexplained AR variance AND a missing category
+    must block on the zero-AR-tolerance guard — never be demoted to a mere
+    `partial` delivery (which would make an AR-blocked practice delta-mergeable)."""
+    from backend.tests.envelope.fixtures.ezyvet_synthetic_export import (
+        generate_practice_export,
+    )
+    repo = OnboardingRepository(db_url)
+    repo.init_db()
+    rq, _hr = P.review_queue(db_url)
+    clinic = f"batch-arblk-{uuid.uuid4().hex[:6]}"
+    pid = f"{clinic}-p0"
+    # partial (attachments omitted) AND a planted AR variance — the co-occurrence.
+    exp = generate_practice_export(pid, seed=771, variant="partial",
+                                   planted="ar_variance")
+    result = BatchOrchestrator(repo, rq).run(clinic, [exp])
+
+    o = result.outcomes[pid]
+    assert "AR variance" in (o.blocked_reason or "")
+    assert o.state == "verified"                 # blocked, NOT partial
+    assert repo.get_practice_database_by_practice(pid)["state"] == "verified"
+    assert not o.shadow_ready
 
 
 def test_prior_reuse_persisted_rollup(db_url):
