@@ -624,6 +624,16 @@ class OnboardingRepository:
         rows = self._select_where("practice_readiness", practice_id=practice_id)
         return rows[-1] if rows else None
 
+    def create_batch_rollup(self, m: Any) -> dict:
+        return self._insert("batch_rollup", self._dump(m))
+
+    def get_batch_rollups(self, clinic_id: str) -> list[dict]:
+        return self._select_where("batch_rollup", clinic_id=clinic_id)
+
+    def latest_batch_rollup(self, clinic_id: str) -> Optional[dict]:
+        rows = self._select_where("batch_rollup", clinic_id=clinic_id)
+        return rows[-1] if rows else None
+
     # ---- canonical financial / inventory ----------------------------- #
     def upsert_canonical(self, table_name: str, rows: list[Any],
                          key_cols: tuple = ("practice_id", "source_id")) -> int:
