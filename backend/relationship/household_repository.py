@@ -240,10 +240,27 @@ class HouseholdRepository:
     #  init_db (idempotent-additive)
     # ------------------------------------------------------------------ #
     def init_db(self) -> None:
-        """Create the 13 tables + append-only triggers (idempotent)."""
+        """Create the 13 tables + append-only triggers (idempotent).
+
+        The trigger install is sentinel-guarded: re-issuing CREATE OR REPLACE
+        FUNCTION / DROP+CREATE TRIGGER on every init_db() churns the shared
+        Postgres system catalogs and races autovacuum ("tuple concurrently
+        updated") when many tests each re-init. The reject-mutation function's
+        presence makes the reinstall a no-op once provisioned."""
         self.metadata.create_all(self.engine)
-        if self.engine.dialect.name == "postgresql":
+        if self.engine.dialect.name == "postgresql" and not self._triggers_installed():
             self._install_append_only_triggers()
+
+    def _triggers_installed(self) -> bool:
+        """True iff the append-only trigger spine is already present
+        (the reject-mutation function is the sentinel)."""
+        try:
+            with self.engine.connect() as conn:
+                return bool(conn.execute(text(
+                    "SELECT 1 FROM pg_proc WHERE proname = 'relationship_reject_mutation'"
+                )).first())
+        except Exception:  # treat as not-installed; install below
+            return False
 
     def _install_append_only_triggers(self) -> None:
         ddl = [
@@ -295,6 +312,14 @@ class HouseholdRepository:
         stmt = select(tbl)
         for k, v in eq.items():
             stmt = stmt.where(tbl.c[k] == v)
+        # Deterministic insertion order: without ORDER BY, Postgres returns
+        # physical heap order, and callers' rows[-1] semantics silently depend
+        # on it. PKs here are UUID strings, so order by created_at (append
+        # order) with the id as a stable tie-break.
+        if "created_at" in tbl.c:
+            stmt = stmt.order_by(tbl.c["created_at"])
+        for pk in tbl.primary_key.columns:
+            stmt = stmt.order_by(pk)
         with self.engine.connect() as conn:
             return [dict(r) for r in conn.execute(stmt).mappings().all()]
 

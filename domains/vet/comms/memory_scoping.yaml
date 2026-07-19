@@ -1,0 +1,133 @@
+# =============================================================================
+# VetAgent Domain Pack — COMMS / MEMORY SCOPING  (Tier-1 administrative)
+# =============================================================================
+# STATUS: DRAFT. Configures capabilities/comms/ reveal-policy hooks.
+#
+# W10 (content ours, rails core): this file is the VERTICAL HALF of relationship
+# memory — the *policy data*. Core owns the default-deny RAIL that enforces it
+# (`vera/memory.py` Memory.scoped_recall in core; the shim
+# backend/relationship/scoped_recall.py + scoping_policy.py until the c6 rail
+# cutover). Neither half weakens the other's: the pack cannot reveal a class the
+# rail denies, and the rail reveals nothing this pack does not positively list.
+#
+# PACK-SHIPPABLE POLICY DATA (the v0.2 canonicalization foreseen in
+# comms/references.yaml). Tenant-neutral: it is the pack DEFAULT; a clinic's
+# `config/relationship/memory_scoping.<clinic>.yaml` is a bounded override of
+# this shape (never a fork of the three fields).
+#
+# THREE FIELDS, STRUCTURAL DEFAULT-DENY BY ABSENCE (H1):
+#   * an audience absent from `allow_classes`  -> denies ALL classes
+#   * a class not listed for an audience        -> denied (default_deny_no_rule)
+#   * a fact_kind absent from `kind_to_class`   -> denied (unmapped_kind)
+#
+# KIND REGISTRATION IS LOAD-BEARING (core-rail cutover): core's rail DENIES any
+# unmapped kind, so an unregistered vet memory kind SILENTLY DISAPPEARS at
+# cutover. Every vet memory kind referenced anywhere in backend/ MUST appear in
+# `kind_to_class` below. `test_pack_memory_scoping.py` fails the build if a kind
+# used in code/tests is missing here. (The two deliberate deny-probes —
+# `experimental_unmapped`, `insurance_claim` — are INTENTIONALLY absent; they
+# exercise the unmapped-kind deny path and must never be registered.)
+#
+# Closed fact-class vocabulary (the ONLY classes the rail recognises):
+#   schedule | client_summary | patient_clinical | financial | contact_info | staff_notes
+# =============================================================================
+
+pack: vetagent/vet
+id: memory_scoping
+version: 0.1.0
+status: DRAFT
+shape: three_field
+enforcement: core            # core holds the default-deny rail; pack supplies data
+
+# (1) allow_classes: {audience: [fact_class, ...]} — POSITIVE content classes only.
+allow_classes:
+  owner:
+    - schedule
+    - client_summary
+    - patient_clinical
+    - financial
+    - contact_info
+    - staff_notes
+  manager:
+    - schedule
+    - client_summary
+    - patient_clinical
+    - financial
+    - contact_info
+    # staff_notes intentionally OMITTED -> default-deny exercisable
+  staff:
+    - schedule
+    - client_summary
+    - patient_clinical
+    - contact_info
+    # financial + staff_notes intentionally OMITTED
+  client_verified:
+    - schedule
+    - client_summary
+    - patient_clinical
+    - contact_info
+    # financial + staff_notes intentionally OMITTED (own household only, no $ detail)
+  caller_unverified:
+    - schedule
+    # only general schedule availability
+
+# (2) scope_predicates: {audience: [predicate, ...]} — ROW filters.
+#     own_household_only -> reason=wrong_household on a foreign-household row
+#     own_clinic_only    -> tenant scope
+scope_predicates:
+  owner:
+    - own_clinic_only
+  manager:
+    - own_clinic_only
+  staff:
+    - own_clinic_only
+  client_verified:
+    - own_clinic_only
+    - own_household_only
+  caller_unverified:
+    - own_clinic_only
+
+# (3) kind_to_class: {fact_kind: fact_class} — recall-kind -> class BRIDGE.
+#     EXHAUSTIVE over every vet memory kind used in backend/ (see load-bearing
+#     note above). A kind not listed here is DENIED (unmapped_kind).
+kind_to_class:
+  # --- schedule ---
+  appointment: schedule            # used: Fact/reveal_log, shared_line, red_team
+  schedule_availability: schedule
+  next_available: schedule
+  # --- client_summary ---
+  visit_summary: client_summary    # used: shared_line, scoped_recall, red_team
+  last_visit: client_summary       # used: household_summary_provider (summary_kind default), shim_upgrades
+  greeting_summary: client_summary
+  # --- patient_clinical ---
+  diagnosis: patient_clinical      # used: shared_line, scoped_recall, red_team
+  medication: patient_clinical
+  vaccination: patient_clinical
+  lab_result: patient_clinical
+  # --- financial ---
+  invoice: financial
+  balance: financial               # used: scoping, scoped_recall, red_team
+  payment_history: financial
+  # --- contact_info ---
+  phone: contact_info              # used: red_team
+  email: contact_info
+  address: contact_info
+  # --- staff_notes ---
+  internal_note: staff_notes       # used: red_team
+  staff_memo: staff_notes
+
+provenance:
+  authored_by: VetAgent stream (011 shim-retirement prep)
+  authored_at: 2026-07-19
+  sources:
+    - path: config/relationship/memory_scoping.goldsmith.yaml
+      cite: "canonical live config (feature 011, H1 three-field shape) — canonicalized here as pack data"
+    - path: backend/relationship/scoping_policy.py
+      cite: "closed fact-class vocabulary + default-deny evaluator this data feeds"
+  confidence: high              # mirrors the live, test-covered three-field config
+  review_status: DRAFT
+  tier: administrative
+  caveats:
+    - "UNSIGNED placeholder content; VP-9 signs before any live client-facing reveal (Pilot-Activation gate)."
+    - "kind_to_class is exhaustive over backend/ kinds AS OF 2026-07-19; a new kind must be added here BEFORE the core-rail cutover or it silently denies. See specs/011-relationship-memory/shim-retirement.md."
+signed_by: null

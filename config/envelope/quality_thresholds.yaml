@@ -1,0 +1,38 @@
+# Feature 009 — quality thresholds + dirty-data rules (FR-014/015; FR-017).
+# Drives quality.py (usable-record share vs floor) and the zero-AR-tolerance
+# reconciliation guard. The board kill-criterion: >20% unusable -> held.
+
+# The strategy-board kill-criterion: a practice with more than this share of
+# sampled records unusable is held out of shadow-mode (never shadow_ready).
+unusable_floor: 0.20
+
+# Zero tolerance on AR balances — any unexplained AR variance is blocking
+# (surfaced red, not buried). FR-017.
+ar_zero_tolerance: true
+
+# Dirty-data rules — each quantified into the usable-record share. A record
+# hitting any `unusable: true` rule is counted against the usable share; rules
+# with `unusable: false` are quantified/itemized but do not by themselves make a
+# record unusable.
+dirty_data_rules:
+  shared_phones:
+    description: "The same phone number on >1 distinct owner (collision or duplicate)."
+    unusable: false
+  duplicate_owners:
+    description: "Two owner records that resolve to the same person."
+    unusable: true
+  deceased_pets:
+    description: "Patient marked deceased (valid history, flagged not dropped)."
+    unusable: false
+  orphaned_refs:
+    description: "A record referencing a client/patient id that does not exist."
+    unusable: true
+  malformed:
+    description: "A record that fails schema/field validation."
+    unusable: true
+
+# Sampling — how the usable-record share is computed. `full` = assess every
+# ingested record (the deterministic build posture); a live pilot may sample.
+sampling:
+  mode: full
+  seed: 20260718

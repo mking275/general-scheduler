@@ -1199,3 +1199,361 @@ class ClinicStaffRole(BaseModel):
     role: StaffRole
     active: bool = True
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# ===========================================================================
+# Feature 009 — Vera Envelope Onboarding (VP-1): net-new onboarding-control
+# entities + net-new canonical financial/AR/ledger/payment + inventory
+# entities + enums (data-model.md — the T002 entity source of truth).
+#
+# Practice-scoped tables key on practice_id (+ clinic_id tenant scope);
+# Delivery / BatchRollup are group-scoped. Every canonical record carries a
+# NON-NULLABLE entity_ref (seeded via backend/relationship/entity_ref.py) +
+# source_id lineage. NO net-new ReviewItem model is defined — the spec's
+# "ReviewItem" Key Entity IS the reused HouseholdReviewQueue (011 T012, above);
+# 009 writes to it via relationship/review_queue.py verbatim (finding F7).
+# ===========================================================================
+
+class PracticeState(str, Enum):
+    """The per-practice pipeline state. The linear happy path is
+    received -> profiled -> normalized -> verified -> reconciled ->
+    identity_bootstrapped -> shadow_ready; blocked/partial/held/delta are
+    FIRST-CLASS off-path states (a practice may sit at any without stalling
+    the batch and never auto-advances to shadow_ready)."""
+    RECEIVED = "received"
+    PROFILED = "profiled"
+    NORMALIZED = "normalized"
+    VERIFIED = "verified"
+    RECONCILED = "reconciled"
+    IDENTITY_BOOTSTRAPPED = "identity_bootstrapped"
+    SHADOW_READY = "shadow_ready"
+    BLOCKED = "blocked"
+    PARTIAL = "partial"
+    HELD = "held"
+    DELTA = "delta"
+
+
+class ScopeCategory(str, Enum):
+    """The §5 letter's enumerated data-copy categories (config/envelope/
+    section5_scope.yaml is the source of truth)."""
+    PATIENT_CLIENT = "patient_client"
+    SCHEDULING = "scheduling"
+    INVOICING_BILLING_PAYMENTS = "invoicing_billing_payments"
+    COMMUNICATIONS = "communications"
+    ATTACHMENTS_IMAGING = "attachments_imaging"
+    CONFIGURATION = "configuration"
+
+
+class VarianceDisposition(str, Enum):
+    EXPLAINED = "explained"
+    BLOCKING = "blocking"
+
+
+class ReadinessCriterion(str, Enum):
+    """The six criteria that ALL must be met for shadow_ready (FR-022)."""
+    COUNSEL_CLEARED = "counsel_cleared"
+    FORMAT_DISCOVERED = "format_discovered"
+    NORMALIZATION_IDEMPOTENT = "normalization_idempotent"
+    COMPLETENESS_QUALITY_ABOVE_FLOOR = "completeness_quality_above_floor"
+    RECONCILIATION_ACKNOWLEDGED = "reconciliation_acknowledged"
+    IDENTITY_CORPUS_PRODUCED = "identity_corpus_produced"
+
+
+# --------------------------------------------------------------------------- #
+#  Onboarding-control tables
+# --------------------------------------------------------------------------- #
+
+# --- Delivery — chain-of-custody anchor (group-scoped; append-only) --------
+class Delivery(BaseModel):
+    """One received export bundle. The §6.3 backup-compliance artifact."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    source: str                                      # secure-transfer origin
+    delivery_timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+    byte_count: int = 0
+    checksum: str = ""                               # sha256 of the bundle
+    practice_ids: List[str] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- PracticeDatabase — one practice's export within a delivery -------------
+class PracticeDatabase(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    delivery_id: str
+    receipt_state: _Literal["received", "superseded"] = "received"
+    state: PracticeState = PracticeState.RECEIVED
+    vault_object_ref: Optional[str] = None
+    checksum: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- ChainOfCustody (append-only) ------------------------------------------
+class ChainOfCustody(BaseModel):
+    """Proof of 'captured before touched' — parsed MUST be false at write."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    practice_database_id: str
+    source: str
+    delivery_timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+    byte_count: int = 0
+    checksum: str = ""
+    vault_written_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    parsed: bool = False                             # must be false at write time
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- CounselSignoff (append-only) — the hard pre-normalization gate row -----
+class CounselSignoff(BaseModel):
+    """Its PRESENCE is the guard received -> profiled/normalized checks
+    (FR-004, §3.2(h)). No engineering bypass by design."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    signed_by: str
+    signed_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    structure_version: str = "v1"
+    scope: str = ""                                  # the clinic-owned-data structure signed
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- ScopeCheck — scope-vs-request against §5 categories --------------------
+class ScopeCheck(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    practice_database_id: str
+    # scope_category value -> "present" | "absent" | "short"
+    dispositions: Dict[str, str] = Field(default_factory=dict)
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- FormatProfile — machine-readable discovery result ---------------------
+class FormatProfile(BaseModel):
+    """Normalization is BLOCKED without this row (FR-005/006)."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    practice_database_id: str
+    entities: Dict[str, int] = Field(default_factory=dict)     # entity name -> record_count
+    encodings: Dict[str, str] = Field(default_factory=dict)    # entity -> encoding
+    referential_relationships: List[Dict[str, Any]] = Field(default_factory=list)
+    export_variant: str = ""                          # the identified ezyVet variant
+    unmapped_flags: List[str] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- StateTransition (append-only) — the single write path -----------------
+class StateTransition(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    from_state: Optional[str] = None                 # None for the initial receipt row
+    to_state: PracticeState
+    reason: str = ""
+    at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- CompletenessResult ----------------------------------------------------
+class CompletenessResult(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    # scope_category value -> {"present": bool, "ingested": int, "profiled": int, "short": bool}
+    category_coverage: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    referential_integrity_findings: List[Dict[str, Any]] = Field(default_factory=list)
+    # financial block (FR-013)
+    ar_balance_total: float = 0.0
+    invoice_count: int = 0
+    payment_total: float = 0.0
+    missing_or_short: List[str] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- QualityAssessment -----------------------------------------------------
+class QualityAssessment(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    shared_phones: int = 0
+    duplicate_owners: int = 0
+    deceased_pets: int = 0
+    orphaned_refs: int = 0
+    malformed: int = 0
+    usable_record_share: float = 1.0
+    below_floor: bool = False                         # > 0.20 unusable -> true
+    itemized_gap: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- FinancialVariance — a reconciliation variance line --------------------
+class FinancialVariance(BaseModel):
+    amount: float = 0.0                               # ingested - reported
+    disposition: VarianceDisposition = VarianceDisposition.EXPLAINED
+    attributed_cause: Optional[str] = None
+
+
+# --- ReconciliationReport (append-only; owner-facing) ----------------------
+class ReconciliationReport(BaseModel):
+    """Zero AR tolerance: any unexplained ar_variance -> blocking. Owner/
+    manager audience only (FR-016/017/018)."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    # scope_category value -> {"requested": int, "delivered": int, "ingested": int}
+    category_counts: Dict[str, Dict[str, int]] = Field(default_factory=dict)
+    ar_variance: Optional[FinancialVariance] = None
+    invoice_variance: Optional[FinancialVariance] = None
+    payment_variance: Optional[FinancialVariance] = None
+    outstanding_gap: List[str] = Field(default_factory=list)   # scope_category values
+    blocking: bool = False                            # any blocking financial variance
+    owner_acknowledged: bool = False                  # group-level ack
+    audience: _Literal["owner", "manager"] = "owner"
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- IdentityAuditCorpus (append-only) — the 009-defined 011 seam ----------
+class IdentityAuditCorpus(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    proposals: List[Dict[str, Any]] = Field(default_factory=list)   # each w/ entity_ref lineage
+    collisions: List[Dict[str, Any]] = Field(default_factory=list)
+    answer_key_scored_precision: Dict[str, Any] = Field(default_factory=dict)  # single vs multi-match
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- GapNotice (append-only; owner-facing) ---------------------------------
+class GapNotice(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    missing_categories: List[str] = Field(default_factory=list)     # scope_category values
+    text: str = ""                                    # paper-trail-ready vendor-reply text
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- PracticeReadiness ------------------------------------------------------
+class PracticeReadiness(BaseModel):
+    """shadow_ready true ONLY when all six criteria met (FR-022/023/028)."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    # readiness_criterion value -> satisfied bool
+    criteria: Dict[str, bool] = Field(default_factory=dict)
+    shadow_ready: bool = False
+    invisible_adoption_asserted: bool = False          # no staff artifact emitted
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- BatchRollup (group-scoped; computed view) -----------------------------
+class BatchRollup(BaseModel):
+    """Group-level view over the per-practice rows; a blocked practice is
+    visible but never stalls the batch (FR-024)."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    delivery_id: Optional[str] = None
+    # practice_id -> {"state": str, "shadow_ready": bool, ...}
+    per_practice: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --------------------------------------------------------------------------- #
+#  Net-new canonical practice-model entities (financial/AR/ledger/payment +
+#  inventory). Every row carries a NON-NULLABLE entity_ref + source_id lineage
+#  (FR-008/009). The clinical/scheduling canonical entities already exist on
+#  the platform practice model; 009 hydrates them.
+# --------------------------------------------------------------------------- #
+
+class CanonicalRecord(BaseModel):
+    """The generic canonical-entity envelope an adapter emits from normalize()
+    — a uniform shape (category + payload) the normalizer (T018) persists. Every
+    record carries lineage back to a specific source export row."""
+    practice_id: str
+    category: str                                    # provider|client|household|patient|
+    #                                                  appointment|invoice|ledger|payment|
+    #                                                  ar_balance|inventory|communication|
+    #                                                  attachment|product_service
+    entity_ref: str                                  # NON-NULLABLE lineage key
+    source_id: str                                   # NON-NULLABLE source-row key
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    unmapped_fields: Dict[str, Any] = Field(default_factory=dict)
+
+
+class LedgerEntry(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    entity_ref: str                                  # NON-NULLABLE
+    source_id: str
+    account_ref: str = ""
+    amount: float = 0.0
+    entry_type: str = ""                             # invoice | adjustment | credit
+    posted_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class InvoiceRecord(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    entity_ref: str                                  # NON-NULLABLE
+    source_id: str
+    client_ref: str = ""
+    total: float = 0.0
+    status: str = ""
+    issued_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class PaymentRecord(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    entity_ref: str                                  # NON-NULLABLE
+    source_id: str
+    client_ref: str = ""
+    amount: float = 0.0
+    method: str = ""
+    received_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class ARBalance(BaseModel):
+    """Open client balances — the zero-tolerance reconciliation target."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    entity_ref: str                                  # NON-NULLABLE
+    source_id: str
+    client_ref: str = ""
+    balance: float = 0.0
+    as_of: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class InventoryItem(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    entity_ref: str                                  # NON-NULLABLE
+    source_id: str
+    product_ref: str = ""
+    qty_on_hand: float = 0.0
+    unit: str = ""
+    last_counted_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class UnmappedFieldSidecar(BaseModel):
+    """Preserves source fields with no canonical mapping — never silently
+    dropped (FR-008 US3-scenario-3; T020)."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    clinic_id: str
+    practice_id: str
+    entity_ref: str                                  # owning canonical record
+    source_field: str = ""
+    raw_value: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())

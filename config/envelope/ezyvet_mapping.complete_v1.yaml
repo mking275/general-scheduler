@@ -1,0 +1,154 @@
+# Feature 009 — ezyVet complete-export -> canonical field map (T003/T015).
+#
+# The reusable group PRIOR the ezyVet adapter drives (migration_agent.py
+# per-source field-map precedent). A prior, not an assumption: each database is
+# profiled independently for schema drift (FR-026); an entity/field absent from
+# this map is FLAGGED, never silently dropped (FR-007).
+#
+# Structure per source entity:
+#   canonical_category : the CanonicalRecord.category value
+#   ref_builder        : which entity_ref.py builder seeds the lineage key
+#                        (client | patient | staff | household | none)
+#   id_field           : the source column carrying the stable PIMS id
+#   target_table       : the net-new canonical table (financial/inventory only)
+#   fields             : source_column -> canonical_field
+
+variant: complete_v1
+pims: ezyvet
+
+entities:
+
+  # ---- patient/client + configuration (hydrate existing platform tables) ----
+  clients:
+    canonical_category: client
+    ref_builder: client
+    id_field: client_id
+    fields:
+      client_id: source_id
+      first_name: first_name
+      last_name: last_name
+      phone: phone
+      email: email
+      address: address
+
+  patients:
+    canonical_category: patient
+    ref_builder: patient
+    id_field: patient_id
+    fields:
+      patient_id: source_id
+      client_id: client_source_id
+      name: name
+      species: species
+      breed: breed
+      status: status
+
+  providers:
+    canonical_category: provider
+    ref_builder: staff
+    id_field: provider_id
+    fields:
+      provider_id: source_id
+      name: name
+      role: role
+
+  appointments:
+    canonical_category: appointment
+    ref_builder: none
+    id_field: appointment_id
+    fields:
+      appointment_id: source_id
+      patient_id: patient_source_id
+      provider_id: provider_source_id
+      start: start_time
+      type: appointment_type
+
+  products:
+    canonical_category: product_service
+    ref_builder: none
+    id_field: product_id
+    fields:
+      product_id: source_id
+      name: name
+      unit_price: unit_price
+
+  communications:
+    canonical_category: communication
+    ref_builder: none
+    id_field: communication_id
+    fields:
+      communication_id: source_id
+      client_id: client_source_id
+      channel: channel
+      body: body
+
+  attachments:
+    canonical_category: attachment
+    ref_builder: none
+    id_field: attachment_id
+    fields:
+      attachment_id: source_id
+      patient_id: patient_source_id
+      kind: kind
+      filename: filename
+
+  # ---- invoicing/billing/payments — financial / AR / ledger / payment -------
+  invoices:
+    canonical_category: invoice
+    ref_builder: none
+    id_field: invoice_id
+    target_table: InvoiceRecord
+    fields:
+      invoice_id: source_id
+      client_id: client_ref
+      total: total
+      status: status
+      issued_at: issued_at
+
+  ledger:
+    canonical_category: ledger
+    ref_builder: none
+    id_field: ledger_id
+    target_table: LedgerEntry
+    fields:
+      ledger_id: source_id
+      account: account_ref
+      amount: amount
+      entry_type: entry_type
+      posted_at: posted_at
+
+  payments:
+    canonical_category: payment
+    ref_builder: none
+    id_field: payment_id
+    target_table: PaymentRecord
+    fields:
+      payment_id: source_id
+      client_id: client_ref
+      amount: amount
+      method: method
+      received_at: received_at
+
+  ar_balances:
+    canonical_category: ar_balance
+    ref_builder: none
+    id_field: ar_id
+    target_table: ARBalance
+    fields:
+      ar_id: source_id
+      client_id: client_ref
+      balance: balance
+      as_of: as_of
+
+  # ---- inventory ------------------------------------------------------------
+  inventory:
+    canonical_category: inventory
+    ref_builder: none
+    id_field: inventory_id
+    target_table: InventoryItem
+    fields:
+      inventory_id: source_id
+      product_id: product_ref
+      qty_on_hand: qty_on_hand
+      unit: unit
+      last_counted_at: last_counted_at

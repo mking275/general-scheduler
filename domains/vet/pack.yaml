@@ -40,6 +40,7 @@ capability_modules:
     active: true
     configures:
       - comms/references.yaml          # include-by-reference to live 010/011 configs
+      - comms/memory_scoping.yaml      # pack-shippable three-field reveal policy (011 shim-retirement prep)
 
 # Knowledge + metrics layers (not capability modules; consumed by prompt
 # composition + telemetry respectively).

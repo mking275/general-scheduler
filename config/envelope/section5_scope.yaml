@@ -1,0 +1,34 @@
+# Feature 009 — §5 scope-vs-request source of truth (FR-002; T003/T010).
+#
+# The enumerated categories the §5 written data-copy letter asks ezyVet to
+# deliver, per practice database. scope_check.py compares delivered contents
+# against this list to produce a per-database present/absent/short disposition,
+# and gap_notice.py detects partial deliveries against it. The `key` values are
+# the ScopeCategory enum members (backend/models.py).
+
+categories:
+  - key: patient_client
+    label: "Patient & client records"
+    # ezyVet source entities that satisfy this category
+    source_entities: [clients, patients, contacts, addresses]
+    required: true
+  - key: scheduling
+    label: "Scheduling / appointments"
+    source_entities: [appointments, resources, appointment_types]
+    required: true
+  - key: invoicing_billing_payments
+    label: "Invoicing, billing & payments (financial / AR / ledger)"
+    source_entities: [invoices, invoice_lines, ledger, payments, ar_balances]
+    required: true
+  - key: communications
+    label: "Client communications"
+    source_entities: [communications, messages]
+    required: true
+  - key: attachments_imaging
+    label: "Attachments & imaging"
+    source_entities: [attachments, documents, images]
+    required: true
+  - key: configuration
+    label: "Practice configuration (products/services, providers, settings)"
+    source_entities: [products, services, providers, settings, inventory]
+    required: true

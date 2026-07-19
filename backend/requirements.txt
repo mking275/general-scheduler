@@ -20,4 +20,6 @@ SQLAlchemy>=2.0.0
 psycopg2-binary>=2.9.0
 audioop-lts>=0.2.1; python_version >= "3.13"
 # google-genai already present above (Gemini Live primary); twilio already present
+# Feature 009 — Vera Envelope Onboarding (encrypted-at-rest sim vault; hashlib is stdlib)
+cryptography>=42.0.0
 
