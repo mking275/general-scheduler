@@ -113,7 +113,9 @@ class SyntheticExport:
         with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
             for name in sorted(self.entities.keys()):
                 rows = self.entities[name]
-                cols = ENTITY_COLUMNS[name]
+                # known entities use the fixed column order; an injected/unknown
+                # entity derives columns from its first row (test robustness).
+                cols = ENTITY_COLUMNS.get(name) or (list(rows[0].keys()) if rows else [])
                 sbuf = io.StringIO()
                 w = csv.DictWriter(sbuf, fieldnames=cols, extrasaction="ignore")
                 w.writeheader()
