@@ -28,6 +28,7 @@ references:
     audiences: [owner, manager, staff, client_verified, caller_unverified]
     fact_classes: [schedule, client_summary, patient_clinical, financial, contact_info, staff_notes]
     note: "UNSIGNED placeholder in the referenced file; VP-9 signs before any live client-facing reveal (Pilot-Activation gate)."
+    pack_authored: domains/vet/comms/memory_scoping.yaml   # the v0.2 canonicalization (011 shim-retirement prep): pack-shippable copy of the three fields, kind_to_class EXHAUSTIVE over backend/ kinds for the core-rail cutover
 
   - id: verification_policy
     role: "Tiered knowledge-factor verification bar (contract R4)"
