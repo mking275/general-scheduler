@@ -171,8 +171,13 @@ class BatchOrchestrator:
                 export_variant=profile.export_variant,
                 unmapped_flags=profile.unmapped_flags))
 
-            Normalizer(self.repo).normalize(clinic_id, pid, adapter, profile, exp)
+            # THE COUNSEL GATE — the transition to `profiled` is unreachable
+            # without a counsel_signoff row (FR-004). Normalization runs ONLY
+            # after it clears, so no clinic-owned record is normalized pre-counsel
+            # (the gate has no engineering bypass — a raise here leaves the
+            # canonical store untouched).
             self.sm.advance(pid, PracticeState.PROFILED, clinic_id=clinic_id)
+            Normalizer(self.repo).normalize(clinic_id, pid, adapter, profile, exp)
             self.sm.advance(pid, PracticeState.NORMALIZED, clinic_id=clinic_id)
 
             # completeness + quality; a >20%-unusable practice is HELD (never

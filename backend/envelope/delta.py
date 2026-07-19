@@ -47,6 +47,8 @@ def reingest_delta(repo, clinic_id: str, practice_id: str, adapter,
     bundle (the missing category, arriving later). Raises ``DiscoveryError`` on a
     corrupt export **before** any normalization (canonical store untouched)."""
     before = repo.count_canonical("canonical_record", practice_id)
+    _prev = repo.get_reconciliation_reports(practice_id)
+    before_gap = set((_prev[-1].get("outstanding_gap") or [])) if _prev else set()
 
     # discovery FIRST — a corrupt/truncated export fails here, pre-normalize.
     profile = adapter.profile(delta_export)
@@ -71,9 +73,12 @@ def reingest_delta(repo, clinic_id: str, practice_id: str, adapter,
     # the delta's genuinely-new records; on a redundant re-run of the same delta
     # it is 0 (the upsert keys on source_id/entity_ref — no duplicates), which is
     # the idempotency proof the harness drives by running the delta twice.
+    # gap_closed: the delta resolved at least one previously-outstanding category
+    # (a robust signal — an unrelated persistent short-category never masks it).
+    after_gap = set(report.outstanding_gap or [])
     return DeltaResult(
         practice_id=practice_id, state=sm.current_state(practice_id),
         report=report,
-        gap_closed=not report.outstanding_gap,
+        gap_closed=bool(before_gap - after_gap),
         records_added=max(after - before, 0),
     )
