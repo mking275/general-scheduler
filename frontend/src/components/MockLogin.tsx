@@ -2,15 +2,27 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { login as identityLogin } from "../lib/authClient";
+
+// Demo credentials shown below double as the seed-superuser identity the fake
+// provider exchanges on first sign-in (COS_IDENTITY_SEED_SUPERUSER_EMAIL).
+const DEMO_EMAIL = "demo@clinic.com";
 
 export default function MockLogin({ onLogin }: { onLogin: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setLoading(true);
-    setTimeout(() => {
+    setError(null);
+    try {
+      // Real fake-provider exchange (C7): stores the rotating access+refresh pair.
+      await identityLogin(DEMO_EMAIL, "Demo Staff");
       onLogin();
-    }, 1000);
+    } catch (e: any) {
+      setError(e?.message ?? "Sign-in failed. Is the backend running on :8080?");
+      setLoading(false);
+    }
   };
 
   return (
@@ -29,10 +41,10 @@ export default function MockLogin({ onLogin }: { onLogin: () => void }) {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-zinc-400 mb-1">Email</label>
-            <input 
-              type="email" 
-              disabled 
-              value="demo@clinic.com" 
+            <input
+              type="email"
+              disabled
+              value={DEMO_EMAIL}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2 text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
@@ -63,6 +75,12 @@ export default function MockLogin({ onLogin }: { onLogin: () => void }) {
               "Sign In (Demo)"
             )}
           </motion.button>
+
+          {error && (
+            <p className="text-sm text-red-400 mt-2" role="alert">
+              {error}
+            </p>
+          )}
         </div>
       </motion.div>
     </div>

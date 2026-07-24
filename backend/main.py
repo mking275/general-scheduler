@@ -44,6 +44,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Identity & RBAC (C7 — vendored cos_identity). Staff/owner-side auth. ──────
+# Routers are mounted at import time; the asyncpg pool is opened lazily at
+# startup so the app still boots when Postgres is absent (scheduler features use
+# SQLite and stay unaffected). Client / pet-owner identity is NOT wired here — it
+# stays on the 011 verification ladder.
+from .identity_auth import build_identity, build_auth_router, build_admin_router  # noqa: E402
+
+_identity_service, _open_identity_pool, _close_identity_pool = build_identity()
+app.state.identity_settings = _identity_service.settings
+app.include_router(build_auth_router(_identity_service), prefix="/api/auth")
+app.include_router(build_admin_router(_identity_service), prefix="/api/admin")
+
+
+@app.on_event("startup")
+async def _identity_startup():
+    """Open the identity DB pool (non-fatal: auth endpoints degrade if PG is down)."""
+    try:
+        await _open_identity_pool()
+    except Exception as e:  # pragma: no cover - dev convenience
+        print(f"[IDENTITY] Pool open failed (auth endpoints unavailable): {e}")
+
+
+@app.on_event("shutdown")
+async def _identity_shutdown():
+    try:
+        await _close_identity_pool()
+    except Exception:  # pragma: no cover
+        pass
+
 # Unique ID for this server process — changes on every restart
 SESSION_ID = str(_uuid.uuid4())
 
