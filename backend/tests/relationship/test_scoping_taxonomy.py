@@ -44,7 +44,11 @@ DENY_DEFAULT_CASES = [
 
 @pytest.mark.parametrize("audience,kind,klass", ALLOW_CASES)
 def test_t037_allow_path(policy, audience, kind, klass):
-    d = policy.evaluate(kind, audience)
+    # §4a core semantic (C6 hardening): the allow path requires an ATTRIBUTED,
+    # in-scope row — a null subject under an active predicate now denies.
+    d = policy.evaluate(kind, audience,
+                        subject_household="hhA", subject_clinic="clinic-taxonomy",
+                        entity_scope=["hhA", "clinic-taxonomy"])
     assert d.allowed, (audience, kind)
     assert d.reason == "explicit_allow"
     assert d.fact_class == klass and klass in CLOSED_CLASSES
@@ -66,8 +70,10 @@ def test_t037_unmapped_kind_denies_for_every_audience(policy, audience):
 
 
 def test_t037_client_verified_wrong_household_denied(policy):
+    # in-scope clinic so the household predicate is the one under test (§4a).
     d = policy.evaluate("diagnosis", "client_verified",
-                        subject_household="hhB", entity_scope=["hhA"])
+                        subject_household="hhB", subject_clinic="clinic-taxonomy",
+                        entity_scope=["hhA", "clinic-taxonomy"])
     assert not d.allowed and d.reason == "wrong_household"
 
 

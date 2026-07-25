@@ -14,6 +14,17 @@ for an audience with **structural default-deny**:
 
 Default-deny is structural in BOTH directions: a class not listed, an audience
 absent, and an unmapped kind all deny. Nothing is revealed by omission.
+
+C6 cutover reconciliations (shim-retirement.md §4 — both FAIL-CLOSED, aligned
+with core's ``vera/memory.py`` rail semantics ahead of the deferred cutover):
+  §4a — a NULL subject (``subject_household`` / ``subject_clinic``) under an
+        ACTIVE scope predicate DENIES: an unattributed row is never "explicitly
+        permitted" for a party-scoped audience (FR-014 default-deny). A
+        missing/None ``entity_scope`` likewise denies (an unresolved caller
+        reveals nothing).
+  §4b — an UNRECOGNIZED scope predicate DENIES (``unrecognized_predicate``):
+        a typo'd or future predicate in policy data tightens scoping — it
+        never silently no-ops (the old fail-open).
 """
 from __future__ import annotations
 
@@ -29,7 +40,7 @@ CLOSED_CLASSES = frozenset({
     "financial", "contact_info", "staff_notes",
 })
 
-Reason = str  # explicit_allow | default_deny_no_rule | wrong_household | unmapped_kind
+Reason = str  # explicit_allow | default_deny_no_rule | wrong_household | unmapped_kind | unrecognized_predicate
 
 
 @dataclass
@@ -87,18 +98,26 @@ class ScopingPolicy:
             return ScopeDecision("withheld", "default_deny_no_rule", fact_class)
 
         # (3) row-level scope predicates (filters applied AFTER the class allow).
+        # FAIL-CLOSED on every ambiguous input (C6 reconciliations §4a/§4b):
+        # a null subject or null entity_scope under an active predicate denies,
+        # and an unrecognized predicate denies — nothing reveals by no-op.
         for pred in self.scope_predicates.get(audience, []):
             if pred == "own_household_only":
-                if subject_household is not None and (
-                    entity_scope is None or subject_household not in entity_scope
-                ):
+                if (subject_household is None or entity_scope is None
+                        or subject_household not in entity_scope):
+                    # §4a: null subject_household = unattributed row → deny
+                    # (core scopes on entity_ref, where null is out-of-scope).
                     return ScopeDecision("withheld", "wrong_household", fact_class)
             elif pred == "own_clinic_only":
-                if subject_clinic is not None and (
-                    entity_scope is None or subject_clinic not in entity_scope
-                ):
-                    # cross-clinic withhold — no rule permits this tenant's row
+                if (subject_clinic is None or entity_scope is None
+                        or subject_clinic not in entity_scope):
+                    # cross-clinic / unattributed-clinic withhold — no rule
+                    # permits this row for the caller's tenant scope (§4a).
                     return ScopeDecision("withheld", "default_deny_no_rule", fact_class)
+            else:
+                # §4b: unknown predicate FAILS CLOSED — a typo'd/future predicate
+                # in policy data must tighten scoping, never silently weaken it.
+                return ScopeDecision("withheld", "unrecognized_predicate", fact_class)
 
         return ScopeDecision(
             "revealed", "explicit_allow", fact_class,

@@ -49,6 +49,11 @@ def _collision_facts():
     facts = bundle(HH_A) + bundle(HH_B)
     facts.append(Fact("experimental_unmapped", "leak-me",
                       subject_household=HH_A, subject_clinic=CLINIC))
+    # §4a probe (C6 hardening): an UNATTRIBUTED row — null subject_household —
+    # under own_household_only must WITHHOLD (fail-closed), never reveal.
+    facts.append(Fact("visit_summary", "unattributed-null-household",
+                      entity_ref="unattributed:null-hh",
+                      subject_household=None, subject_clinic=CLINIC))
     return facts
 
 
@@ -86,6 +91,23 @@ async def test_t031_wrong_person_reveal_is_zero(scoped):
             if cls in HOUSEHOLD_SPECIFIC and f.subject_household not in _entity_scope(audience):
                 wrong_person += 1
     assert wrong_person == 0                    # zero-tolerance (SC-001)
+
+
+async def test_t031_null_household_fact_withheld_from_scoped_client(scoped):
+    # §4a (shim-retirement reconciliation, core semantic): a fact with NO
+    # household attribution is not "explicitly permitted" for a household-scoped
+    # audience — it withholds, and the withhold is audited per-fact.
+    sr, repo = scoped
+    out = await sr.recall("x", audience="client_verified", entity_scope=[HH_A, CLINIC])
+    assert all(f.content != "unattributed-null-household" for f in out)
+    # audit filter is audience-scoped: staff (own_clinic_only, clinic attributed)
+    # legitimately reveal this fact; for the household-scoped client every row —
+    # this run and prior runs (append-only log) — must be a withhold.
+    rows = [r for r in repo.get_reveal_decisions(CLINIC)
+            if r["entity_ref"] == "unattributed:null-hh"
+            and r["audience"] == "client_verified"]
+    assert rows and all(r["decision"] == "withheld" for r in rows)
+    assert rows[-1]["reason"] == "wrong_household"
 
 
 async def test_t031_client_never_sees_other_household(scoped):
