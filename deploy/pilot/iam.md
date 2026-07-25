@@ -117,3 +117,21 @@ adapter selection flips) with no redeploy of new code.
 - No `roles/owner` / `roles/editor` on any runtime SA.
 - Ingress is `all` only because Twilio + the Vercel frontend are external
   callers; tighten to an internal LB + IAP if/when a private network lands.
+
+## W7 brief reconciliation (verbatim anchors, added 2026-07-25)
+
+The two Matt-gated steps, as the brief words them:
+1. "Create GCP project (suggest `vetagent-pilot`) under the billing account;
+   grant the VetAgent stream's ops SA project-owner-equivalent (mirror FA2's
+   reauth-free `fa2-agent-ops` pattern)."
+2. "Budget: $600/mo with 50%/90% alerts (S1 forecast is ~$437; headroom for
+   load tests)."
+
+Brief constraints reflected in this scaffold: region us-central1; Cloud Run
+from day one, no hand-deployed VMs; voice-bridge min-instances 1; **Cloud SQL
+PG16 2vCPU/8GB + 100GB, non-HA during shadow week → enable HA at the
+pilot-activation gate** (the DB is the cost lever; HA ≈ doubles it); NO app
+connection as an owner/BYPASSRLS role; **Cloud Tasks only behind an adapter
+seam** (the one no-analog GCP service — connector-framework port comes from
+Steward; do not scatter raw Cloud Tasks calls); paid-tier/direct model keys,
+never a free-tier Gemini key on customer data.

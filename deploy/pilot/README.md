@@ -100,11 +100,20 @@ Set the number's Media Streams URL to
 
 ---
 
-## Acceptance evidence to capture (5 items)
+## Acceptance evidence to capture (5 items — W7 brief verbatim, reconciled 2026-07-25)
 
-> Reconstructed from the provisioning intent; two are named explicitly in the
-> brief (RLS spot-check, forced websocket-drop). Confirm against the W7 brief's
-> exact list before sign-off.
+> The brief's own list ("delivered = pushed + hash on the board, per W3"):
+> 1. Project live, budget alerts firing to Matt.
+> 2. C7 DDL applied; an SC-003-style spot check run against the live DB
+>    (unfiltered select as app role sees only its tenant) — paste the evidence.
+> 3. Both services deployed via CI; voice bridge survives a forced websocket
+>    drop (reconnect verified).
+> 4. Exit-runbook stub filed (patterns/ template follows from Steward; a
+>    paragraph now suffices).
+> 5. Costs visible: first invoice screenshot or billing-export query on the board.
+>
+> A1–A5 below are the working procedures that produce evidence for brief items
+> 2, 3 and 5; item 1 falls out of Matt's gated steps; item 4 is the stub below.
 
 ### A1 — Deploy provenance on both services (`/healthz` carries the SHA)
 
@@ -163,3 +172,13 @@ as a literal env value. Both services reach `Ready` and pass their startup probe
 
 `gcloud run services update-traffic <svc> --to-revisions=<prev>=100`. Images are
 immutable + SHA-tagged, so rollback is a traffic flip to the prior revision.
+
+## Exit-runbook stub (brief acceptance item 4)
+
+If the pilot ends (any reason): revoke the two Twilio numbers' webhooks; scale
+both Cloud Run services to zero and disable; export the clinic-owned vault +
+Cloud SQL (pg_dump per practice) and deliver to Synergy Vet as their §6.3
+backup; revoke all model API keys; delete Secret Manager entries; the GCP
+project itself is Matt's to archive or delete. No customer data survives in
+any VetAgent-controlled system after delivery. (Steward's patterns/ template
+supersedes this paragraph when it lands.)
