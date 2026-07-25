@@ -1,0 +1,49 @@
+# syntax=docker/dockerfile:1
+# ---------------------------------------------------------------------------
+# VetAgent pilot — API service image (Synergy Vet, W7).
+# Serves the FastAPI backend (backend.main:app): scheduler, identity/RBAC,
+# envelope + relationship surfaces. Stateless request/response; scales to 0.
+#
+# Production-shaped: slim base, non-root runtime user, pinned deps layer,
+# HEALTHCHECK on /healthz, deploy provenance (GIT_SHA -> /healthz).
+# Build context is the REPO ROOT (paths are backend/...). Build via
+# deploy/pilot/build.sh so the SHA and clean-tree guard are enforced.
+# ---------------------------------------------------------------------------
+FROM python:3.12-slim AS base
+
+# Deploy provenance (Pattern #4): the caller passes the resolved commit SHA.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA} \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PORT=8080
+
+WORKDIR /app
+
+# System deps: curl for the container HEALTHCHECK only. psycopg2-binary and
+# cryptography ship wheels, so no build toolchain is needed.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Dependency layer first for cache reuse.
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Application code.
+COPY backend/ ./backend/
+
+# Non-root runtime user (least privilege; no shell login needed).
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8080
+
+# Liveness + provenance. Cloud Run also has its own probe; this covers `docker run`.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${PORT}/healthz" || exit 1
+
+# Single worker: Cloud Run scales by instances, not in-process workers.
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT}"]
