@@ -1,0 +1,97 @@
+# ---------------------------------------------------------------------------
+# VetAgent pilot — voice-bridge Cloud Run service (Knative Serving manifest).
+# Long-lived Twilio Media Streams websockets (backend.voice_bridge_main:app).
+#
+# WHY min-instances 1: a dropped/cold voice call is a bad first impression and
+# there is no graceful retry for a live caller. One instance stays warm so the
+# first call of the day connects without a cold start.
+#
+# WEBSOCKET 60-min CAP: Cloud Run caps a single request (incl. a websocket) at
+# 3600s. Gemini Live independently caps a session ~15 min (WS ~10 min lifetime).
+# Neither is a call-length limit for the CALLER: the bridge's transparent
+# resumption (T014 adapter.resume) re-establishes the model session without
+# re-disclosing, and the C3 escalation watchdog (backend/voice/adapter_guarantees.py
+# EscalationWatchdog) holds independent transfer authority if a reconnect stalls.
+# Reconnect authority is client/Twilio-side (Twilio re-dials on drop). See
+# backend/tests/infra/test_ws_reconnect_harness.py for the survives-drop contract.
+#
+# Placeholders: PROJECT_ID, REGION, IMAGE_SHA (see api.service.yaml header).
+# ---------------------------------------------------------------------------
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: vetagent-voice-bridge
+  labels:
+    app: vetagent
+    component: voice-bridge
+    pilot: synergy-vet
+  annotations:
+    run.googleapis.com/ingress: all            # Twilio Media Streams connects here
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"  # ALWAYS WARM — no cold voice calls
+        autoscaling.knative.dev/maxScale: "4"  # pilot concurrency ceiling
+        run.googleapis.com/cpu-throttling: "false"   # steady CPU for realtime audio
+        run.googleapis.com/sessionAffinity: "true"   # keep a call on one instance
+    spec:
+      serviceAccountName: vetagent-voice-sa@PROJECT_ID.iam.gserviceaccount.com
+      containerConcurrency: 20                  # concurrent live calls per warm instance
+      timeoutSeconds: 3600                      # Cloud Run websocket hard cap (60 min)
+      containers:
+        - image: IMAGE_SHA
+          ports:
+            - name: http1
+              containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          env:
+            # ── Non-secret config ──────────────────────────────────────────
+            - name: VOICE_LIVE
+              value: "true"                     # real telephony/model at pilot-activation
+            - name: GEMINI_LOCATION
+              value: "global"                   # gen-3 Gemini REQUIRES location=global (see iam.md)
+            # ── Secrets — Secret Manager refs, never baked ─────────────────
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vetagent-gemini-api-key        # paid-tier key
+                  key: latest
+            - name: OPENAI_API_KEY                       # Realtime fallback slot
+              valueFrom:
+                secretKeyRef:
+                  name: vetagent-openai-api-key
+                  key: latest
+            - name: TWILIO_ACCOUNT_SID
+              valueFrom:
+                secretKeyRef:
+                  name: vetagent-twilio-account-sid
+                  key: latest
+            - name: TWILIO_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vetagent-twilio-auth-token
+                  key: latest
+            - name: VOICE_DATABASE_URL                   # 8 voice tables (Cloud SQL)
+              valueFrom:
+                secretKeyRef:
+                  name: vetagent-voice-db-url
+                  key: latest
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 30
+  traffic:
+    - percent: 100
+      latestRevision: true
