@@ -1,0 +1,96 @@
+# ---------------------------------------------------------------------------
+# VetAgent pilot — API Cloud Run service (Knative Serving manifest).
+# Stateless FastAPI (backend.main:app). Scales to zero when idle.
+#
+# Placeholders to substitute at deploy (README step 3):
+#   PROJECT_ID   GCP project id (Matt-gated: created same-day)
+#   REGION       e.g. us-central1
+#   IMAGE_SHA    image ref from build.sh, e.g. REGION-docker.pkg.dev/PROJECT_ID/vetagent/vetagent-api:<sha>
+# Secrets are Secret Manager refs — NEVER env-baked. Non-secret config only in env.
+# ---------------------------------------------------------------------------
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: vetagent-api
+  labels:
+    app: vetagent
+    component: api
+    pilot: synergy-vet
+  annotations:
+    run.googleapis.com/ingress: all            # public: frontend (Vercel) + Twilio webhooks
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"  # stateless: scale to zero when idle
+        autoscaling.knative.dev/maxScale: "4"  # sane pilot ceiling; one clinic's load
+        run.googleapis.com/cpu-throttling: "true"
+    spec:
+      # Per-service, least-privilege identity (see iam.md).
+      serviceAccountName: vetagent-api-sa@PROJECT_ID.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+        - image: IMAGE_SHA
+          ports:
+            - name: http1
+              containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          env:
+            # ── Non-secret config ──────────────────────────────────────────
+            - name: COS_IDENTITY_PROVIDER
+              value: "fake"                     # firebase not wired for pilot
+            - name: COS_IDENTITY_TOKEN_ISSUER
+              value: "vetagent-identity"
+            - name: COS_IDENTITY_SCHEMA_NAME
+              value: "cos_identity"
+            - name: COS_IDENTITY_APP_ROLE
+              value: "cos_identity_app"
+            - name: COS_IDENTITY_AUTH_ROLE
+              value: "cos_identity_auth"
+            - name: COS_IDENTITY_OWNER_ROLE
+              value: "cos_identity_owner"
+            # ── Secrets — Secret Manager refs, never baked ─────────────────
+            - name: COS_IDENTITY_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: vetagent-identity-jwt-secret
+                  key: latest
+            - name: COS_IDENTITY_DATABASE_URL       # asyncpg DSN (Cloud SQL)
+              valueFrom:
+                secretKeyRef:
+                  name: vetagent-identity-db-url
+                  key: latest
+            - name: VOICE_DATABASE_URL              # SQLAlchemy DSN (envelope/relationship)
+              valueFrom:
+                secretKeyRef:
+                  name: vetagent-voice-db-url
+                  key: latest
+            - name: TWILIO_ACCOUNT_SID
+              valueFrom:
+                secretKeyRef:
+                  name: vetagent-twilio-account-sid
+                  key: latest
+            - name: TWILIO_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vetagent-twilio-auth-token
+                  key: latest
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 30
+  traffic:
+    - percent: 100
+      latestRevision: true

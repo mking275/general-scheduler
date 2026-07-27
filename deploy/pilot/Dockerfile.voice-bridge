@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1
+# ---------------------------------------------------------------------------
+# VetAgent pilot — voice-bridge service image (Synergy Vet, W7).
+# Serves backend.voice_bridge_main:app: the Twilio Media Streams websocket
+# terminator bridged to the realtime model port (Gemini Live primary / OpenAI
+# Realtime fallback). Long-lived websockets -> its own service, min-instances 1
+# (see cloudrun/voice-bridge.service.yaml). Kept separate from the api so a
+# stateful, always-warm socket surface never blocks the stateless api's scale.
+#
+# Production-shaped: slim base, non-root, pinned deps, HEALTHCHECK on /healthz,
+# deploy provenance (GIT_SHA -> /healthz). Build context is the REPO ROOT.
+# ---------------------------------------------------------------------------
+FROM python:3.12-slim AS base
+
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA} \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PORT=8080
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Shares the backend requirements (websockets, google-genai, openai, twilio).
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend/ ./backend/
+
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${PORT}/healthz" || exit 1
+
+# uvicorn speaks websockets (websockets lib already in requirements). One worker;
+# concurrency is per-call and Cloud Run holds one warm instance.
+CMD ["sh", "-c", "uvicorn backend.voice_bridge_main:app --host 0.0.0.0 --port ${PORT}"]

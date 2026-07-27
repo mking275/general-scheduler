@@ -25,9 +25,15 @@ from .agents.clinic_resolver import ClinicResolver
 from .solver import HeuristicSolver
 from .agents.dispatch import DispatchAgent
 from fastapi.middleware.cors import CORSMiddleware
+import os as _os
 import uuid as _uuid
 import json
 from datetime import datetime, date as _date
+
+# Deploy provenance (Pattern #4): the git SHA is baked into the image at build
+# (GIT_SHA build arg -> env) and surfaced on /healthz so a running revision is
+# traceable to an exact commit. "unknown" when run outside a provenance build.
+GIT_SHA = _os.environ.get("GIT_SHA", "unknown")
 
 # SMS gateway — uses Twilio when credentials are set, simulation fallback otherwise
 try:
@@ -150,6 +156,20 @@ def require_module(module_id: str):
 # ============================================================
 # Session
 # ============================================================
+
+@app.get("/healthz")
+def healthz():
+    """Liveness + deploy-provenance probe (Pattern #4). Cloud Run health checks
+    hit this; the git SHA lets an operator map a live revision to a commit.
+    Deliberately dependency-free — it must return 200 even when the identity
+    Postgres pool is down (auth degrades, the service is still 'up')."""
+    return {
+        "status": "ok",
+        "service": "vetagent-api",
+        "git_sha": GIT_SHA,
+        "session_id": SESSION_ID,
+    }
+
 
 @app.get("/api/session")
 def get_session():
