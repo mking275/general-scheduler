@@ -18,7 +18,11 @@ def policy() -> ScopingPolicy:
 #  T018 — evaluator: allow / default-deny / audience-absent / unmapped-kind
 # --------------------------------------------------------------------------- #
 def test_t018_mapped_kind_in_allow_classes_allows(policy):
-    d = policy.evaluate("appointment", "client_verified")   # schedule ∈ allow
+    # §4a core semantic: an active scope predicate requires an ATTRIBUTED,
+    # in-scope row — a null subject no longer passes (fail-closed).
+    d = policy.evaluate("appointment", "client_verified",   # schedule ∈ allow
+                        subject_household="hhA", subject_clinic=CLINIC,
+                        entity_scope=["hhA", CLINIC])
     assert d.allowed and d.reason == "explicit_allow"
     assert d.fact_class == "schedule"
 
@@ -42,14 +46,18 @@ def test_t018_unmapped_kind_denied_never_by_omission(policy):
 
 
 def test_t018_own_household_only_wrong_household(policy):
+    # subject_clinic supplied in-scope so own_clinic_only passes and the
+    # household predicate is the one under test (§4a: null clinic would deny).
     d = policy.evaluate("visit_summary", "client_verified",
-                        subject_household="hhB", entity_scope=["hhA"])
+                        subject_household="hhB", subject_clinic=CLINIC,
+                        entity_scope=["hhA", CLINIC])
     assert not d.allowed and d.reason == "wrong_household"
 
 
 def test_t018_own_household_only_own_household_allows(policy):
     d = policy.evaluate("visit_summary", "client_verified",
-                        subject_household="hhA", entity_scope=["hhA"])
+                        subject_household="hhA", subject_clinic=CLINIC,
+                        entity_scope=["hhA", CLINIC])
     assert d.allowed and d.reason == "explicit_allow"
 
 
@@ -61,7 +69,9 @@ def test_t019_revealed_and_withheld_each_write_one_row(repo, policy):
     log = RevealLog(repo, CLINIC, interaction_ref=ref)
     before = len(repo.get_reveal_decisions(CLINIC))
 
-    allow = policy.evaluate("appointment", "client_verified")
+    allow = policy.evaluate("appointment", "client_verified",
+                            subject_household="hhA", subject_clinic=CLINIC,
+                            entity_scope=["hhA", CLINIC])
     log.record(audience="client_verified", fact_kind="appointment", decision=allow)
 
     deny = policy.evaluate("balance", "client_verified")

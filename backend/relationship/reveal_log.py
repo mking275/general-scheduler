@@ -2,7 +2,9 @@
 
 Writes a ``reveal_decision_log`` row on **every** scoping decision — revealed
 AND withheld — the staff-visible audit spine. The reason vocabulary is closed:
-``explicit_allow | default_deny_no_rule | wrong_household | unmapped_kind``.
+``explicit_allow | default_deny_no_rule | wrong_household | unmapped_kind |
+unrecognized_predicate`` (the last added by the C6 §4b fail-closed hardening;
+coordinate the string with core's rail vocabulary at cutover).
 """
 from __future__ import annotations
 

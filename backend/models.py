@@ -1149,7 +1149,8 @@ class RevealDecisionLog(BaseModel):
     entity_ref: Optional[str] = None
     decision: RevealDecision
     rule_matched: Optional[str] = None
-    reason: _Literal["explicit_allow", "default_deny_no_rule", "wrong_household", "unmapped_kind"]
+    reason: _Literal["explicit_allow", "default_deny_no_rule", "wrong_household",
+                     "unmapped_kind", "unrecognized_predicate"]
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
