@@ -205,3 +205,35 @@ backup; revoke all model API keys; delete Secret Manager entries; the GCP
 project itself is Matt's to archive or delete. No customer data survives in
 any VetAgent-controlled system after delivery. (Steward's patterns/ template
 supersedes this paragraph when it lands.)
+
+---
+
+## Domain — `vet-agent.com` (registered 2026-07-28, Cloudflare, auto-renew)
+
+Product domain for VetAgent. Distinct from `fruitscout.ai` (corporate site, VeraWeb's
+surface) — no shared records, so no cross-head DNS contention.
+
+### Records for the pilot (human-gated; DNS is Matt's per fleet rule)
+
+| Host | Target | Cloudflare proxy | Why |
+|---|---|---|---|
+| `api.vet-agent.com` | Cloud Run `vetagent-api` | **Proxied (orange)** | Owner/manager surfaces; benefits from Cloudflare TLS, caching, WAF |
+| `voice.vet-agent.com` | Cloud Run `vetagent-voice-bridge` | **DNS-only (grey)** | Twilio Media Streams target — see below |
+| `www` / apex | *(unassigned for the pilot)* | — | Marketing surface; coordinate with VeraWeb before claiming |
+
+### Why the voice host is DNS-only — do not "helpfully" proxy it later
+
+The voice bridge carries **real-time bidirectional audio over a WebSocket**. Proxying
+it adds a hop to every audio frame (latency is the product on a phone call) and puts a
+third party's connection-idle and duration limits between Twilio and the bridge — on top
+of Cloud Run's own 60-minute WebSocket cap, which the C3 reconnect/watchdog logic already
+has to survive. Fewer moving parts on the path that a client hears.
+
+Proxy the API host, keep the voice host direct, and if that is ever revisited, test a
+full-length call **before** changing the record — not after.
+
+### Mapping mechanics
+Cloud Run custom domains require domain verification, then a domain mapping per service
+(`gcloud beta run domain-mappings create --service=… --domain=…`), which emits the exact
+DNS records to enter at Cloudflare. Verification is a one-time human step (Search Console
+TXT record), which is why this whole section is Matt-gated rather than agent-run.
