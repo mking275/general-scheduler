@@ -135,19 +135,42 @@ psql "$VOICE_DATABASE_URL_PSQL" -c "\dt" | grep -E 'reveal_decision_log|onboardi
 
 ### A3 — RLS wall spot-check (SC-003 posture)
 
-Under the **non-owner app role** with no tenant set, a cross-tenant read returns
-**zero rows** — the wall is the DB, not Python. Reference harness:
-`backend/identity/tests/integration/test_rls_wall.py`. Manual spot-check:
+Under the **non-owner app role**, a cross-tenant read returns **zero rows** — the
+wall is the DB, not Python. Reference harness:
+`backend/identity/tests/integration/test_rls_wall.py`.
+
+> **A bare `0 rows` PROVES NOTHING.** Under RLS a query with a *wrong tenant key*
+> also returns 0 — indistinguishable from "0 because isolation held." (Fleet
+> lesson, 2026-07-28: a hyphenated copy of a real key with a space in it read as
+> "wall confirmed" while confirming nothing.) So the check below has three parts
+> and all three are required evidence: verify the keys, prove rows exist to be
+> hidden (positive control), then prove they are hidden.
 
 ```bash
-psql "$IDENTITY_ADMIN_DSN" <<'SQL'
+# (1) KEY VERIFICATION — as OWNER, list the real keys. Copy them EXACTLY;
+#     never retype a key from a design doc.
+psql "$IDENTITY_OWNER_DSN" -c \
+  "SELECT DISTINCT customer_id FROM cos_identity.users ORDER BY 1;"
+
+# (2) POSITIVE CONTROL — as OWNER (RLS not enforced for the owner), the target
+#     rows MUST exist. If this is 0, the isolation test below is vacuous.
+psql "$IDENTITY_OWNER_DSN" -c \
+  "SELECT count(*) FROM cos_identity.users WHERE customer_id = '<KEY_B_EXACT>';"
+#     expect: > 0
+
+# (3) ISOLATION — as the app role scoped to tenant A. BOTH assertions required:
+psql "$IDENTITY_ADMIN_DSN" <<SQL
 SET ROLE cos_identity_app;
-SELECT set_config('app.customer_id', 'tenant-A', true);
--- attempt to read tenant-B rows: must be 0
-SELECT count(*) FROM cos_identity.users WHERE customer_id = 'tenant-B';
+SELECT set_config('app.customer_id', '<KEY_A_EXACT>', true);
+SELECT count(*) AS should_be_zero     FROM cos_identity.users WHERE customer_id = '<KEY_B_EXACT>';
+SELECT count(*) AS should_be_positive FROM cos_identity.users WHERE customer_id = '<KEY_A_EXACT>';
 SQL
 ```
-Expected: `count = 0` (RLS filters it even though the SQL asks for tenant-B).
+
+**Evidence to paste on the board:** the key list from (1), the positive-control
+count from (2) (`> 0`), and BOTH counts from (3) — `should_be_zero = 0` **and**
+`should_be_positive > 0`. The second is what distinguishes a working wall from a
+broken query, an empty table, or a mistyped key.
 
 ### A4 — Forced websocket-drop (voice-bridge survives, session intact)
 
