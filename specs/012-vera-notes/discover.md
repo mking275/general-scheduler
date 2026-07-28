@@ -526,3 +526,55 @@ AI scribing in veterinary went from **3.5% to 17.5% of VIN members in 14 months*
 ### Differentiation Source
 Not the note — the **catchability**, sold as **defensibility rather than convenience**. The AAVSB position is that responsibility for AI use rests entirely with the licensee; VIN's general counsel notes it is unclear whether recordings are even part of the legal medical record and warns they are discoverable; and the sharpest recorded objection in the category — *"I won't use it… This technology is not good enough for these critical documents"* [V] — is a **verifiability** objection, not an accuracy one. A vet who can prove in three seconds that a dose came from an actual spoken sentence has a defense no competitor's product can produce. That aims 012 at the ~80% of the profession that has *refused* scribes on trust grounds — a cohort the incumbents have stopped selling to.
 Second source of difference: **the smallest legal surface that still offers verification.** Nobody has claimed *"audio kept only until you sign, then hard-deleted, with the provenance map preserved"* — while the incumbent stores recordings **in the patient's clinical record**. Third: Vera Notes is the only scribe attached to an operating layer that already knows the practice. The note is the wedge; documentation → missed-charge capture → clinical reminders is the climb.
+
+---
+
+## Matt's rulings (2026-07-28) — the three open questions, decided
+
+Recorded here so `/clarify` starts from decisions rather than re-opening them.
+
+### R-1 · Audio retention → **EPHEMERAL VERIFICATION. Adopted.**
+Retain audio through signature, then hard-delete. **7-day default, 30-day
+ceiling, legal-hold override.** A practice may *shorten* freely; *lengthening*
+requires an explicit acknowledgment of the discovery risk (a deliberate bet, never
+an accidental default). Citations degrade to **loud, dated tombstones** (C-8).
+
+*Rationale:* the value curve and the liability curve cross at signature. Before
+it, audio is the verification instrument; after it, the signed note is the legal
+record and the audio's main remaining use is impeaching that record in discovery.
+Seven days survives a late signature after a weekend or a sick day and is still
+defensible as transitory draft material. Retention is a **customer-visible term**,
+not an internal default.
+
+### R-2 · State exposure → **No pre-emptive carve-outs. State is a per-practice property. NO SPEAKER DIARIZATION in cycle one.**
+Two decisions, separated:
+- **Geography:** ask at kickoff (week-1 discovery) before designing around a risk
+  the group may not have — but build **state as a per-practice property from day
+  one**, because the up-market ICP (100–400-practice groups) certainly spans IL/WA.
+- **Diarization: dropped from 12a.** It is the entire Illinois BIPA voiceprint
+  exposure (per-violation statutory damages across a clinic group, private right
+  of action), and a SOAP note needs *what was said* far more than perfect speaker
+  labels — the DVM is the primary speaker and the one whose words become the
+  record. Accepted cost: rougher multi-speaker transcripts.
+
+### R-3 · Consent posture → **STAND BEHIND THE MECHANISM. Adopted, scoped.**
+- **We build and warrant the machinery:** per-state rules, the disclosure script,
+  the recorded consent artifact, per-practice configuration, and **visible gaps**
+  when it is not followed.
+- **We do not warrant the practice's operational behavior** — but the system makes
+  skipping the script hard and *visible*, which is what a practice needs to defend
+  itself.
+
+*Rationale:* disclaiming consent onto the customer contradicts the posture the
+product is built on (trust by construction; the published won't-do list). It is
+also genuinely unclaimed — competitors make consent solely the clinic's problem —
+and for a PE-owned operator, multi-state compliance burden is the thing their
+operating partners actually worry about, so this is a sales asset. The scope limit
+exists because unlimited liability for other parties' operational behavior is
+uninsurable.
+
+### Standing condition on all three
+**If the citation/verification layer is ever descoped for schedule, cancel 012 —
+do not ship it.** IDEXX now bundles a free ambient scribe inside ezyVet (reaching
+Synergy Vets), so verification *is* the product; a scribe without citations is a
+paid copy of something the customer already has for free.
