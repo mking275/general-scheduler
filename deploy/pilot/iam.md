@@ -135,3 +135,19 @@ connection as an owner/BYPASSRLS role; **Cloud Tasks only behind an adapter
 seam** (the one no-analog GCP service — connector-framework port comes from
 Steward; do not scatter raw Cloud Tasks calls); paid-tier/direct model keys,
 never a free-tier Gemini key on customer data.
+
+## Ops SA — CONFIRMED reauth-free (Matt, 2026-07-28)
+
+The provisioning ask was granted in the fleet harden round (Ba `5bb491f3`): the
+`vetagent-pilot` **ops service account is provisioned reauth-free at project
+creation**, riding the project-creation step itself — not added afterward.
+
+    roles: run.admin + cloudsql.client + secretmanager.secretAccessor
+    scope: the vetagent-pilot project only
+
+Rationale, recorded so nobody "simplifies" it later: a long-lived service that
+outlives its credential is a scheduled outage. The fleet hit this class twice —
+an 8-hour auth stall, and a near-miss where the shared twin proxy was running on
+expiring user ADC on a box whose refresh was already failing (its next restart
+would have taken all fleet comms down, looping forever under Restart=always).
+User ADC never authenticates a standing service here.
