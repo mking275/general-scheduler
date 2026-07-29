@@ -152,3 +152,44 @@ entities:
       qty_on_hand: qty_on_hand
       unit: unit
       last_counted_at: last_counted_at
+
+# ── SOURCE-ABSENT ENTITIES (recorded 2026-07-29 from the first real delivery) ──
+# Profiled against Coastal Creek Animal Hospital's complete export. Three entities
+# this map declares are NOT PRESENT in what ezyVet actually ships. They are recorded
+# here as source-absent rather than deleted, so the profiler keeps FLAGGING them
+# (FR-007) instead of a future reader assuming they were never wanted.
+#
+#   ar_balances  — ezyVet ships NO accounts-receivable aging file and no per-client
+#                  balance field. AR must be DERIVED (invoice line items minus
+#                  payments, per client). Matt's ruling 2026-07-29: reconcile against
+#                  derived figures AND state plainly in the reconciliation report
+#                  that this is because ezyVet does not provide an AR aging report.
+#                  The disclosure is not optional — a derived figure presented as if
+#                  it were the source's own is the dishonest version of this.
+#
+#   inventory    — Coastal Creek does not track inventory in ezyVet (confirmed with
+#                  the practice). Mark NOT-TRACKED-IN-SOURCE for this practice rather
+#                  than reporting a gap; where stock actually lives is an open
+#                  question with the group. Re-check per practice: absence here is a
+#                  practice-level fact, not an ezyVet-level one.
+#
+#   providers    — no roster file; staff identities are embedded as fields on
+#                  consults and appointments. Derive the provider set from those
+#                  rather than expecting an export.
+
+source_absent:
+  ar_balances:
+    reason: not_exported_by_source
+    handling: derive_and_disclose
+    disclosure: >-
+      Accounts-receivable figures in this report are DERIVED from invoice line
+      items less payments, because ezyVet does not provide an accounts-receivable
+      aging report in its export. They have not been reconciled against a
+      practice-supplied AR statement.
+  inventory:
+    reason: not_tracked_in_source_by_this_practice
+    handling: mark_not_applicable
+    scope: per_practice
+  providers:
+    reason: no_roster_export
+    handling: derive_from_consults_and_appointments
