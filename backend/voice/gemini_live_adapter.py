@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from backend.voice.realtime_model_port import BaseSimAdapter
 
+from backend.model_config import GEMINI_LIVE
+
 
 class GeminiLiveAdapter(BaseSimAdapter):
     provider = "gemini_live"
     default_voice = "vera-en-us"
     out_rate = 24000            # Gemini Live audio-out is 24 kHz PCM
-    model_name = "gemini-3.1-flash-live-preview"
+    model_name = GEMINI_LIVE
 
     async def _live_connect(self, system, tools, voice, locale) -> None:  # pragma: no cover
         # Pilot-activation only: real google-genai Live session. Import is

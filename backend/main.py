@@ -1054,9 +1054,10 @@ def vera_chat(req: VeraChatRequest):
     if api_key:
         try:
             from google import genai
+            from model_config import GEMINI_FLASH
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=GEMINI_FLASH,
                 contents=[
                     {"role": "user", "parts": [{"text": VERA_CHAT_SYSTEM_PROMPT + "\n\nUser: " + message + "\n\nVera:"}]}
                 ],

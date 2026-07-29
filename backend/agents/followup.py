@@ -29,6 +29,7 @@ def _get_gemini():
         return False
     try:
         from google import genai
+            from model_config import GEMINI_FLASH
         _gemini_client = genai.Client(api_key=api_key)
         _LLM_AVAILABLE = True
         log.info("FollowUp Agent: Gemini LLM initialized successfully")
@@ -188,7 +189,7 @@ class FollowUpDraftAgent:
         user_prompt = "\n".join(parts) + "\n\nWrite the follow-up email."
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_FLASH,
             contents=[
                 {"role": "user", "parts": [{"text": FOLLOWUP_SYSTEM_PROMPT + "\n\n" + user_prompt}]}
             ],
