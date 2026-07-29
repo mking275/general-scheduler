@@ -7,28 +7,66 @@
 # the ScopeCategory enum members (backend/models.py).
 
 categories:
-  - key: patient_client
-    label: "Patient & client records"
-    # ezyVet source entities that satisfy this category
-    source_entities: [clients, patients, contacts, addresses]
-    required: true
-  - key: scheduling
-    label: "Scheduling / appointments"
-    source_entities: [appointments, resources, appointment_types]
-    required: true
-  - key: invoicing_billing_payments
-    label: "Invoicing, billing & payments (financial / AR / ledger)"
-    source_entities: [invoices, invoice_lines, ledger, payments, ar_balances]
-    required: true
-  - key: communications
-    label: "Client communications"
-    source_entities: [communications, messages]
-    required: true
-  - key: attachments_imaging
-    label: "Attachments & imaging"
-    source_entities: [attachments, documents, images]
-    required: true
-  - key: configuration
-    label: "Practice configuration (products/services, providers, settings)"
-    source_entities: [products, services, providers, settings, inventory]
-    required: true
+- key: patient_client
+  label: Patient & client records, INCLUDING clinical/medical records and histories
+  source_entities:
+  - addresses
+  - animal_master_problems
+  - clients
+  - consults
+  - contacts
+  - diagnostic_results
+  - diagnostics
+  - events
+  - health_status
+  - master_problems
+  - medications
+  - patients
+  - presenting_problems
+  - therapeutics
+  - vaccinations
+  - visit_exams
+  - visit_history
+  required: true
+  note: "The \xA75 letter's first bullet requests patient/client records 'including clinical/medical records\
+    \ and histories'. The clinical entities were REQUESTED; omitting them here let a delivery with zero\
+    \ clinical files pass scope-check as complete while SC-004 claims completeness covers clinical. Corrected\
+    \ 2026-07-29 (spec-013 discovery)."
+- key: scheduling
+  label: Scheduling / appointments
+  source_entities:
+  - appointments
+  - resources
+  - appointment_types
+  required: true
+- key: invoicing_billing_payments
+  label: Invoicing, billing & payments (financial / AR / ledger)
+  source_entities:
+  - invoices
+  - invoice_lines
+  - ledger
+  - payments
+  - ar_balances
+  required: true
+- key: communications
+  label: Client communications
+  source_entities:
+  - communications
+  - messages
+  required: true
+- key: attachments_imaging
+  label: Attachments & imaging
+  source_entities:
+  - attachments
+  - documents
+  - images
+  required: true
+- key: configuration
+  label: Practice configuration (products/services, providers, settings)
+  source_entities:
+  - products
+  - services
+  - providers
+  - settings
+  - inventory
+  required: true
