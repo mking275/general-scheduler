@@ -193,3 +193,18 @@ source_absent:
   providers:
     reason: no_roster_export
     handling: derive_from_consults_and_appointments
+
+# ── REAL-EXPORT FILE NAMES (verified against Coastal Creek, 2026-07-29) ──────
+# ezyVet ships nested files named <Thing>Export.csv; our canonical entity keys
+# are semantic. This maps one to the other so the adapter recognises a real
+# delivery instead of reporting 'unrecognized_variant' for a perfectly good one.
+source_files:
+  clients: ContactExport
+  patients: AnimalExport
+  appointments: AppointmentExport
+  products: ProductExport
+  communications: CommunicationExport
+  attachments: AttachmentExport
+  invoices: InvoiceExport
+  ledger: InvoiceExpenseExport
+  payments: PaymentExport

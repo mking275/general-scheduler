@@ -12,13 +12,21 @@ network connection and no live PII crosses the port in the build.
 """
 from __future__ import annotations
 
+import csv
 import io
+import sys
 import zipfile
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 # The core entities that signal a recognizable ezyVet complete-export.
+# Variant detection accepts EITHER our canonical entity keys (synthetic fixtures)
+# OR the file names a real ezyVet delivery ships (verified against Coastal
+# Creek, 2026-07-29). Recognising only the canonical names made a perfectly
+# standard export report as "unrecognized_variant", which reads as a suspect
+# delivery rather than a naming mismatch on our side.
 _EZYVET_CORE = {"clients", "patients", "invoices"}
+_EZYVET_CORE_REAL = {"ContactExport", "AnimalExport", "InvoiceExport"}
 
 
 @dataclass
@@ -45,6 +53,9 @@ def _to_zip_bytes(raw_export: Any) -> bytes:
     raise TypeError("raw_export must be ZIP bytes or expose raw_bytes()")
 
 
+csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
+
+
 class SimExtractionPort:
     """The sim no-retention extraction adapter. Parses the ZIP-of-CSVs export
     into a structural view and retains ZERO raw bytes after the call returns."""
@@ -66,13 +77,26 @@ class SimExtractionPort:
                 for name in zf.namelist():
                     if not name.endswith(".csv"):
                         continue
-                    entity = name[:-4]
+                    # Real exports nest files (Contacts/ContactExport.csv); the
+                    # entity is the BASENAME, so nested and flat layouts profile
+                    # identically (FR-005).
+                    entity = name.rsplit("/", 1)[-1][:-4]
                     text = zf.read(name).decode("utf-8", errors="strict")
-                    lines = [ln for ln in text.splitlines() if ln != ""]
-                    columns = lines[0].split(",") if lines else []
+                    # CSV-PARSE rather than splitlines: real veterinary data has
+                    # embedded newlines inside quoted fields (clinical notes,
+                    # communication bodies), and line-counting inflates the row
+                    # count by an order of magnitude. Those counts feed
+                    # completeness verification and the owner's reconciliation
+                    # report, so a naive count is not a cosmetic error — it is a
+                    # false number in a customer-facing document.
+                    reader = csv.reader(io.StringIO(text))
+                    try:
+                        columns = next(reader)
+                    except StopIteration:
+                        columns = []
                     entities[entity] = {
                         "columns": columns,
-                        "row_count": max(len(lines) - 1, 0),
+                        "row_count": sum(1 for _ in reader),
                         "encoding": "utf-8",
                     }
         except (zipfile.BadZipFile, UnicodeDecodeError, EOFError) as exc:
@@ -80,7 +104,10 @@ class SimExtractionPort:
             # error — it is never partially normalized downstream (FR-033).
             return ExtractionResult(corrupt=True, error=f"unreadable export: {exc}")
 
-        variant = "complete_v1" if _EZYVET_CORE.issubset(entities.keys()) else "unknown"
+        seen = set(entities.keys())
+        variant = ("complete_v1"
+                   if _EZYVET_CORE.issubset(seen) or _EZYVET_CORE_REAL.issubset(seen)
+                   else "unknown")
         result = ExtractionResult(entities=entities, variant_hint=variant)
 
         # NO-RETENTION: local `data`/`text` go out of scope here; nothing is

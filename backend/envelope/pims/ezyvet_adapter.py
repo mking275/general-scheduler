@@ -63,6 +63,13 @@ class EzyVetAdapter:
         with open(path) as f:
             self.mapping = yaml.safe_load(f)
         self._entity_map: dict[str, dict] = self.mapping["entities"]
+        # Real deliveries name files <Thing>Export; alias those onto the canonical
+        # entity keys so a genuine export is recognised rather than flagged as an
+        # unrecognised variant (verified against Coastal Creek, 2026-07-29).
+        self._source_files: dict[str, str] = self.mapping.get("source_files", {}) or {}
+        for canonical, filename in self._source_files.items():
+            if canonical in self._entity_map:
+                self._entity_map.setdefault(filename, self._entity_map[canonical])
         if extraction_port is None:
             from backend.envelope.sim import resolve_extraction_port
             extraction_port = resolve_extraction_port()
