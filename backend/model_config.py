@@ -27,13 +27,22 @@ GEMINI_LIVE = "gemini-3.1-flash-live-preview"
 # this exact value; see the endpoint-coupling note above.
 VERTEX_LOCATION = "global"
 
-# ── Anthropic in a product runtime — read before proposing it ────────────────
-# Claude is NOT on the fleet's Vertex project (no publisher models, no key), so a
-# Claude tier here means a SEPARATE serving path (anthropic-direct) with its own
-# credential, egress, quota and failure mode — outside the products-own-their-own-
-# infra shape. FA2 logged an anthropic-direct transport error on 2026-07-28 that
-# fell back to Vertex; it degraded correctly, which is exactly the point. Evaluate
-# prose quality AND serving-path cost together: a better draft arriving over a
-# flakier path with a second credential can still lose. Open question for spec-012
-# note drafting (60s budget = a quality decision); settled for voice (Gemini Live
-# wins on latency).
+# ── KNOWN DRIFT: these constants bind MODELS; the fleet binds TASK CLASSES ────
+# Corrected 2026-07-29. The platform runtime policy is task-class based:
+#   onboarding-converse (default) -> PREMIUM  -> claude-opus-4-8 (anthropic-direct,
+#                                                falling back to Claude-on-Vertex,
+#                                                then Gemini)
+#   extract                       -> STANDARD -> gemini-3.5-flash
+# i.e. Claude is the CONVERSATIONAL brain and Gemini the EXTRACTION brain — the
+# opposite of what a reader would infer from this file today.
+#
+# VetAgent's voice path correctly stays Gemini Live (latency; no Claude realtime
+# equivalent). But the non-voice conversational sites that import GEMINI_FLASH
+# (main.py Vera chat, agents/soap.py, agents/followup.py) are drafting/conversing
+# on the EXTRACTION tier, which drifts from the fleet pattern.
+#
+# The fix is structural, not a string swap: express task_class -> tier -> model as
+# POLICY (COS-004 shape) so a tier decision — e.g. spec-012's SOAP drafting — is a
+# binding change, never a code change. Tracked, not yet done; do not "fix" it by
+# swapping these literals to a Claude id, which would hardcode the same mistake in
+# the other direction and add a serving path with no policy behind it.
