@@ -52,6 +52,11 @@ def _as_float(value: Any) -> float:
         return 0.0
 
 
+class NormalizationYieldError(RuntimeError):
+    """Raised when a non-empty profile normalizes to zero records — a mapping
+    failure that would otherwise pass silently through every later stage."""
+
+
 class Normalizer:
     def __init__(self, repo):
         self.repo = repo
@@ -64,6 +69,25 @@ class Normalizer:
         """Load one profiled database into the canonical store via the adapter.
         Idempotent: safe to re-run against the same source (0 duplicates)."""
         result: NormalizeResult = adapter.normalize(profile, raw_export)
+
+        # EMPTY-YIELD GUARD. A profile that found rows but a normalize that
+        # produced none is a MAPPING failure, not an empty practice — and it is
+        # the most dangerous shape this pipeline can take, because every
+        # downstream stage happily reports success on zero records: completeness
+        # computes, quality assesses, the state machine advances to `verified`,
+        # and an operator reads a green run over an empty database.
+        #
+        # This is not hypothetical. On the first real delivery (Coastal Creek,
+        # 2026-07-29) the adapter keyed rows by nested path while the entity map
+        # keyed by basename; 618,109 profiled rows normalized to ZERO and the
+        # pipeline reported verified. Fail loudly instead.
+        profiled_rows = sum((profile.entities or {}).values())
+        if profiled_rows > 0 and not result.records:
+            raise NormalizationYieldError(
+                f"normalize produced 0 records from {profiled_rows:,} profiled rows "
+                f"for practice={practice_id!r} — the adapter mapped nothing. This is a "
+                f"mapping/keying failure, not an empty practice; refusing to advance."
+            )
 
         # 1) generic canonical spine — every category, lineage on 100% of rows.
         generic_rows: list[dict] = []

@@ -117,10 +117,19 @@ class EzyVetAdapter:
             if not rows:
                 continue
             category = spec["canonical_category"]
+            # id_field may be a single column or a LIST of candidates: the
+            # synthetic fixture speaks canonical names (client_id) while a real
+            # ezyVet delivery speaks its own ("Contact Id"). One mapping serves
+            # both rather than forking the variant.
             id_field = spec["id_field"]
+            id_candidates = id_field if isinstance(id_field, list) else [id_field]
             field_map: dict[str, str] = spec.get("fields", {})
             for row in rows:
-                source_id = str(row.get(id_field, "")).strip()
+                source_id = ""
+                for _cand in id_candidates:
+                    source_id = str(row.get(_cand, "") or "").strip()
+                    if source_id:
+                        break
                 if not source_id:
                     # a row with no stable id cannot be lineage-keyed — flag it
                     unmapped_fields.append({"entity": src_entity, "row": row,
@@ -157,7 +166,9 @@ class EzyVetAdapter:
         # ZIP bytes → parse CSV members into row dicts
         import csv
         import io
+        import sys
         import zipfile
+        csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
         out: dict[str, list[dict]] = {}
         data = raw_export.raw_bytes() if hasattr(raw_export, "raw_bytes") else raw_export
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
@@ -165,7 +176,12 @@ class EzyVetAdapter:
                 if not name.endswith(".csv"):
                     continue
                 text = zf.read(name).decode("utf-8")
-                out[name[:-4]] = list(csv.DictReader(io.StringIO(text)))
+                # BASENAME, not the nested path: a real delivery ships
+                # Contacts/ContactExport.csv while the entity map is keyed
+                # by ContactExport. Keying by path silently matched nothing
+                # and normalized ZERO records while reporting success.
+                out[name.rsplit("/", 1)[-1][:-4]] = list(
+                    csv.DictReader(io.StringIO(text)))
         return out
 
 

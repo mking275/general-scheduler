@@ -15,14 +15,13 @@
 
 variant: complete_v1
 pims: ezyvet
-
 entities:
-
-  # ---- patient/client + configuration (hydrate existing platform tables) ----
   clients:
     canonical_category: client
     ref_builder: client
-    id_field: client_id
+    id_field:
+    - Contact Id
+    - client_id
     fields:
       client_id: source_id
       first_name: first_name
@@ -30,11 +29,16 @@ entities:
       phone: phone
       email: email
       address: address
-
+      Contact Id: source_id
+      Contact First: first_name
+      Contact Last: last_name
+      Business Name: business_name
   patients:
     canonical_category: patient
     ref_builder: patient
-    id_field: patient_id
+    id_field:
+    - Animal Id
+    - patient_id
     fields:
       patient_id: source_id
       client_id: client_source_id
@@ -42,7 +46,10 @@ entities:
       species: species
       breed: breed
       status: status
-
+      Animal Id: source_id
+      Animal Name: name
+      Animal Species: species
+      Animal Breed: breed
   providers:
     canonical_category: provider
     ref_builder: staff
@@ -51,52 +58,72 @@ entities:
       provider_id: source_id
       name: name
       role: role
-
   appointments:
     canonical_category: appointment
     ref_builder: none
-    id_field: appointment_id
+    id_field:
+    - Appointment Id
+    - appointment_id
     fields:
       appointment_id: source_id
       patient_id: patient_source_id
       provider_id: provider_source_id
       start: start_time
       type: appointment_type
-
+      Appointment Id: source_id
+      Appointment Type: appointment_type
+      Appointment Start Time: start_time
+      Appointment Contact Id: client_source_id
   products:
     canonical_category: product_service
     ref_builder: none
-    id_field: product_id
+    id_field:
+    - Product Id
+    - product_id
     fields:
       product_id: source_id
       name: name
       unit_price: unit_price
-
+      Product Id: source_id
+      Product Name: name
+      Product Code: code
   communications:
     canonical_category: communication
     ref_builder: none
-    id_field: communication_id
+    id_field:
+    - Communication Id
+    - communication_id
     fields:
       communication_id: source_id
       client_id: client_source_id
       channel: channel
       body: body
-
+      Communication Id: source_id
+      DateTime: occurred_at
+      Direction: direction
+      Contact Method: channel
+      Communication Message: body
   attachments:
     canonical_category: attachment
     ref_builder: none
-    id_field: attachment_id
+    id_field:
+    - File Id
+    - attachment_id
     fields:
       attachment_id: source_id
       patient_id: patient_source_id
       kind: kind
       filename: filename
-
-  # ---- invoicing/billing/payments — financial / AR / ledger / payment -------
+      File Id: source_id
+      File Name: filename
+      Record Type: kind
+      Attachment Record Id: subject_ref
   invoices:
     canonical_category: invoice
     ref_builder: none
-    id_field: invoice_id
+    id_field:
+    - Invoice Id
+    - invoice_id
     target_table: InvoiceRecord
     fields:
       invoice_id: source_id
@@ -104,11 +131,16 @@ entities:
       total: total
       status: status
       issued_at: issued_at
-
+      Invoice Id: source_id
+      Invoice Number: invoice_number
+      Invoice Date: issued_at
+      Invoice Status: status
   ledger:
     canonical_category: ledger
     ref_builder: none
-    id_field: ledger_id
+    id_field:
+    - Invoice Expense Id
+    - ledger_id
     target_table: LedgerEntry
     fields:
       ledger_id: source_id
@@ -116,11 +148,16 @@ entities:
       amount: amount
       entry_type: entry_type
       posted_at: posted_at
-
+      Invoice Expense Id: source_id
+      Invoice Id: invoice_ref
+      Total: amount
+      Qty: quantity
   payments:
     canonical_category: payment
     ref_builder: none
-    id_field: payment_id
+    id_field:
+    - Payment Id
+    - payment_id
     target_table: PaymentRecord
     fields:
       payment_id: source_id
@@ -128,7 +165,12 @@ entities:
       amount: amount
       method: method
       received_at: received_at
-
+      Payment Id: source_id
+      Contact Id: client_ref
+      Date: received_at
+      Amount: amount
+      Outstanding: outstanding
+      Method: method
   ar_balances:
     canonical_category: ar_balance
     ref_builder: none
@@ -139,8 +181,6 @@ entities:
       client_id: client_ref
       balance: balance
       as_of: as_of
-
-  # ---- inventory ------------------------------------------------------------
   inventory:
     canonical_category: inventory
     ref_builder: none
@@ -152,6 +192,16 @@ entities:
       qty_on_hand: qty_on_hand
       unit: unit
       last_counted_at: last_counted_at
+source_files:
+  clients: ContactExport
+  patients: AnimalExport
+  appointments: AppointmentExport
+  products: ProductExport
+  communications: CommunicationExport
+  attachments: AttachmentExport
+  invoices: InvoiceExport
+  ledger: InvoiceExpenseExport
+  payments: PaymentExport
 
 # ── SOURCE-ABSENT ENTITIES (recorded 2026-07-29 from the first real delivery) ──
 # Profiled against Coastal Creek Animal Hospital's complete export. Three entities

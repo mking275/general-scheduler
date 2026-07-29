@@ -667,17 +667,27 @@ class OnboardingRepository:
         """Deterministic idempotent upsert on (practice_id, source_id): a re-run
         against the same source yields no duplicate rows and stable identifiers
         (FR-010). Returns the number of rows written or refreshed."""
-        from sqlalchemy import and_, delete as _delete
+        from sqlalchemy import delete as _delete, tuple_ as _tuple
         tbl = self.tables[table_name]
-        written = 0
+        payloads = [self._payload(table_name, self._dump(m)) for m in rows]
+        if not payloads:
+            return 0
+
+        # SET-BASED, not row-by-row. The original issued one DELETE per row, which
+        # is fine for a 40-row fixture and pathological for a real delivery: the
+        # first Coastal Creek ingest (176,755 records) exceeded ten minutes and
+        # committed nothing. Batched deletes + executemany turn ~176k round trips
+        # into a few hundred, and the semantics are unchanged.
+        CHUNK = 1000
+        keys = [tuple(p[k] for k in key_cols) for p in payloads]
         with self.engine.begin() as conn:
-            for m in rows:
-                payload = self._payload(table_name, self._dump(m))
-                cond = and_(*[tbl.c[k] == payload[k] for k in key_cols])
-                conn.execute(_delete(tbl).where(cond))
-                conn.execute(insert(tbl).values(**payload))
-                written += 1
-        return written
+            for i in range(0, len(keys), CHUNK):
+                batch = keys[i:i + CHUNK]
+                conn.execute(_delete(tbl).where(
+                    _tuple(*[tbl.c[k] for k in key_cols]).in_(batch)))
+            for i in range(0, len(payloads), CHUNK):
+                conn.execute(insert(tbl), payloads[i:i + CHUNK])
+        return len(payloads)
 
     def list_canonical(self, table_name: str, practice_id: str) -> list[dict]:
         return self._select_where(table_name, practice_id=practice_id)
