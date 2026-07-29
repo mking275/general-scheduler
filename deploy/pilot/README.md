@@ -250,3 +250,24 @@ So the edge is path-specific, not a routing failure.
 
 **Probe `/api/healthz` in production.** Both services expose it as an alias; the
 bare `/healthz` is retained for local and Docker health checks.
+
+### ⚠ NEVER set `GIT_SHA` as a runtime env var — verified 2026-07-29
+
+The provenance SHA must come **only** from the image's baked `ENV` (set via the
+`GIT_SHA` build arg). A runtime env var of the same name **silently overrides it**,
+and Cloud Run *persists env vars across revisions* — so a value set on deploy #1
+keeps answering for every later image.
+
+This bit us live: image `a7de8da` was serving while `/api/healthz` confidently
+reported `95a8434`, because the first deploy had pinned the env var. The endpoint
+built to prove which code is running was the thing lying about it — and it looked
+perfectly healthy while doing so.
+
+**Rule: build provenance must not be overridable by runtime configuration.** If a
+service reports a SHA, compare it to the deployed image tag before believing it:
+
+```bash
+gcloud run services describe <svc> --format='value(spec.template.spec.containers[0].image)'   # tag
+curl -H "Authorization: Bearer $TOK" "$URL/api/healthz"                                        # claim
+# they must match; if they differ, suspect a stale runtime env var first
+```
