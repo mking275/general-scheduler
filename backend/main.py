@@ -158,6 +158,12 @@ def require_module(module_id: str):
 # Session
 # ============================================================
 
+# NOTE: Cloud Run's frontend RESERVES /healthz and never forwards it to the
+# container — it answers with Google's own HTML 404. The route below still
+# works locally, in Docker and in k8s, so the alias is what production probes.
+# Verified 2026-07-29: unknown paths DO reach the app (FastAPI JSON 404);
+# only /healthz is intercepted.
+@app.get("/api/healthz")
 @app.get("/healthz")
 def healthz():
     """Liveness + deploy-provenance probe (Pattern #4). Cloud Run health checks

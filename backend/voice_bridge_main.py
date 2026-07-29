@@ -32,6 +32,9 @@ GIT_SHA = os.environ.get("GIT_SHA", "unknown")
 app = FastAPI(title="VetAgent — Voice Bridge")
 
 
+# Cloud Run reserves /healthz at the edge (see backend/main.py) — production
+# probes the /api/healthz alias.
+@app.get("/api/healthz")
 @app.get("/healthz")
 def healthz():
     """Liveness + deploy-provenance probe. Must return 200 with no external

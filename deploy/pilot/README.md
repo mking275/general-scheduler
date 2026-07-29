@@ -115,7 +115,7 @@ Set the number's Media Streams URL to
 > A1–A5 below are the working procedures that produce evidence for brief items
 > 2, 3 and 5; item 1 falls out of Matt's gated steps; item 4 is the stub below.
 
-### A1 — Deploy provenance on both services (`/healthz` carries the SHA)
+### A1 — Deploy provenance on both services (`/api/healthz` carries the SHA)
 
 ```bash
 curl -fsS https://<api-url>/healthz          # -> {"service":"vetagent-api","git_sha":"<sha>",...}
@@ -237,3 +237,16 @@ Cloud Run custom domains require domain verification, then a domain mapping per 
 (`gcloud beta run domain-mappings create --service=… --domain=…`), which emits the exact
 DNS records to enter at Cloudflare. Verification is a one-time human step (Search Console
 TXT record), which is why this whole section is Matt-gated rather than agent-run.
+
+### ⚠ Cloud Run reserves `/healthz` — verified 2026-07-29
+
+Cloud Run's frontend **intercepts `/healthz` and never forwards it** to the
+container; it answers with Google's own HTML 404. This is invisible in every
+other environment — the route returns 200 locally, in Docker, and in k8s.
+
+Verified empirically on this project: an unknown path (`/zzz-does-not-exist`)
+reaches the app and gets FastAPI's JSON 404, while `/healthz` gets Google's HTML.
+So the edge is path-specific, not a routing failure.
+
+**Probe `/api/healthz` in production.** Both services expose it as an alias; the
+bare `/healthz` is retained for local and Docker health checks.
