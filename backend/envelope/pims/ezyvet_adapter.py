@@ -107,7 +107,7 @@ class EzyVetAdapter:
         return f"{category}:{eref.PIMS_PREFIX}_{source_id}"
 
     def normalize(self, profile: FormatProfile, raw_export: Any) -> NormalizeResult:
-        entities = self._entities(raw_export)
+        entities = self._entities(raw_export, wanted=set(self._entity_map))
         records: list[CanonicalRecord] = []
         unmapped_fields: list[dict[str, Any]] = []
         _unmapped_agg: dict[tuple, dict[str, Any]] = {}
@@ -170,8 +170,15 @@ class EzyVetAdapter:
     # ------------------------------------------------------------------ #
     #  raw_export -> in-memory entity rows
     # ------------------------------------------------------------------ #
-    @staticmethod
-    def _entities(raw_export: Any) -> dict[str, list[dict]]:
+    def _entities(self, raw_export: Any, wanted: Optional[set] = None) -> dict[str, list[dict]]:
+        """Parse an export into row dicts.
+
+        ``wanted`` restricts parsing to entities the mapping actually covers. A
+        real delivery is 618,109 rows across 53 files of which 176,755 in 9 files
+        are mapped; parsing all of them built the full set in memory (and two
+        more copies downstream) before a single record was written. Parse what
+        you will use.
+        """
         if hasattr(raw_export, "entities"):
             return raw_export.entities            # the sim SyntheticExport
         if isinstance(raw_export, dict):
@@ -188,6 +195,9 @@ class EzyVetAdapter:
             for name in zf.namelist():
                 if not name.endswith(".csv"):
                     continue
+                base = name.rsplit("/", 1)[-1][:-4]
+                if wanted is not None and base not in wanted:
+                    continue   # unmapped entity: profiled and flagged, not parsed
                 text = zf.read(name).decode("utf-8")
                 # BASENAME, not the nested path: a real delivery ships
                 # Contacts/ContactExport.csv while the entity map is keyed
