@@ -181,3 +181,28 @@ def test_group_ack_skips_blocking_practice(repo):
     assert result["held"] == [blocking]
     assert surface.is_activatable(clean)
     assert not surface.is_activatable(blocking)
+
+
+def test_derived_ar_is_disclosed_in_the_owner_report(repo):
+    """Matt's ruling 2026-07-29: reconcile AR against DERIVED figures, and state in
+    the report that this is because ezyVet ships no AR aging report.
+
+    The failure this guards is not a crash — it is a report that looks clean. A
+    derived figure tied to itself always reconciles perfectly, so without the
+    disclosure the owner reads "your AR reconciles" when what actually happened is
+    "we computed both sides." Those are different claims, and only one of them is
+    evidence.
+    """
+    pid = f"p-derived-{uuid.uuid4().hex[:6]}"
+    exp, _ = _ingest_and_verify(repo, pid, planted="clean")
+    report = Reconciler(repo).reconcile(
+        CLINIC, pid, exp.reported_figures,
+        derived_figures={
+            "ar_balance_total":
+                "derived from invoice line items less payments — ezyVet provides no "
+                "accounts-receivable aging report",
+        },
+    )
+    disclosed = " ".join(report.outstanding_gap)
+    assert "ar_balance_total" in disclosed
+    assert "aging report" in disclosed.lower()

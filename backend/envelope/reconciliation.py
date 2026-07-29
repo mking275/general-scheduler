@@ -46,14 +46,27 @@ class Reconciler:
 
     def reconcile(self, clinic_id: str, practice_id: str,
                   reported_figures: dict[str, Any],
-                  attributed_causes: Optional[dict[str, str]] = None
+                  attributed_causes: Optional[dict[str, str]] = None,
+                  derived_figures: Optional[dict[str, str]] = None,
                   ) -> ReconciliationReport:
         """Build + append the reconciliation report. ``reported_figures`` are the
         source system's own numbers (``ar_balance_total`` / ``invoice_count`` /
         ``payment_total``); ``attributed_causes`` optionally explains an
         ``invoice``/``payment``/``ar`` variance (an unexplained AR variance always
-        blocks)."""
+        blocks).
+
+        ``derived_figures`` names any figure this report COMPUTED rather than read
+        from the source, mapped to the reason the source could not supply it. Every
+        such figure carries its reason into the owner-facing report — a derived
+        number presented as though it were the source's own is the dishonest version
+        of this report, and is exactly the failure a competitor's customers
+        discovered only after their open balances went missing.
+
+        Real case (2026-07-29): ezyVet's complete export ships no accounts-receivable
+        aging file and no per-client balance, so ``ar_balance_total`` is derived from
+        invoice line items less payments and MUST be disclosed as such."""
         causes = attributed_causes or {}
+        derived = derived_figures or {}
         completeness = self.repo.get_completeness_result(practice_id)
         profile = self.repo.get_format_profile(practice_id)
         profiled_entities: dict[str, int] = (profile or {}).get("entities") or {}
@@ -91,11 +104,19 @@ class Reconciler:
         blocking = any(v.disposition == VarianceDisposition.BLOCKING
                        for v in (ar_var, inv_var, pay_var))
 
+        # A DERIVED figure has no independent source number to tie to, so its
+        # variance is arithmetic identity, not evidence. Recording the reason keeps
+        # the report honest: "this reconciles" and "we computed both sides" are
+        # different claims and the owner is entitled to know which one they have.
+        disclosures = [
+            f"{figure}: {reason}" for figure, reason in sorted(derived.items())
+        ]
+
         report = ReconciliationReport(
             clinic_id=clinic_id, practice_id=practice_id,
             category_counts=category_counts,
             ar_variance=ar_var, invoice_variance=inv_var, payment_variance=pay_var,
-            outstanding_gap=sorted(set(outstanding_gap)),
+            outstanding_gap=sorted(set(outstanding_gap) | set(disclosures)),
             blocking=blocking, owner_acknowledged=False, audience="owner",
         )
         self.repo.append_reconciliation_report(report)
