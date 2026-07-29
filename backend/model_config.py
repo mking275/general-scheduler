@@ -26,3 +26,14 @@ GEMINI_LIVE = "gemini-3.1-flash-live-preview"
 # Set when running against Vertex rather than the Developer API. Gen-3 requires
 # this exact value; see the endpoint-coupling note above.
 VERTEX_LOCATION = "global"
+
+# ── Anthropic in a product runtime — read before proposing it ────────────────
+# Claude is NOT on the fleet's Vertex project (no publisher models, no key), so a
+# Claude tier here means a SEPARATE serving path (anthropic-direct) with its own
+# credential, egress, quota and failure mode — outside the products-own-their-own-
+# infra shape. FA2 logged an anthropic-direct transport error on 2026-07-28 that
+# fell back to Vertex; it degraded correctly, which is exactly the point. Evaluate
+# prose quality AND serving-path cost together: a better draft arriving over a
+# flakier path with a second credential can still lose. Open question for spec-012
+# note drafting (60s budget = a quality decision); settled for voice (Gemini Live
+# wins on latency).
