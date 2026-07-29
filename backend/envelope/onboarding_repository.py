@@ -678,6 +678,19 @@ class OnboardingRepository:
         # first Coastal Creek ingest (176,755 records) exceeded ten minutes and
         # committed nothing. Batched deletes + executemany turn ~176k round trips
         # into a few hundred, and the semantics are unchanged.
+        # DEDUPE on the lineage key before writing. Real exports reference one
+        # artifact from many rows — Coastal Creek ships 26,546 attachment rows
+        # for 23,089 distinct files, and communications repeat the same id when a
+        # message is linked to several records. One canonical record per
+        # entity_ref is correct; the repeats are references to it, not new facts.
+        dedupe_cols = list(key_cols)
+        if "entity_ref" in (payloads[0] or {}):
+            dedupe_cols = ["practice_id", "entity_ref"] if "practice_id" in payloads[0] else ["entity_ref"]
+        seen: dict[tuple, dict] = {}
+        for pl in payloads:
+            seen[tuple(pl.get(c) for c in dedupe_cols)] = pl   # last occurrence wins
+        payloads = list(seen.values())
+
         CHUNK = 1000
         keys = [tuple(p[k] for k in key_cols) for p in payloads]
         with self.engine.begin() as conn:
