@@ -110,6 +110,7 @@ class EzyVetAdapter:
         entities = self._entities(raw_export)
         records: list[CanonicalRecord] = []
         unmapped_fields: list[dict[str, Any]] = []
+        _unmapped_agg: dict[tuple, dict[str, Any]] = {}
         unmapped_entities = sorted(n for n in entities if n not in self._entity_map)
 
         for src_entity, spec in self._entity_map.items():
@@ -143,14 +144,26 @@ class EzyVetAdapter:
                         payload[field_map[col]] = val
                     else:
                         rec_unmapped[col] = val
-                        unmapped_fields.append(
-                            {"entity": src_entity, "entity_ref": entity_ref,
-                             "source_field": col, "raw_value": val})
+                        # AGGREGATE per (entity, column) — never per row. FR-007
+                        # requires knowing WHICH fields are unmapped, not carrying
+                        # every row's copy: a real delivery has 74-column exports,
+                        # so per-row accumulation built millions of dicts (each
+                        # holding a raw value) before a single record was written.
+                        # The per-record copy still rides on the record itself.
+                        key = (src_entity, col)
+                        agg = _unmapped_agg.get(key)
+                        if agg is None:
+                            _unmapped_agg[key] = {
+                                "entity": src_entity, "source_field": col,
+                                "row_count": 1, "entity_ref": entity_ref}   # an EXAMPLE ref, not per-row
+                        else:
+                            agg["row_count"] += 1
                 records.append(CanonicalRecord(
                     practice_id=self.practice_id or profile.practice_id,
                     category=category, entity_ref=entity_ref, source_id=source_id,
                     payload=payload, unmapped_fields=rec_unmapped,
                 ))
+        unmapped_fields.extend(_unmapped_agg.values())
         return NormalizeResult(records=records, unmapped_entities=unmapped_entities,
                                unmapped_fields=unmapped_fields)
 
