@@ -9,6 +9,7 @@ import json
 import logging
 from typing import Optional
 from ..models import SoapNote, PreExamBrief, Patient
+from ..model_config import GEMINI_FLASH
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +30,6 @@ def _get_gemini():
         return False
     try:
         from google import genai
-            from model_config import GEMINI_FLASH
         _gemini_client = genai.Client(api_key=api_key)
         _LLM_AVAILABLE = True
         log.info("SOAP Agent: Gemini LLM initialized successfully")

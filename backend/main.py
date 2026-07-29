@@ -56,6 +56,7 @@ app.add_middleware(
 # SQLite and stay unaffected). Client / pet-owner identity is NOT wired here — it
 # stays on the 011 verification ladder.
 from .identity_auth import build_identity, build_auth_router, build_admin_router  # noqa: E402
+from backend.model_config import GEMINI_FLASH
 
 _identity_service, _open_identity_pool, _close_identity_pool = build_identity()
 app.state.identity_settings = _identity_service.settings
@@ -1054,7 +1055,6 @@ def vera_chat(req: VeraChatRequest):
     if api_key:
         try:
             from google import genai
-            from model_config import GEMINI_FLASH
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
                 model=GEMINI_FLASH,
